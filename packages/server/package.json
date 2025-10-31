@@ -1,6 +1,6 @@
 {
   "name": "@getvision/server",
-  "version": "0.0.1",
+  "version": "0.0.0-develop-20251031183955",
   "type": "module",
   "description": "Vision Server - Meta-framework with built-in observability, pub/sub, and type-safe APIs",
   "exports": {
@@ -20,8 +20,7 @@
     "ioredis": "^5.8.2",
     "zod": "^4.1.11"
   },
-  "peerDependencies": {
-  },
+  "peerDependencies": {},
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",

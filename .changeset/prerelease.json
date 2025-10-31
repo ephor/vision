@@ -1,0 +1,22 @@
+{
+  "mode": "snapshot",
+  "initialVersions": {
+    "docs": "0.0.0",
+    "web": "0.0.0",
+    "express-basic-example": "0.0.1",
+    "fastify-basic-example": "0.0.1",
+    "hono-basic-example": "0.0.1",
+    "vision-basic-example": "0.0.1",
+    "@getvision/adapter-express": "0.0.1",
+    "@getvision/adapter-fastify": "0.0.1",
+    "@getvision/adapter-hono": "0.0.1",
+    "@getvision/core": "0.0.1",
+    "@repo/eslint-config": "0.0.0",
+    "@getvision/server": "0.0.1",
+    "@repo/typescript-config": "0.0.0",
+    "@repo/ui": "0.0.1"
+  },
+  "changesets": [
+    "curvy-olives-sneeze"
+  ]
+}
