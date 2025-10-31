@@ -98,7 +98,7 @@ mkdir -p packages/adapter-yourframework
 - **ESM** - Use ES modules (`import`/`export`)
 - **Type-safe** - Export all types from `types/index.ts`
 - **Comments** - Add JSDoc comments for public APIs
-- **Formatting** - Run `pnpm format` before committing
+- **Formatting** - Run `bun format` before committing
 
 ## Commit Convention
 

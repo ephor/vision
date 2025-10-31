@@ -10,6 +10,7 @@
     "build": "tsc",
     "lint": "eslint . --max-warnings 0"
   },
+  "license": "MIT",
   "dependencies": {
     "@hono/zod-validator": "^0.7.3",
     "@getvision/core": "workspace:*",

@@ -10,6 +10,7 @@
     "build": "tsc",
     "lint": "eslint . --max-warnings 0"
   },
+  "license": "MIT",
   "dependencies": {
     "@getvision/core": "workspace:*",
     "zod": "^4.1.11"

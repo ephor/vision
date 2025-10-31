@@ -261,9 +261,9 @@ This project is in **early development**. Contributions are welcome!
 
 ---
 
-## 📄 License
-
-MIT
+  ## 📄 License
+ 
+ Core is licensed under **MIT** (c) 2025 Ihor Kolobanov. See `LICENSE`.
 
 ---
 

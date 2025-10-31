@@ -16,6 +16,7 @@
     "test:watch": "bun test --watch",
     "lint": "eslint . --max-warnings 0"
   },
+  "license": "MIT",
   "dependencies": {
     "ws": "^8.18.0",
     "nanoid": "^5.0.7",
