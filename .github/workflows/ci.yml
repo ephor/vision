@@ -1,0 +1,109 @@
+name: CI & Release
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'feat/**'
+      - 'fix/**'
+
+jobs:
+  commitlint:
+    if: github.event_name == 'pull_request'
+    name: Commitlint (Conventional Commits)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.cjs
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      upgraded: ${{ steps.release.outputs.upgraded }}
+      upgraded-packages: ${{ steps.release.outputs.upgraded-packages }}
+      git-head-ref: ${{ steps.set-git-head-ref.outputs.git-head-ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: 'main'
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.0'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bunx turbo run build
+      - name: Test
+        run: bunx turbo run test
+      - name: Release
+        id: release
+        uses: edenlabllc/changesets-action@v1
+        with:
+          mode: ${{ startsWith(github.ref_name, 'release/') && 'stable' || 'snapshot' }}
+          snapshot-tag: ${{ github.ref_name == 'main' && 'develop' || '' }}
+          commit: ${{ github.ref_name == 'main' || startsWith(github.ref_name, 'release/') }}
+          release-codenames: |
+            adjectives
+            starWars
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set git HEAD ref
+        id: set-git-head-ref
+        run: echo "git-head-ref=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  publish:
+    name: Publish to NPM
+    needs: build
+    if: needs.build.outputs.upgraded == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: ${{ fromJSON(needs.build.outputs.upgraded-packages) }}
+    steps:
+      - name: Checkout code at new version commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.git-head-ref }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.0'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: https://registry.npmjs.org/
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bunx turbo run build
+      - name: Get NPM Tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.ref_name }}" == release* ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "tag=next" >> $GITHUB_OUTPUT
+          fi
+      - name: Publish ${{ matrix.package.name }} to NPM
+        if: steps.get_tag.outputs.tag != ''
+        working-directory: ${{ matrix.package.path }}
+        run: bun publish --access public --tag ${{ steps.get_tag.outputs.tag }}
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
