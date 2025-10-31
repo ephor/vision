@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm, eye-comfort light theme */
+    --background: 48 33% 96%;            /* warm ivory */
+    --foreground: 222 15% 16%;           /* neutral slate text */
+    --card: 0 0% 100%;
+    --card-foreground: 222 15% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 16%;
+    --primary: 221 70% 55%;              /* softer blue accent */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 48 22% 92%;
+    --secondary-foreground: 222 20% 20%;
+    --muted: 48 20% 92%;                 /* warm muted panels */
+    --muted-foreground: 222 12% 40%;
+    --accent: 48 22% 92%;
+    --accent-foreground: 222 20% 20%;
+    --destructive: 0 70% 54%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 48 16% 85%;
+    --input: 48 16% 85%;
+    --ring: 221 70% 55%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Neutral, less-blue dark theme */
+    --background: 220 16% 10%;           /* charcoal */
+    --foreground: 210 20% 95%;
+    --card: 220 16% 14%;
+    --card-foreground: 210 20% 95%;
+    --popover: 220 16% 14%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 221 65% 58%;              /* subtle blue for accents only */
+    --primary-foreground: 222 47% 11%;
+    --secondary: 220 14% 17%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 220 14% 17%;                /* sidebars/panels */
+    --muted-foreground: 210 12% 70%;
+    --accent: 220 14% 17%;
+    --accent-foreground: 210 20% 95%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 210 20% 95%;
+    --border: 220 14% 23%;
+    --input: 220 14% 23%;
+    --ring: 221 65% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-mono;
+  }
+}
+
+@layer utilities {
+  /* Subtle glass effects, tuned for both light and dark themes */
+  .glass {
+    @apply bg-background/60 backdrop-blur-md border border-white/10 shadow-sm;
+  }
+  .glass-strong {
+    @apply bg-background/40 backdrop-blur-lg border border-white/10 shadow;
+  }
+  .glass-muted {
+    @apply bg-muted/50 backdrop-blur-md border border-border/60 shadow-sm;
+  }
+}

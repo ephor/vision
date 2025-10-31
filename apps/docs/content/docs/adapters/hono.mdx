@@ -1,0 +1,277 @@
+---
+title: Hono Adapter
+description: Seamless integration with Hono framework including automatic route discovery
+---
+
+# Hono Adapter
+
+The Hono adapter provides seamless integration with [Hono](https://hono.dev), including automatic route discovery and Zod schema extraction.
+
+## Installation
+
+```bash
+bun add @getvision/adapter-hono
+```
+
+## Basic Usage
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+
+const app = new Hono()
+
+app.use('*', visionAdapter())
+enableAutoDiscovery(app)
+
+export default app
+```
+
+## Configuration
+
+### visionAdapter(options)
+
+```typescript
+interface VisionHonoOptions {
+  enabled?: boolean        // Enable/disable Vision (default: true)
+  port?: number           // Dashboard port (default: 9500)
+  maxTraces?: number      // Max traces to store (default: 1000)
+  logging?: boolean       // Enable console logs (default: true)
+  
+  // Service metadata
+  name?: string           // Service name (auto-detected from package.json)
+  service?: {
+    name?: string
+    version?: string
+    description?: string
+    integrations?: Record<string, string>
+  }
+}
+```
+
+### Example
+
+```typescript
+app.use('*', visionAdapter({
+  port: 9500,
+  maxTraces: 5000,
+  logging: process.env.NODE_ENV === 'development',
+  service: {
+    name: 'my-api',
+    version: '1.0.0',
+    description: 'My awesome API',
+    integrations: {
+      database: process.env.DATABASE_URL,
+      redis: process.env.REDIS_URL,
+    },
+  },
+}))
+```
+
+## Zod Integration
+
+Use Vision's monkey-patched `zValidator` to enable automatic schema extraction:
+
+```typescript
+import { zValidator } from '@getvision/adapter-hono'
+import { z } from 'zod'
+
+const schema = z.object({
+  name: z.string().describe('User name'),
+  email: z.string().email().describe('User email'),
+})
+
+app.post('/users', zValidator('json', schema), (c) => {
+  const data = c.req.valid('json')
+  // ...
+})
+```
+
+Vision will automatically:
+- Extract the Zod schema
+- Generate JSON templates with comments
+- Show field types and descriptions in the dashboard
+
+## Custom Spans
+
+Track custom operations with `useVisionSpan()`:
+
+```typescript
+import { useVisionSpan } from '@getvision/adapter-hono'
+
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+  
+  // Database query
+  const users = withSpan('db.query', {
+    'db.system': 'postgresql',
+    'db.table': 'users',
+  }, async () => {
+    return await db.select().from(users).all()
+  })
+  
+  // External API call
+  const enriched = withSpan('http.request', {
+    'http.url': 'https://api.example.com/enrich',
+    'http.method': 'POST',
+  }, async () => {
+    return await fetch('https://api.example.com/enrich', {
+      method: 'POST',
+      body: JSON.stringify(users),
+    })
+  })
+  
+  return c.json(enriched)
+})
+```
+
+## Context Access
+
+Get Vision instance and trace ID in your handlers:
+
+```typescript
+import { getVisionContext } from '@getvision/adapter-hono'
+
+app.get('/debug', (c) => {
+  const { vision, traceId } = getVisionContext()
+  
+  console.log('Current trace:', traceId)
+  
+  return c.json({ traceId })
+})
+```
+
+## Auto-Discovery
+
+Enable automatic route discovery:
+
+```typescript
+import { enableAutoDiscovery } from '@getvision/adapter-hono'
+
+// After adding visionAdapter middleware
+enableAutoDiscovery(app)
+
+// Routes defined after this will be auto-discovered
+app.get('/users', handler)
+app.post('/users', handler)
+```
+
+Vision will automatically detect:
+- HTTP methods (GET, POST, PUT, DELETE, etc.)
+- Route paths (including dynamic params like `/users/:id`)
+- Handler names
+- Zod schemas from `zValidator`
+
+### Registration Order and Mounted Sub-Apps
+
+- Call `enableAutoDiscovery(app)` right after `visionAdapter()` and before you start defining routes.
+- The adapter now also captures routes of mounted sub-apps via `app.route('/base', child)`. Define child routes relative to the mount point.
+
+```ts
+// parent.ts
+import { Hono } from 'hono'
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+import analytics from './analytics' // exports a Hono app
+
+const app = new Hono()
+app.use('*', visionAdapter())
+enableAutoDiscovery(app) // enable first
+
+// define routes and mount sub-apps after discovery is enabled
+app.get('/users', handler)
+app.route('/analytics', analytics) // child defines '/dashboard' -> becomes '/analytics/dashboard'
+
+export default app
+```
+
+```ts
+// analytics.ts (sub-app)
+import { Hono } from 'hono'
+const analytics = new Hono()
+analytics.get('/dashboard', (c) => c.json({ ok: true }))
+export default analytics
+```
+
+## Drizzle Studio Integration
+
+Launch Drizzle Studio directly from Vision dashboard:
+
+```typescript
+import { launchDrizzleStudio } from '@getvision/adapter-hono'
+import { db } from './db'
+
+// Optionally launch on startup
+if (process.env.NODE_ENV === 'development') {
+  launchDrizzleStudio(db)
+}
+```
+
+## Complete Example
+
+```typescript
+import { serve } from '@hono/node-server'
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { 
+  visionAdapter, 
+  enableAutoDiscovery, 
+  useVisionSpan,
+  zValidator 
+} from '@getvision/adapter-hono'
+import { db } from './db'
+import { users } from './db/schema'
+
+const app = new Hono()
+
+// Vision setup
+app.use('*', visionAdapter({
+  service: {
+    name: 'my-api',
+    version: '1.0.0',
+  },
+}))
+
+enableAutoDiscovery(app)
+
+// Schemas
+const createUserSchema = z.object({
+  name: z.string().min(1).describe('User full name'),
+  email: z.string().email().describe('User email address'),
+})
+
+// Routes
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+  
+  const allUsers = withSpan('db.query', {
+    'db.table': 'users',
+  }, () => {
+    return db.select().from(users).all()
+  })
+  
+  return c.json(allUsers)
+})
+
+app.post('/users', 
+  zValidator('json', createUserSchema),
+  async (c) => {
+    const body = c.req.valid('json')
+    const withSpan = useVisionSpan()
+    
+    const newUser = withSpan('db.insert', {
+      'db.table': 'users',
+    }, () => {
+      return db.insert(users).values(body).returning().get()
+    })
+    
+    return c.json(newUser, 201)
+  }
+)
+
+serve(app)
+```
+
+## Next Steps
+
+- [API Explorer](/docs/features/api-explorer)
+- [Deployment](/docs/deployment)

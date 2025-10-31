@@ -1,0 +1,247 @@
+---
+title: API Explorer
+description: Test your API endpoints directly from the Vision dashboard
+---
+
+# API Explorer
+
+Test your API endpoints directly from the Vision dashboard with auto-generated request templates.
+
+## Overview
+
+The API Explorer allows you to:
+- 🎯 **Test endpoints** - Make real HTTP requests
+- 📝 **Auto-fill schemas** - Zod schemas → JSON templates with comments
+- 🔍 **Inspect responses** - Formatted JSON viewer
+- 📋 **Copy as cURL** - Export for command line
+- 🌙 **Syntax highlighting** - Monaco Editor with dark mode
+
+## Features
+
+### Auto-Generated Templates
+
+When you use Zod validation, Vision automatically generates request templates:
+
+```typescript
+import { z } from 'zod'
+import { zValidator } from '@getvision/adapter-hono'
+
+const createUserSchema = z.object({
+  name: z.string().min(1).describe('User full name'),
+  email: z.string().email().describe('User email address'),
+  age: z.number().optional().describe('User age (optional)'),
+})
+
+app.post('/users', zValidator('json', createUserSchema), handler)
+```
+
+**Generated template in API Explorer:**
+
+```jsonc
+{
+  // User full name
+  "name": "",
+  // User email address
+  "email": "",
+  // User age (optional)
+  "age": 0
+}
+```
+
+### URL Parameters
+
+For routes with dynamic segments:
+
+```typescript
+app.get('/users/:id', handler)
+```
+
+API Explorer shows:
+- Input field for `id` parameter
+- Auto-fills into URL: `/users/123`
+
+### Request Body Editor
+
+Powered by Monaco Editor (same as VS Code):
+
+- **Syntax highlighting** - JSON/JSONC
+- **Auto-completion** - Schema-aware
+- **Error detection** - Invalid JSON highlighted
+- **Dark mode** - Beautiful theme
+- **Code folding** - Collapse sections
+- **Format on paste** - Auto-prettify
+
+### Response Viewer
+
+After calling API:
+- **Formatted JSON** - Syntax highlighted
+- **Status code** - Color-coded (200 = green, 400 = red)
+- **Headers** - Request/response headers
+- **Timing** - Request duration
+- **Copy button** - Copy response to clipboard
+
+## Usage
+
+### 1. Select Endpoint
+
+Click any route from the Services tree:
+
+```
+📁 my-api
+  └── 📁 users
+      ├── GET /users
+      ├── GET /users/:id
+      ├── POST /users
+      └── PUT /users/:id
+```
+
+### 2. Fill Parameters
+
+For `GET /users/:id`:
+- Enter `123` in the `id` field
+- URL becomes `/users/123`
+
+### 3. Edit Request Body
+
+For `POST /users`:
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "age": 30
+}
+```
+
+### 4. Call API
+
+Click **Call API** button → See response:
+
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "age": 30,
+  "createdAt": "2025-10-05T23:00:00Z"
+}
+```
+
+## Zod Integration
+
+### Basic Schema
+
+```typescript
+const schema = z.object({
+  title: z.string(),
+  count: z.number(),
+})
+```
+
+**Generated:**
+```json
+{
+  "title": "",
+  "count": 0
+}
+```
+
+### With Descriptions
+
+```typescript
+const schema = z.object({
+  title: z.string().describe('Post title'),
+  count: z.number().describe('Number of likes'),
+})
+```
+
+**Generated:**
+```jsonc
+{
+  // Post title
+  "title": "",
+  // Number of likes
+  "count": 0
+}
+```
+
+### Optional Fields
+
+```typescript
+const schema = z.object({
+  name: z.string(),
+  email: z.string().optional(),
+})
+```
+
+**Shows in Services Page:**
+- `name` - `string` **required**
+- `email` - `string` optional
+
+### Nested Objects
+
+```typescript
+const schema = z.object({
+  user: z.object({
+    name: z.string(),
+    email: z.string(),
+  }),
+  settings: z.object({
+    theme: z.enum(['light', 'dark']),
+  }),
+})
+```
+
+**Generated:**
+```json
+{
+  "user": {
+    "name": "",
+    "email": ""
+  },
+  "settings": {
+    "theme": "light"
+  }
+}
+```
+
+## Tips & Tricks
+
+### Using the Monaco Editor
+
+**Shortcuts:**
+- `Cmd/Ctrl + F` - Find
+- `Cmd/Ctrl + /` - Toggle comment
+- `Alt + Shift + F` - Format document
+- `Cmd/Ctrl + D` - Select next occurrence
+
+### Testing Auth Endpoints
+
+Add headers manually:
+
+```json
+// Headers (not implemented yet, coming soon)
+{
+  "Authorization": "Bearer token123"
+}
+```
+
+### Multiple Tabs
+
+Open multiple endpoints in tabs:
+- Click "+" to add tab
+- Switch between endpoints
+- Each tab remembers its state
+
+## Limitations
+
+Current limitations (will be improved):
+
+- ⚠️ **No custom headers** (coming soon)
+- ⚠️ **No query parameters UI** (can add in URL manually)
+- ⚠️ **No request history** (coming soon)
+- ⚠️ **No cURL export** (coming soon)
+
+## Next Steps
+
+- [Hono Adapter](/docs/adapters/hono)
+- [Deployment](/docs/deployment)

@@ -1,0 +1,465 @@
+---
+title: Schema Support
+description: Type-safe APIs with Zod validation and auto-generated documentation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Schema Support
+
+Vision provides first-class support for Zod schemas, giving you type-safe validation and auto-generated API documentation.
+
+## What are Schemas?
+
+Schemas define the shape of your API:
+- **Input schemas** - What data your endpoint accepts
+- **Output schemas** - What data your endpoint returns
+- **Validation** - Automatic request validation
+- **Documentation** - Auto-generated API docs
+
+## Vision Server - Full Schema Support
+
+Vision Server supports both input AND output schemas:
+
+```typescript
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+app.service('users')
+  .endpoint('POST', '/users', {
+    // Input schema - validates request body
+    input: z.object({
+      name: z.string().min(1).describe('User full name'),
+      email: z.string().email().describe('Email address'),
+      age: z.number().int().positive().optional().describe('User age')
+    }),
+    // Output schema - documents response
+    output: z.object({
+      id: z.string().describe('User ID'),
+      name: z.string().describe('User name'),
+      email: z.string().describe('User email'),
+      createdAt: z.string().describe('Creation timestamp')
+    })
+  }, async (data, c) => {
+    // data is typed as { name: string, email: string, age?: number }
+    const user = await createUser(data)
+    
+    // Return type is validated against output schema
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt.toISOString()
+    }
+  })
+```
+
+**Dashboard displays:**
+
+**Request Body Schema:**
+- `name` (string, required) - User full name
+- `email` (string, required) - Email address  
+- `age` (number, optional) - User age
+
+**Response Body Schema:**
+- `id` (string) - User ID
+- `name` (string) - User name
+- `email` (string) - User email
+- `createdAt` (string) - Creation timestamp
+
+<Callout type="success">
+  **Vision Server** provides complete API contracts with both input and output schemas.
+</Callout>
+
+## Vision Adapters - Input Schema Only
+
+Adapters extract input schemas from Zod validators:
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter, zValidator } from '@getvision/adapter-hono'
+
+const app = new Hono()
+app.use('*', visionAdapter())
+
+app.post('/users',
+  zValidator('json', z.object({
+    name: z.string().min(1).describe('User full name'),
+    email: z.string().email().describe('Email address')
+  })),
+  async (c) => {
+    const data = c.req.valid('json')
+    // data is typed
+    
+    const user = await createUser(data)
+    return c.json(user)
+  }
+)
+```
+
+**Dashboard displays:**
+
+**Request Body Schema:**
+- `name` (string, required) - User full name
+- `email` (string, required) - Email address
+
+**Response Body Schema:**
+- ❌ Not available
+
+<Callout type="warn">
+  **Adapters** currently only support input schemas. Output schemas are a **Vision Server exclusive**.
+</Callout>
+
+## Schema Features
+
+### Descriptions
+
+Add descriptions to your fields:
+
+```typescript
+z.object({
+  email: z.string().email().describe('User email address'),
+  password: z.string().min(8).describe('Password (minimum 8 characters)'),
+  role: z.enum(['user', 'admin']).describe('User role')
+})
+```
+
+**Dashboard shows descriptions** to help API consumers understand each field.
+
+### Optional Fields
+
+Mark fields as optional:
+
+```typescript
+z.object({
+  name: z.string(),                    // Required
+  email: z.string().email(),           // Required
+  age: z.number().optional(),          // Optional
+  bio: z.string().optional()           // Optional
+})
+```
+
+**Dashboard marks** required vs optional fields clearly.
+
+### Nested Objects
+
+Define complex nested structures:
+
+```typescript
+z.object({
+  user: z.object({
+    name: z.string(),
+    email: z.string().email()
+  }),
+  address: z.object({
+    street: z.string(),
+    city: z.string(),
+    country: z.string()
+  })
+})
+```
+
+**Dashboard displays** nested structure with proper indentation.
+
+### Arrays
+
+Define array fields:
+
+```typescript
+z.object({
+  tags: z.array(z.string()).describe('User tags'),
+  items: z.array(z.object({
+    id: z.string(),
+    quantity: z.number()
+  })).describe('Order items')
+})
+```
+
+**Dashboard shows** array types and nested item schemas.
+
+### Enums
+
+Define allowed values:
+
+```typescript
+z.object({
+  status: z.enum(['pending', 'active', 'inactive']).describe('User status'),
+  role: z.enum(['user', 'admin', 'moderator']).describe('User role')
+})
+```
+
+**Dashboard lists** all possible enum values.
+
+### Default Values
+
+Set default values:
+
+```typescript
+z.object({
+  role: z.enum(['user', 'admin']).default('user'),
+  active: z.boolean().default(true),
+  credits: z.number().default(0)
+})
+```
+
+**Dashboard shows** default values for optional fields.
+
+## Auto-Generated Templates
+
+Vision generates JSON templates from your schemas:
+
+### Input Template
+
+For this schema:
+```typescript
+input: z.object({
+  name: z.string().describe('User full name'),
+  email: z.string().email().describe('Email address'),
+  age: z.number().optional().describe('User age')
+})
+```
+
+**API Explorer generates:**
+```json
+{
+  "name": "",        // User full name
+  "email": "",       // Email address
+  "age": 0           // User age (optional)
+}
+```
+
+### Output Template (Server Only)
+
+For this schema:
+```typescript
+output: z.object({
+  id: z.string().describe('User ID'),
+  name: z.string().describe('User name'),
+  createdAt: z.string().describe('Creation timestamp')
+})
+```
+
+**Services page shows:**
+```json
+{
+  "id": "",          // User ID
+  "name": "",        // User name
+  "createdAt": ""    // Creation timestamp
+}
+```
+
+## Validation
+
+### Automatic Validation (Server)
+
+Vision Server validates automatically:
+
+```typescript
+app.service('users')
+  .endpoint('POST', '/users', {
+    input: z.object({
+      email: z.string().email(),
+      age: z.number().int().positive()
+    }),
+    output: z.object({ id: z.string() })
+  }, async (data, c) => {
+    // data is already validated!
+    // TypeScript knows: data.email is string, data.age is number
+    return { id: '123' }
+  })
+```
+
+**Invalid request:**
+```json
+{
+  "email": "not-an-email",
+  "age": -5
+}
+```
+
+**Automatic response:**
+```json
+{
+  "error": "Validation failed",
+  "issues": [
+    {
+      "path": ["email"],
+      "message": "Invalid email"
+    },
+    {
+      "path": ["age"],
+      "message": "Number must be greater than 0"
+    }
+  ]
+}
+```
+
+### Manual Validation (Adapters)
+
+Adapters use `zValidator`:
+
+```typescript
+import { zValidator } from '@getvision/adapter-hono'
+
+app.post('/users',
+  zValidator('json', z.object({
+    email: z.string().email(),
+    age: z.number().int().positive()
+  })),
+  async (c) => {
+    const data = c.req.valid('json')
+    // data is validated and typed
+    return c.json({ success: true })
+  }
+)
+```
+
+## Complex Schemas
+
+### Discriminated Unions
+
+```typescript
+z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('email'),
+    email: z.string().email()
+  }),
+  z.object({
+    type: z.literal('sms'),
+    phone: z.string()
+  })
+])
+```
+
+### Transformations
+
+```typescript
+z.object({
+  email: z.string().email().toLowerCase(),
+  age: z.string().transform(val => parseInt(val, 10))
+})
+```
+
+### Custom Refinements
+
+```typescript
+z.object({
+  password: z.string().min(8),
+  confirmPassword: z.string()
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword']
+})
+```
+
+## Best Practices
+
+### 1. Always Add Descriptions
+
+```typescript
+// ✅ Good - Clear descriptions
+z.object({
+  email: z.string().email().describe('User email address'),
+  age: z.number().int().positive().describe('User age (must be positive)')
+})
+
+// ❌ Bad - No descriptions
+z.object({
+  email: z.string().email(),
+  age: z.number().int().positive()
+})
+```
+
+### 2. Use Specific Types
+
+```typescript
+// ✅ Good - Specific validation
+z.object({
+  email: z.string().email(),
+  url: z.string().url(),
+  uuid: z.string().uuid(),
+  date: z.string().datetime()
+})
+
+// ❌ Bad - Generic strings
+z.object({
+  email: z.string(),
+  url: z.string(),
+  uuid: z.string(),
+  date: z.string()
+})
+```
+
+### 3. Define Output Schemas (Server)
+
+```typescript
+// ✅ Good - Complete API contract
+.endpoint('POST', '/users', {
+  input: z.object({ ... }),
+  output: z.object({ ... })  // Clients know what to expect!
+}, handler)
+
+// ⚠️ Okay - But less documentation
+.endpoint('POST', '/users', {
+  input: z.object({ ... })
+  // No output schema
+}, handler)
+```
+
+### 4. Use Enums for Fixed Values
+
+```typescript
+// ✅ Good - Type-safe enums
+z.object({
+  status: z.enum(['pending', 'active', 'inactive']),
+  role: z.enum(['user', 'admin', 'moderator'])
+})
+
+// ❌ Bad - Any string allowed
+z.object({
+  status: z.string(),
+  role: z.string()
+})
+```
+
+### 5. Mark Optional Fields
+
+```typescript
+// ✅ Good - Clear optionality
+z.object({
+  name: z.string(),              // Required
+  email: z.string().email(),     // Required
+  bio: z.string().optional(),    // Optional
+  age: z.number().optional()     // Optional
+})
+
+// ❌ Bad - Unclear which are required
+z.object({
+  name: z.string(),
+  email: z.string().email(),
+  bio: z.string(),
+  age: z.number()
+})
+```
+
+## Vision Server vs Adapters
+
+| Feature | Vision Server | Adapters |
+|---------|--------------|----------|
+| Input schemas | ✅ Full support | ✅ Full support |
+| Output schemas | ✅ Full support | ❌ Not supported |
+| Auto-validation | ✅ Built-in | ✅ Via zValidator |
+| Type inference | ✅ Full | ✅ Full |
+| Descriptions | ✅ Displayed | ✅ Displayed |
+| Nested objects | ✅ Supported | ✅ Supported |
+| Arrays | ✅ Supported | ✅ Supported |
+| Enums | ✅ Supported | ✅ Supported |
+| Auto-templates | ✅ Input & Output | ✅ Input only |
+
+## Next Steps
+
+- [Vision Server](/docs/server) - Build with full schema support
+- [Services](/docs/features/services) - View your API schemas
+- [API Explorer](/docs/features/api-explorer) - Test with auto-generated templates

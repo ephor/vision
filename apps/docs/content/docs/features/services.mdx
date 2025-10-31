@@ -1,0 +1,317 @@
+---
+title: Service Catalog
+description: Auto-discover and explore your API services
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Service Catalog
+
+The Service Catalog automatically discovers all your API endpoints and organizes them by service, giving you a complete overview of your API surface.
+
+## What is the Service Catalog?
+
+The Services page shows:
+- **All your services** - Grouped logically (Users, Orders, Payments, etc.)
+- **All endpoints** - Every route in your API
+- **Request/Response schemas** - Auto-generated from Zod
+- **Endpoint metadata** - Method, path, handler, middleware
+
+## Auto-Discovery
+
+Vision automatically discovers your routes:
+
+### With Vision Server
+
+Services are explicitly defined:
+
+```typescript
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+// Service: Users
+app.service('users')
+  .endpoint('GET', '/users', schema, handler)
+  .endpoint('GET', '/users/:id', schema, handler)
+  .endpoint('POST', '/users', schema, handler)
+
+// Service: Orders
+app.service('orders')
+  .endpoint('GET', '/orders', schema, handler)
+  .endpoint('POST', '/orders', schema, handler)
+```
+
+**Result in Dashboard:**
+```
+Services:
+├─ Users (3 endpoints)
+│  ├─ GET /users
+│  ├─ GET /users/:id
+│  └─ POST /users
+└─ Orders (2 endpoints)
+   ├─ GET /orders
+   └─ POST /orders
+```
+
+### With Vision Adapters
+
+Routes are auto-discovered and grouped by path:
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+
+const app = new Hono()
+app.use('*', visionAdapter())
+enableAutoDiscovery(app)
+
+// Automatically grouped into "Users" service
+app.get('/users', handler)
+app.get('/users/:id', handler)
+app.post('/users', handler)
+
+// Automatically grouped into "Orders" service
+app.get('/orders', handler)
+app.post('/orders', handler)
+```
+
+<Callout type="info">
+  **Vision Server** uses explicit service names. **Adapters** auto-group by path prefix.
+</Callout>
+
+## Request/Response Schemas
+
+### Vision Server - Full Schema Support
+
+Vision Server shows both input AND output schemas:
+
+```typescript
+app.service('users')
+  .endpoint('POST', '/users', {
+    input: z.object({
+      name: z.string().min(1).describe('User full name'),
+      email: z.string().email().describe('Email address'),
+      age: z.number().optional().describe('User age (optional)')
+    }),
+    output: z.object({
+      id: z.string().describe('User ID'),
+      name: z.string().describe('User name'),
+      email: z.string().describe('User email'),
+      createdAt: z.string().describe('Creation timestamp')
+    })
+  }, handler)
+```
+
+**Dashboard shows:**
+
+**Request Body Schema:**
+- `name` (string, required) - User full name
+- `email` (string, required) - Email address
+- `age` (number, optional) - User age (optional)
+
+**Response Body Schema:**
+- `id` (string, always present) - User ID
+- `name` (string, always present) - User name
+- `email` (string, always present) - User email
+- `createdAt` (string, always present) - Creation timestamp
+
+### Vision Adapters - Input Schema Only
+
+Adapters extract input schemas from Zod validators:
+
+```typescript
+import { zValidator } from '@getvision/adapter-hono'
+
+app.post('/users',
+  zValidator('json', z.object({
+    name: z.string().min(1).describe('User full name'),
+    email: z.string().email().describe('Email address')
+  })),
+  handler
+)
+```
+
+**Dashboard shows:**
+
+**Request Body Schema:**
+- `name` (string, required) - User full name
+- `email` (string, required) - Email address
+
+**Response Body Schema:**
+- ❌ Not available (adapters don't support output schemas yet)
+
+<Callout type="warn">
+  **Limitation:** Adapters currently only support input schemas. Output schemas are a **Vision Server exclusive feature**.
+</Callout>
+
+## Service Metadata
+
+Each service shows:
+- **Name** - Service identifier
+- **Endpoint count** - Number of routes
+- **Methods** - GET, POST, PUT, DELETE, PATCH
+- **Paths** - All route paths
+
+Each endpoint shows:
+- **Method & Path** - HTTP method and route
+- **Handler** - Function name (if available)
+- **Middleware** - Applied middleware stack
+- **Request schema** - Input validation
+- **Response schema** - Output structure (Vision Server only)
+
+## Organizing Services
+
+### Vision Server - Explicit Services
+
+```typescript
+// Clear service boundaries
+app.service('auth')
+  .endpoint('POST', '/login', schema, handler)
+  .endpoint('POST', '/logout', schema, handler)
+
+app.service('users')
+  .endpoint('GET', '/users', schema, handler)
+  .endpoint('POST', '/users', schema, handler)
+
+app.service('admin')
+  .endpoint('GET', '/admin/stats', schema, handler)
+  .endpoint('DELETE', '/admin/users/:id', schema, handler)
+```
+
+### Vision Adapters - Path-Based Grouping
+
+```typescript
+// Auto-grouped by path prefix
+app.get('/auth/login', handler)      // → Auth service
+app.post('/auth/logout', handler)    // → Auth service
+
+app.get('/users', handler)           // → Users service
+app.post('/users', handler)          // → Users service
+
+app.get('/admin/stats', handler)     // → Admin service
+```
+
+You can also configure custom service grouping:
+
+```typescript
+app.use('*', visionAdapter({
+  services: [
+    { name: 'Authentication', paths: ['/login', '/logout', '/register'] },
+    { name: 'User Management', paths: ['/users', '/profile'] },
+    { name: 'Admin Panel', paths: ['/admin/*'] }
+  ]
+}))
+```
+
+## Searching & Filtering
+
+The Service Catalog supports:
+- **Search by path** - Find specific endpoints
+- **Filter by method** - Show only GET, POST, etc.
+- **Filter by service** - View one service at a time
+- **Sort by name/method** - Organize your view
+
+## Endpoint Details
+
+Click any endpoint to see:
+- **Full path** - Including path parameters
+- **Request schema** - Field types, validation, descriptions
+- **Response schema** - Expected output structure (Server only)
+- **Handler info** - Function name and location
+- **Middleware stack** - All applied middleware
+- **Recent traces** - Last requests to this endpoint
+- **Test in API Explorer** - Quick link to test
+
+## Export & Documentation
+
+<Callout type="info">
+  Coming soon: Export your service catalog as OpenAPI/Swagger spec
+</Callout>
+
+Future features:
+- **OpenAPI export** - Generate OpenAPI 3.0 spec
+- **Markdown docs** - Auto-generate API documentation
+- **Postman collection** - Export for Postman
+- **Code generation** - Generate client SDKs
+
+## Best Practices
+
+### 1. Use Descriptive Service Names
+
+```typescript
+// ✅ Good - Clear purpose
+app.service('user-management')
+app.service('order-processing')
+app.service('payment-gateway')
+
+// ❌ Bad - Unclear
+app.service('api')
+app.service('handlers')
+app.service('routes')
+```
+
+### 2. Add Schema Descriptions
+
+```typescript
+// ✅ Good - Helpful descriptions
+input: z.object({
+  email: z.string().email().describe('User email address'),
+  password: z.string().min(8).describe('Password (min 8 characters)')
+})
+
+// ❌ Bad - No context
+input: z.object({
+  email: z.string().email(),
+  password: z.string().min(8)
+})
+```
+
+### 3. Group Related Endpoints
+
+```typescript
+// ✅ Good - Logical grouping
+app.service('users')
+  .endpoint('GET', '/users', ...)
+  .endpoint('GET', '/users/:id', ...)
+  .endpoint('POST', '/users', ...)
+  .endpoint('PUT', '/users/:id', ...)
+  .endpoint('DELETE', '/users/:id', ...)
+
+// ❌ Bad - Scattered
+app.service('get-users').endpoint('GET', '/users', ...)
+app.service('create-user').endpoint('POST', '/users', ...)
+```
+
+### 4. Define Output Schemas (Server Only)
+
+```typescript
+// ✅ Good - Complete contract
+.endpoint('POST', '/users', {
+  input: z.object({ ... }),
+  output: z.object({ ... })  // Clients know what to expect
+}, handler)
+
+// ⚠️ Okay - But less documentation
+.endpoint('POST', '/users', {
+  input: z.object({ ... })
+  // No output schema
+}, handler)
+```
+
+## Vision Server vs Adapters
+
+| Feature | Vision Server | Adapters |
+|---------|--------------|----------|
+| Service organization | ✅ Explicit services | ✅ Auto-grouped by path |
+| Input schemas | ✅ Full support | ✅ Full support |
+| Output schemas | ✅ Full support | ❌ Not supported |
+| Schema descriptions | ✅ Displayed | ✅ Displayed |
+| Custom grouping | ✅ Built-in | ✅ Via config |
+| Middleware info | ✅ Shown | ✅ Shown |
+
+## Next Steps
+
+- [Request Tracing](/docs/features/tracing) - Trace requests to your services
+- [API Explorer](/docs/features/api-explorer) - Test your endpoints
+- [Schemas](/docs/features/schemas) - Deep dive into schema support

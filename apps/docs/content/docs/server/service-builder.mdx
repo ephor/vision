@@ -1,0 +1,502 @@
+---
+title: Service Builder Pattern
+description: Build APIs with the inline service builder approach
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Service Builder Pattern
+
+The **Service Builder Pattern** lets you define your entire API inline - endpoints, events, and cron jobs all in one place.
+
+## When to Use
+
+✅ **Best for:**
+- Small to medium APIs
+- Grouping related endpoints together
+- When you need pub/sub + cron jobs
+- Teams that prefer explicit structure
+
+❌ **Consider file-based routing if:**
+- You have a large API (50+ endpoints)
+- Your team prefers Next.js-style organization
+- You want file-system based routing
+
+## Basic Example
+
+```typescript
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({
+  service: { name: 'My API' }
+})
+
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({
+      id: z.string().describe('User ID')
+    }),
+    output: z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string()
+    })
+  }, async ({ id }, c) => {
+    const user = c.span('db.select', { 'db.table': 'users' }, () => {
+      return db.users.findById(id)
+    })
+    return user
+  })
+
+app.start(3000)
+```
+
+## Defining Services
+
+### Create a Service
+
+```typescript
+const userService = app.service('users')
+```
+
+This creates a service named "Users" in the Vision Dashboard.
+
+### Add Endpoints
+
+```typescript
+app.service('users')
+  // GET endpoint
+  .endpoint('GET', '/users', {
+    input: z.object({}),
+    output: z.object({
+      users: z.array(z.object({
+        id: z.string(),
+        name: z.string()
+      }))
+    })
+  }, async (_, c) => {
+    const users = c.span('db.select', {}, () => db.users.all())
+    return { users }
+  })
+  
+  // POST endpoint
+  .endpoint('POST', '/users', {
+    input: z.object({
+      name: z.string().min(1),
+      email: z.string().email()
+    }),
+    output: z.object({
+      id: z.string()
+    })
+  }, async (data, c) => {
+    const user = c.span('db.insert', {}, () => {
+      return db.users.create(data)
+    })
+    return { id: user.id }
+  })
+```
+
+### Chain Everything
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users', schema, handler)
+  .endpoint('GET', '/users/:id', schema, handler)
+  .endpoint('POST', '/users', schema, handler)
+  .endpoint('PUT', '/users/:id', schema, handler)
+  .endpoint('DELETE', '/users/:id', schema, handler)
+  .on('user/created', eventHandler)
+  .on('user/updated', eventHandler)
+  .cron('0 0 * * *', cronHandler)
+```
+
+## Schemas
+
+### Input & Output Schemas
+
+```typescript
+.endpoint('POST', '/users', {
+  input: z.object({
+    name: z.string().min(1).describe('User full name'),
+    email: z.string().email().describe('Email address'),
+    age: z.number().int().positive().optional().describe('User age')
+  }),
+  output: z.object({
+    id: z.string().describe('User ID'),
+    name: z.string().describe('User name'),
+    email: z.string().describe('User email'),
+    createdAt: z.string().describe('Creation timestamp')
+  })
+}, handler)
+```
+
+<Callout type="success">
+  Both input and output schemas appear in the Vision Dashboard with descriptions!
+</Callout>
+
+### Automatic Validation
+
+```typescript
+// Invalid request
+{
+  "name": "",  // Too short!
+  "email": "not-an-email"  // Invalid!
+}
+
+// Automatic response
+{
+  "error": "Validation error",
+  "details": [
+    { "path": ["name"], "message": "String must contain at least 1 character(s)" },
+    { "path": ["email"], "message": "Invalid email" }
+  ]
+}
+```
+
+### Handler Type Inference
+
+```typescript
+.endpoint('POST', '/users', {
+  input: z.object({
+    name: z.string(),
+    email: z.string().email()
+  }),
+  output: z.object({
+    id: z.string()
+  })
+}, async (data, c) => {
+  // TypeScript knows:
+  // data: { name: string, email: string }
+  // return type must be: { id: string }
+  
+  return { id: '123' }  // ✅ Type-safe!
+})
+```
+
+## Context Helpers
+
+### c.span()
+
+Built-in tracing helper:
+
+```typescript
+async (data, c) => {
+  // Database query
+  const user = c.span('db.select', {
+    'db.system': 'postgresql',
+    'db.table': 'users',
+    'user.id': data.id
+  }, () => {
+    return db.users.findById(data.id)
+  })
+  
+  // External API
+  const profile = c.span('http.client', {
+    'http.method': 'GET',
+    'http.url': 'https://api.example.com/profile',
+    'user.id': user.id
+  }, async () => {
+    return await fetch(`https://api.example.com/profile/${user.id}`)
+  })
+  
+  return { user, profile }
+}
+```
+
+### Standard Hono Context
+
+All Hono context methods work:
+
+```typescript
+async (data, c) => {
+  // Get headers
+  const token = c.req.header('Authorization')
+  
+  // Get query params (in addition to validated input)
+  const debug = c.req.query('debug')
+  
+  // Set response headers
+  c.header('X-Custom', 'value')
+  
+  // Return different status
+  return c.json({ error: 'Not found' }, 404)
+}
+```
+
+## Middleware
+
+### Global Middleware
+
+```typescript
+import { logger } from 'hono/logger'
+import { cors } from 'hono/cors'
+
+app.use('*', logger())
+app.use('*', cors())
+```
+
+### Service-Level Middleware
+
+Applied to all endpoints in the service:
+
+```typescript
+import { jwt } from 'hono/jwt'
+
+app.service('admin')
+  .use(jwt({ secret: process.env.JWT_SECRET }))
+  .endpoint('GET', '/admin/users', schema, handler)
+  .endpoint('DELETE', '/admin/users/:id', schema, handler)
+```
+
+### Endpoint-Level Middleware
+
+Applied to a single endpoint:
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users', schema, publicHandler)
+  .endpoint('POST', '/users', schema, protectedHandler, {
+    middleware: [authMiddleware]
+  })
+```
+
+## Pub/Sub Events
+
+### Subscribe to Events
+
+```typescript
+app.service('notifications')
+  .on('user/created', async (event) => {
+    console.log('Send welcome email to:', event.data.email)
+    await sendEmail(event.data.email, 'welcome')
+  })
+  .on('order/placed', async (event) => {
+    console.log('Send order confirmation:', event.data.orderId)
+    await sendEmail(event.data.userId, 'order-confirmation')
+  })
+```
+
+### Define Event Schemas
+
+Define schemas directly on `.on()` to get type-safe event payloads:
+
+```typescript
+app.service('notifications')
+  .on('user/created', {
+    schema: z.object({ userId: z.string(), email: z.string().email(), name: z.string() }),
+    handler: async (event) => {
+      await sendEmail(event.data.email, 'welcome')
+    }
+  })
+  .on('order/placed', {
+    schema: z.object({ orderId: z.string(), userId: z.string(), total: z.number() }),
+    handler: async (event) => {
+      await sendEmail(event.data.userId, 'order-confirmation')
+    }
+  })
+```
+
+### Send Events
+
+Use `c.emit()` inside handlers:
+
+```typescript
+await c.emit('user/created', {
+  userId: '123',
+  email: 'user@example.com',
+  name: 'John Doe'
+})
+```
+
+<Callout type="info">
+  Declare <code>.on('event', ...)</code> <b>before</b> any endpoint that calls <code>c.emit('event', ...)</code> so TypeScript can infer the event type for <code>c.emit</code>.
+</Callout>
+
+## Cron Jobs
+
+Schedule tasks with cron expressions:
+
+```typescript
+app.service('cleanup')
+  .cron('0 0 * * *', async () => {
+    console.log('Running daily cleanup at midnight')
+    await cleanupOldRecords()
+  }, { id: 'daily-cleanup' })
+  
+app.service('reports')
+  .cron('0 9 * * MON', async () => {
+    console.log('Sending weekly report every Monday at 9 AM')
+    await sendWeeklyReport()
+  }, { id: 'weekly-report' })
+```
+
+## Multiple Services
+
+Organize your API by domain:
+
+```typescript
+// User Management
+app.service('users')
+  .endpoint('GET', '/users', schema, handler)
+  .endpoint('POST', '/users', schema, handler)
+  .on('user/created', handler)
+
+// Order Processing
+app.service('orders')
+  .endpoint('GET', '/orders', schema, handler)
+  .endpoint('POST', '/orders', schema, handler)
+  .on('order/placed', handler)
+  .cron('0 */6 * * *', handler)
+
+// Analytics
+app.service('analytics')
+  .endpoint('GET', '/analytics/dashboard', schema, handler)
+  .on('user/created', handler)
+  .on('order/placed', handler)
+  .cron('0 0 * * *', handler)
+```
+
+## Best Practices
+
+### 1. Keep Services Focused
+
+```typescript
+// ✅ Good - Clear responsibility
+app.service('users')
+  .endpoint('GET', '/users', ...)
+  .endpoint('POST', '/users', ...)
+
+app.service('orders')
+  .endpoint('GET', '/orders', ...)
+  .endpoint('POST', '/orders', ...)
+
+// ❌ Bad - Mixed responsibilities
+app.service('api')
+  .endpoint('GET', '/users', ...)
+  .endpoint('GET', '/orders', ...)
+```
+
+### 2. Use Descriptive Names
+
+```typescript
+// ✅ Good
+app.service('user-management')
+app.service('order-processing')
+app.service('payment-gateway')
+
+// ❌ Bad
+app.service('api')
+app.service('handlers')
+app.service('routes')
+```
+
+### 3. Add Schema Descriptions
+
+```typescript
+// ✅ Good - Helpful descriptions
+input: z.object({
+  email: z.string().email().describe('User email address'),
+  password: z.string().min(8).describe('Password (minimum 8 characters)')
+})
+
+// ❌ Bad - No descriptions
+input: z.object({
+  email: z.string().email(),
+  password: z.string().min(8)
+})
+```
+
+### 4. Group Related Logic
+
+```typescript
+// ✅ Good - Related endpoints together
+app.service('users')
+  .endpoint('GET', '/users', ...)
+  .endpoint('POST', '/users', ...)
+  .on('user/created', ...)
+  .cron('0 0 * * *', ...)  // Daily user cleanup
+
+// ❌ Bad - Scattered logic
+app.service('users').endpoint('GET', '/users', ...)
+app.service('user-creation').endpoint('POST', '/users', ...)
+app.service('user-events').on('user/created', ...)
+```
+
+## Complete Example
+
+```typescript
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+import { db } from './db'
+import { users } from './db/schema'
+import { eq } from 'drizzle-orm'
+
+const app = new Vision({
+  service: {
+    name: 'My API',
+    version: '1.0.0'
+  }
+})
+
+// User Service
+app.service('users')
+  // Event handler (declare BEFORE endpoints that emit)
+  .on('user/created', {
+    schema: z.object({ userId: z.string(), email: z.string().email() }),
+    handler: async (event) => {
+      console.log('Sending welcome email to:', event.data.email)
+    }
+  })
+
+  // List users
+  .endpoint('GET', '/users', {
+    input: z.object({}),
+    output: z.object({
+      users: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        email: z.string()
+      }))
+    })
+  }, async (_, c) => {
+    const allUsers = c.span('db.select', { 'db.table': 'users' }, () => {
+      return db.select().from(users).all()
+    })
+    return { users: allUsers }
+  })
+  
+  // Create user (emits event)
+  .endpoint('POST', '/users', {
+    input: z.object({
+      name: z.string().min(1).describe('User full name'),
+      email: z.string().email().describe('Email address')
+    }),
+    output: z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string()
+    })
+  }, async (data, c) => {
+    const user = c.span('db.insert', { 'db.table': 'users' }, () => {
+      return db.insert(users).values(data).returning().get()
+    })
+    // Emit event
+    await c.emit('user/created', { userId: user.id, email: user.email })
+    
+    return user
+  })
+  
+  // Cron job
+  .cron('0 0 * * *', async () => {
+    console.log('Daily user cleanup')
+  }, { id: 'daily-cleanup' })
+
+app.start(3000)
+```
+
+## Next Steps
+
+- [File-Based Routing](/docs/server/file-based-routing) - Alternative approach
+- [Next.js Integration](/docs/server/nextjs-integration) - Use with Next.js
+- [Features](/docs/features) - Explore all Vision features

@@ -1,0 +1,620 @@
+---
+title: File-Based Routing
+description: Next.js App Router style routing for Vision Server
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# File-Based Routing
+
+Vision Server supports **Next.js App Router** style file-based routing - use the exact same syntax!
+
+<Callout type="success">
+  If you know Next.js App Router, you already know how to use Vision Server file-based routing!
+</Callout>
+
+## When to Use
+
+✅ **Best for:**
+- Large APIs (50+ endpoints)
+- Next.js users wanting familiar structure
+- Teams that prefer file-system organization
+- Collocating route logic with tests
+
+❌ **Consider service builder if:**
+- You need pub/sub + cron jobs in same file
+- You prefer explicit service grouping
+- You have a small API (less than 20 endpoints)
+
+## Quick Start
+
+### 1. Create API Directory
+
+```
+app/api/
+├── products/
+│   ├── route.ts
+│   └── [id]/
+│       └── route.ts
+└── users/
+    └── route.ts
+```
+
+### 2. Define Routes (Next.js Style!)
+
+```typescript
+// app/api/products/route.ts
+import { z } from 'zod'
+
+export async function GET(_, c) {
+  const products = c.span('db.select', { 'db.table': 'products' }, () => {
+    return db.products.all()
+  })
+  return { products }
+}
+
+export const GET_schema = {
+  input: z.object({}),
+  output: z.object({
+    products: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      price: z.number()
+    }))
+  })
+}
+```
+
+### 3. Load Routes
+
+```typescript
+// src/index.ts
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+// Load all file-based routes
+await app.loadFileBasedRoutes('./app/api')
+
+app.start(3000)
+```
+
+**Done!** Routes automatically appear in Vision Dashboard grouped by path.
+
+## File Structure
+
+### Conventions
+
+#### route.ts or +endpoint.ts
+
+Both work the same way - choose what you prefer:
+
+```
+app/api/products/route.ts       ← Recommended (Next.js style)
+app/api/products/+endpoint.ts   ← Alternative
+```
+
+#### Dynamic Segments
+
+Use `[param]` for dynamic routes (just like Next.js):
+
+```
+app/api/products/[id]/route.ts           → /products/:id
+app/api/users/[userId]/posts/[postId]/route.ts  → /users/:userId/posts/:postId
+```
+
+### Example Structure
+
+```
+app/api/
+├── products/
+│   ├── route.ts              → GET, POST /products
+│   ├── [id]/
+│   │   └── route.ts          → GET, PUT, DELETE /products/:id
+│   └── search/
+│       └── route.ts          → GET /products/search
+├── users/
+│   ├── route.ts              → GET, POST /users
+│   └── [id]/
+│       ├── route.ts          → GET /users/:id
+│       └── orders/
+│           └── route.ts      → GET /users/:id/orders
+└── analytics/
+    ├── dashboard/
+    │   └── route.ts          → GET /analytics/dashboard
+    └── track/
+        └── route.ts          → POST /analytics/track
+```
+
+## Route Files
+
+### Exports
+
+Each route file exports HTTP method functions:
+
+```typescript
+// app/api/products/route.ts
+import { z } from 'zod'
+
+// GET /products
+export async function GET(req, c) {
+  // Handler logic
+  return { products: [] }
+}
+
+// POST /products
+export async function POST(req, c) {
+  // Handler logic
+  return { id: '123' }
+}
+
+// Optional: Schemas for validation + docs
+export const GET_schema = {
+  input: z.object({}),
+  output: z.object({ products: z.array(...) })
+}
+
+export const POST_schema = {
+  input: z.object({ name: z.string(), price: z.number() }),
+  output: z.object({ id: z.string() })
+}
+
+// Optional: Middleware
+export const middleware = [authMiddleware]
+```
+
+### Supported Methods
+
+Export any HTTP method function:
+
+- `GET`
+- `POST`
+- `PUT`
+- `PATCH`
+- `DELETE`
+
+```typescript
+export async function GET(req, c) { /* ... */ }
+export async function POST(req, c) { /* ... */ }
+export async function PUT(req, c) { /* ... */ }
+export async function PATCH(req, c) { /* ... */ }
+export async function DELETE(req, c) { /* ... */ }
+```
+
+### Multiple Methods per File
+
+You can export multiple methods from the same file:
+
+```typescript
+// app/api/products/route.ts
+export async function GET(_, c) {
+  // List products
+  const products = c.span('db.select', {}, () => db.products.all())
+  return { products }
+}
+
+export async function POST(data, c) {
+  // Create product
+  const product = c.span('db.insert', {}, () => db.products.create(data))
+  return product
+}
+
+export const GET_schema = { /* ... */ }
+export const POST_schema = { /* ... */ }
+```
+
+## Examples
+
+### GET with Path Parameters
+
+```typescript
+// app/api/products/[id]/route.ts
+import { z } from 'zod'
+
+export async function GET({ id }, c) {
+  const product = c.span('db.select', {
+    'db.table': 'products',
+    'product.id': id
+  }, () => {
+    return db.products.findById(id)
+  })
+  
+  if (!product) {
+    return c.json({ error: 'Product not found' }, 404)
+  }
+  
+  return product
+}
+
+export const GET_schema = {
+  input: z.object({
+    id: z.string().describe('Product ID')
+  }),
+  output: z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    description: z.string()
+  })
+}
+```
+
+### POST with Body
+
+```typescript
+// app/api/products/route.ts
+import { z } from 'zod'
+
+export async function POST(data, c) {
+  const product = c.span('db.insert', { 'db.table': 'products' }, () => {
+    return db.products.create({
+      ...data,
+      id: generateId(),
+      createdAt: new Date().toISOString()
+    })
+  })
+  
+  console.log('Product created:', product.id)
+  
+  return product
+}
+
+export const POST_schema = {
+  input: z.object({
+    name: z.string().min(1).describe('Product name'),
+    price: z.number().positive().describe('Product price'),
+    description: z.string().optional().describe('Product description')
+  }),
+  output: z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    createdAt: z.string()
+  })
+}
+```
+
+### Nested Dynamic Routes
+
+```typescript
+// app/api/users/[userId]/orders/[orderId]/route.ts
+export async function GET({ userId, orderId }, c) {
+  const order = c.span('db.select', {
+    'db.table': 'orders',
+    'user.id': userId,
+    'order.id': orderId
+  }, () => {
+    return db.orders.findOne({
+      id: orderId,
+      userId: userId
+    })
+  })
+  
+  return order
+}
+
+export const GET_schema = {
+  input: z.object({
+    userId: z.string().describe('User ID'),
+    orderId: z.string().describe('Order ID')
+  }),
+  output: z.object({
+    id: z.string(),
+    userId: z.string(),
+    total: z.number(),
+    items: z.array(z.object({
+      productId: z.string(),
+      quantity: z.number()
+    }))
+  })
+}
+```
+
+### Search/Query Params
+
+```typescript
+// app/api/products/search/route.ts
+export async function GET({ q, category, minPrice }, c) {
+  const products = c.span('db.select', {
+    'db.table': 'products',
+    'search.query': q
+  }, () => {
+    let query = db.products.where({ published: true })
+    
+    if (q) {
+      query = query.where({ name: { contains: q } })
+    }
+    if (category) {
+      query = query.where({ category })
+    }
+    if (minPrice) {
+      query = query.where({ price: { gte: minPrice } })
+    }
+    
+    return query.all()
+  })
+  
+  return { products, total: products.length }
+}
+
+export const GET_schema = {
+  input: z.object({
+    q: z.string().optional().describe('Search query'),
+    category: z.string().optional().describe('Filter by category'),
+    minPrice: z.number().optional().describe('Minimum price')
+  }),
+  output: z.object({
+    products: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      price: z.number()
+    })),
+    total: z.number()
+  })
+}
+```
+
+## Context Helpers
+
+### c.span()
+
+Same as service builder - built into context:
+
+```typescript
+export async function GET(_, c) {
+  const user = c.span('db.select', { 'db.table': 'users' }, () => {
+    return db.users.findById('123')
+  })
+  
+  const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
+    return db.posts.findMany({ userId: user.id })
+  })
+  
+  return { user, posts }
+}
+```
+
+### Standard Hono Context
+
+All Hono methods work:
+
+```typescript
+export async function POST(data, c) {
+  // Get headers
+  const token = c.req.header('Authorization')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  
+  // Set response headers
+  c.header('X-Request-ID', generateId())
+  
+  // Custom status codes
+  return c.json({ created: true }, 201)
+}
+```
+
+## Middleware
+
+### File-Level Middleware
+
+Apply to all methods in the file:
+
+```typescript
+// app/api/admin/users/route.ts
+import { jwt } from 'hono/jwt'
+
+export const middleware = [
+  jwt({ secret: process.env.JWT_SECRET })
+]
+
+export async function GET(_, c) {
+  // Protected by JWT
+  return { users: [] }
+}
+
+export async function POST(data, c) {
+  // Also protected by JWT
+  return { id: '123' }
+}
+```
+
+## Service Grouping
+
+Routes are automatically grouped by path prefix in the Vision Dashboard:
+
+```
+app/api/
+├── products/route.ts         → Products service
+├── products/[id]/route.ts    → Products service
+├── users/route.ts            → Users service
+├── users/[id]/route.ts       → Users service
+└── analytics/dashboard/route.ts  → Analytics service
+```
+
+**Dashboard shows:**
+- **Products** (2 endpoints)
+- **Users** (2 endpoints)
+- **Analytics** (1 endpoint)
+
+## Mixing Approaches
+
+You can use both file-based routes AND service builder:
+
+```typescript
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+// Inline services (with pub/sub + cron)
+app.service('notifications')
+  .on('user/created', handler)
+  .cron('0 9 * * *', handler)
+
+// File-based routes (HTTP endpoints)
+await app.loadFileBasedRoutes('./app/api')
+
+app.start(3000)
+```
+
+<Callout type="info">
+  Use **service builder** for pub/sub + cron, **file-based routes** for HTTP endpoints!
+</Callout>
+
+## Best Practices
+
+### 1. Keep Files Small
+
+```typescript
+// ✅ Good - One concern per file
+// app/api/products/route.ts - List & Create
+// app/api/products/[id]/route.ts - Get & Update & Delete
+// app/api/products/search/route.ts - Search
+
+// ❌ Bad - Everything in one file
+// app/api/products/route.ts - All product operations
+```
+
+### 2. Use Meaningful Paths
+
+```typescript
+// ✅ Good - Clear intent
+app/api/products/search/route.ts
+app/api/users/[id]/orders/route.ts
+app/api/analytics/dashboard/route.ts
+
+// ❌ Bad - Unclear
+app/api/search/route.ts
+app/api/data/route.ts
+```
+
+### 3. Add Schemas
+
+```typescript
+// ✅ Good - Full type safety + docs
+export const GET_schema = {
+  input: z.object({ id: z.string() }),
+  output: z.object({ ... })
+}
+
+// ❌ Bad - No schemas
+// (works but no validation or docs)
+```
+
+### 4. Group Related Routes
+
+```
+// ✅ Good - Logical grouping
+app/api/
+├── products/
+│   ├── route.ts
+│   ├── [id]/route.ts
+│   └── search/route.ts
+
+// ❌ Bad - Flat structure
+app/api/
+├── products-list.ts
+├── products-get.ts
+├── products-search.ts
+```
+
+## Complete Example
+
+```typescript
+// app/api/products/route.ts
+import { z } from 'zod'
+import { db } from '@/db'
+import { products } from '@/db/schema'
+
+// GET /products - List all products
+export async function GET(_, c) {
+  const allProducts = c.span('db.select', { 'db.table': 'products' }, () => {
+    return db.select().from(products).all()
+  })
+  
+  console.log('📦 Fetched products:', allProducts.length)
+  
+  return { products: allProducts }
+}
+
+// POST /products - Create product
+export async function POST(data, c) {
+  const product = c.span('db.insert', { 'db.table': 'products' }, () => {
+    return db.insert(products).values({
+      ...data,
+      id: generateId(),
+      createdAt: new Date().toISOString()
+    }).returning().get()
+  })
+  
+  console.log('📦 Product created:', product.id)
+  
+  return product
+}
+
+export const GET_schema = {
+  input: z.object({}),
+  output: z.object({
+    products: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      price: z.number(),
+      inStock: z.boolean()
+    }))
+  })
+}
+
+export const POST_schema = {
+  input: z.object({
+    name: z.string().min(1).describe('Product name'),
+    price: z.number().positive().describe('Product price'),
+    description: z.string().optional().describe('Product description')
+  }),
+  output: z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    createdAt: z.string()
+  })
+}
+```
+
+```typescript
+// app/api/products/[id]/route.ts
+import { z } from 'zod'
+
+// GET /products/:id - Get product by ID
+export async function GET({ id }, c) {
+  const product = c.span('db.select', {
+    'db.table': 'products',
+    'product.id': id
+  }, () => {
+    return db.products.findById(id)
+  })
+  
+  if (!product) {
+    return c.json({ error: 'Product not found' }, 404)
+  }
+  
+  return product
+}
+
+export const GET_schema = {
+  input: z.object({
+    id: z.string().describe('Product ID')
+  }),
+  output: z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    inStock: z.boolean(),
+    description: z.string()
+  })
+}
+```
+
+## Next Steps
+
+- [Next.js Integration](/docs/server/nextjs-integration) - Use with Next.js projects
+- [Service Builder](/docs/server/service-builder) - Alternative approach
+- [Features](/docs/features) - Explore all Vision features

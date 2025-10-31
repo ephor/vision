@@ -1,0 +1,224 @@
+---
+title: Fastify Adapter
+description: Vision adapter for Fastify with hooks-based tracing, Zod validation, and auto-discovery.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Fastify Adapter
+
+Vision adapter for Fastify provides zero-config tracing using Fastify's native hooks lifecycle, request/response capture, and Zod schema support.
+
+## Installation
+
+```bash
+bun add @getvision/adapter-fastify
+# or
+npm i @getvision/adapter-fastify
+```
+
+## Quick Start
+
+```ts
+import Fastify from 'fastify'
+import { visionPlugin, enableAutoDiscovery } from '@getvision/adapter-fastify'
+import { z } from 'zod'
+
+const app = Fastify()
+
+// Register Vision plugin (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  await app.register(visionPlugin, { port: 9500 })
+}
+
+// Routes
+app.get('/users', async (request, reply) => {
+  return { users: [] }
+})
+
+// Zod validation with Fastify schema
+const CreateUserSchema = z.object({
+  name: z.string().min(1).describe('Full name'),
+  email: z.string().email().describe('Email'),
+})
+
+app.post('/users', {
+  schema: {
+    body: CreateUserSchema
+  }
+}, async (request, reply) => {
+  return { id: 1, ...request.body }
+})
+
+// Auto-discover routes (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  enableAutoDiscovery(app)
+}
+
+await app.listen({ port: 3000 })
+```
+
+Open Dashboard at http://localhost:9500.
+
+## Features
+
+- **Hooks-based tracing** - Uses Fastify's `onRequest`, `preHandler`, `onResponse` hooks
+- **Root span + child spans** - `http.request` root span with nested DB/operation spans
+- **Request/response capture** - Full headers, body, query params
+- **Service Catalog** - Auto-grouping and manual grouping with glob patterns
+- **Zod schemas** - Native Fastify schema support generates API Explorer templates
+- **CORS headers** - Auto-configured for Dashboard (`X-Vision-Trace-Id`, `X-Vision-Session`)
+
+## Plugin Options
+
+```ts
+interface VisionFastifyOptions {
+  port?: number              // Dashboard port (default: 9500)
+  enabled?: boolean          // Enable Vision (default: true)
+  maxTraces?: number         // Trace store size (default: 1000)
+  maxLogs?: number           // Log store size (default: 10000)
+  logging?: boolean          // Console request logs (default: true)
+  cors?: boolean             // CORS for Dashboard (default: true)
+  service?: {
+    name?: string
+    version?: string
+    description?: string
+    integrations?: Record<string, string>
+  }
+}
+```
+
+## Services Catalog
+
+By default, routes are grouped by first path segment.
+
+```ts
+// Auto-grouping
+enableAutoDiscovery(app)
+
+// Manual grouping with globs
+enableAutoDiscovery(app, {
+  services: [
+    { name: 'Users', description: 'User management', routes: ['/users/*'] },
+    { name: 'Auth', routes: ['/auth/*'] },
+  ],
+})
+```
+
+### Registration Order and Prefixed Plugins
+
+- Register all plugins (including prefixed ones) before calling `enableAutoDiscovery(app)`.
+- Define routes inside a plugin relative to its local scope; the final path is `prefix + localPath`.
+
+```ts
+// plugins/analytics.ts
+import type { FastifyInstance } from 'fastify'
+export default async function analytics(app: FastifyInstance) {
+  app.get('/dashboard', async (req, reply) => {
+    return { ok: true }
+  })
+}
+```
+
+```ts
+// index.ts
+import analytics from './plugins/analytics'
+
+// register plugin with prefix BEFORE discovery
+await app.register(analytics, { prefix: '/analytics' })
+
+// now enable discovery and (optionally) manual grouping
+enableAutoDiscovery(app, {
+  services: [
+    { name: 'Users', routes: ['/users', '/users/*'] },
+    { name: 'Analytics', routes: ['/analytics', '/analytics/*'] },
+  ],
+})
+```
+
+## Zod Validation
+
+Fastify has native schema support. Use Zod schemas directly:
+
+```ts
+import { z } from 'zod'
+
+const UpdateUser = z.object({
+  name: z.string().min(1).optional().describe('Full name (optional)'),
+  email: z.string().email().optional().describe('Email (optional)'),
+})
+
+app.put('/users/:id', {
+  schema: {
+    body: UpdateUser
+  }
+}, async (request, reply) => {
+  return request.body
+})
+```
+
+Vision extracts the schema and generates a commented JSON template for API Explorer. Comments are stripped automatically when sending.
+
+## Custom Spans
+
+Use `useVisionSpan()` to create child spans attached to the current request's root span.
+
+```ts
+import { useVisionSpan } from '@getvision/adapter-fastify'
+
+app.get('/users/:id', async (request, reply) => {
+  const withSpan = useVisionSpan()
+
+  const user = withSpan('db.select', { 
+    'db.system': 'postgresql', 
+    'db.table': 'users' 
+  }, () => {
+    return { id: 1, name: 'Alice' }
+  })
+
+  return user
+})
+```
+
+## Hooks Lifecycle
+
+Vision uses Fastify hooks for tracing:
+
+1. **`onRequest`** - Create trace, start root span, add CORS headers
+2. **`preHandler`** - Run handler in AsyncLocalStorage context
+3. **`onResponse`** - Complete trace, end span, broadcast to dashboard
+
+This ensures child spans created with `useVisionSpan()` are properly parented.
+
+## CORS
+
+When `cors` is enabled (default), the plugin sets:
+
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, Authorization, X-Vision-Trace-Id, X-Vision-Session`
+- `Access-Control-Expose-Headers: X-Vision-Trace-Id, X-Vision-Session`
+
+<Callout>
+If you proxy the Dashboard or run on a different origin, keep these headers to allow the API Explorer to call your API.
+</Callout>
+
+## Fastify vs Express
+
+| Feature | Fastify | Express |
+|---------|---------|---------|
+| **Tracing** | Hooks (`onRequest`, `onResponse`) | Middleware + `res.on('finish')` |
+| **Schema** | Native schema support | Custom `zValidator()` middleware |
+| **Performance** | Faster (optimized router) | Standard |
+| **TypeScript** | First-class support | Community types |
+| **Auto-discovery** | Internal router API | `app._router.stack` |
+
+## Troubleshooting
+
+- **API Explorer shows "No schema defined"** → ensure route uses `schema: { body: ZodSchema }` and `enableAutoDiscovery(app)` ran after route registration
+- **Spans look flat** → ensure you use `useVisionSpan()` to create child spans; they will be parented under `http.request`
+- **Routes not discovered** → call `enableAutoDiscovery(app)` after all routes are registered
+
+## Example
+
+See repository example: `examples/fastify-basic/`.

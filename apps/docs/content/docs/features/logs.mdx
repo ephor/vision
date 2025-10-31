@@ -1,0 +1,382 @@
+---
+title: Live Logs
+description: Stream and filter logs in real-time
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Live Logs
+
+Vision captures and displays all your application logs in real-time, with powerful filtering and correlation with traces.
+
+## What are Live Logs?
+
+The Logs page shows:
+- **All console output** - `console.log()`, `console.error()`, etc.
+- **Real-time streaming** - Logs appear instantly
+- **Trace correlation** - Link logs to their requests
+- **Filtering** - Search and filter by level, service, message
+- **Timestamps** - Precise timing for each log
+
+## Log Levels
+
+Vision captures all standard log levels:
+
+```typescript
+console.log('Info message')        // INFO
+console.info('Info message')       // INFO
+console.warn('Warning message')    // WARN
+console.error('Error message')     // ERROR
+console.debug('Debug message')     // DEBUG
+```
+
+**In the Dashboard:**
+```
+[INFO]  2024-01-20 10:30:45  Info message
+[WARN]  2024-01-20 10:30:46  Warning message
+[ERROR] 2024-01-20 10:30:47  Error message
+[DEBUG] 2024-01-20 10:30:48  Debug message
+```
+
+## Automatic Log Capture
+
+### With Vision Server
+
+Logs are automatically captured:
+
+```typescript
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+app.service('users')
+  .endpoint('POST', '/users', schema, async (data, c) => {
+    console.log('Creating user:', data.email)
+    
+    const user = c.span('db.insert', {}, () => {
+      return db.insert(users).values(data).returning().get()
+    })
+    
+    console.log('User created:', user.id)
+    return user
+  })
+```
+
+**Dashboard shows:**
+```
+[INFO] 10:30:45  Creating user: john@example.com
+[INFO] 10:30:45  User created: user_123
+```
+
+### With Vision Adapters
+
+Same automatic capture:
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter } from '@getvision/adapter-hono'
+
+const app = new Hono()
+app.use('*', visionAdapter())
+
+app.post('/users', async (c) => {
+  console.log('Creating user')
+  // Automatically captured
+  return c.json({ success: true })
+})
+```
+
+<Callout type="info">
+  Both **Vision Server** and **Adapters** automatically capture all console output.
+</Callout>
+
+## Trace Correlation
+
+Logs are automatically linked to their traces:
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users/:id', schema, async ({ id }, c) => {
+    console.log('Fetching user:', id)
+    
+    const user = c.span('db.select', {}, () => {
+      console.log('Executing query')
+      return db.select().from(users).where(eq(users.id, id)).get()
+    })
+    
+    if (!user) {
+      console.error('User not found:', id)
+      throw new Error('User not found')
+    }
+    
+    console.log('User found:', user.email)
+    return user
+  })
+```
+
+**In the Dashboard:**
+
+Click on a trace to see its logs:
+```
+Trace: GET /users/123 [200] 45ms
+├─ Logs:
+│  ├─ [INFO]  Fetching user: 123
+│  ├─ [INFO]  Executing query
+│  └─ [INFO]  User found: john@example.com
+└─ Spans:
+   └─ db.select (12ms)
+```
+
+Click on a log to see its trace:
+```
+Log: [INFO] Fetching user: 123
+└─ Trace: GET /users/123 [200] 45ms
+```
+
+## Filtering Logs
+
+### By Level
+
+```
+[Filter: ERROR]
+[ERROR] 10:30:47  Database connection failed
+[ERROR] 10:31:22  User not found: 456
+```
+
+### By Search Term
+
+```
+[Search: "user"]
+[INFO]  10:30:45  Creating user: john@example.com
+[INFO]  10:30:45  User created: user_123
+[ERROR] 10:31:22  User not found: 456
+```
+
+### By Service
+
+```
+[Service: Users]
+[INFO]  10:30:45  Creating user
+[INFO]  10:30:46  User created
+[INFO]  10:31:00  Fetching user
+```
+
+### By Time Range
+
+```
+[Last 5 minutes]
+[INFO]  10:30:45  Recent log 1
+[INFO]  10:31:00  Recent log 2
+```
+
+## Structured Logging
+
+Log objects for better inspection:
+
+```typescript
+console.log('User created', {
+  userId: user.id,
+  email: user.email,
+  timestamp: new Date().toISOString()
+})
+```
+
+**Dashboard shows:**
+```
+[INFO] 10:30:45  User created
+{
+  "userId": "user_123",
+  "email": "john@example.com",
+  "timestamp": "2024-01-20T10:30:45.123Z"
+}
+```
+
+## Error Logging
+
+Capture errors with stack traces:
+
+```typescript
+try {
+  const result = riskyOperation()
+} catch (error) {
+  console.error('Operation failed:', error)
+  // Stack trace automatically captured
+}
+```
+
+**Dashboard shows:**
+```
+[ERROR] 10:30:47  Operation failed: Error: Database timeout
+Stack trace:
+  at riskyOperation (handler.ts:45)
+  at async handler (handler.ts:32)
+  at async dispatch (hono.ts:123)
+```
+
+## Performance Logging
+
+Log with timing information:
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users', schema, async (_, c) => {
+    const start = Date.now()
+    
+    const users = c.span('db.select', {}, () => {
+      return db.select().from(users).all()
+    })
+    
+    const duration = Date.now() - start
+    console.log(`Fetched ${users.length} users in ${duration}ms`)
+    
+    return { users }
+  })
+```
+
+**Dashboard shows:**
+```
+[INFO] 10:30:45  Fetched 150 users in 45ms
+```
+
+## Log Context
+
+Add context to your logs:
+
+```typescript
+app.service('orders')
+  .endpoint('POST', '/orders', schema, async (data, c) => {
+    const orderId = generateId()
+    
+    console.log('[Order]', orderId, 'Creating order for user:', data.userId)
+    
+    const order = c.span('db.insert', {}, () => {
+      console.log('[Order]', orderId, 'Inserting into database')
+      return db.insert(orders).values({ ...data, id: orderId }).returning().get()
+    })
+    
+    console.log('[Order]', orderId, 'Order created successfully')
+    
+    return order
+  })
+```
+
+**Dashboard shows:**
+```
+[INFO] 10:30:45  [Order] ord_123 Creating order for user: user_456
+[INFO] 10:30:45  [Order] ord_123 Inserting into database
+[INFO] 10:30:45  [Order] ord_123 Order created successfully
+```
+
+## Log Retention
+
+Configure how many logs to keep:
+
+```typescript
+const app = new Vision({
+  service: { name: 'My API' },
+  vision: {
+    maxLogs: 10000  // Keep last 10,000 logs (default)
+  }
+})
+```
+
+When the limit is reached, oldest logs are removed automatically.
+
+## Best Practices
+
+### 1. Use Appropriate Log Levels
+
+```typescript
+// ✅ Good - Right level for the message
+console.log('User logged in')           // INFO
+console.warn('Rate limit approaching')  // WARN
+console.error('Payment failed')         // ERROR
+console.debug('Cache hit')              // DEBUG
+
+// ❌ Bad - Wrong levels
+console.error('User logged in')         // Too severe
+console.log('Payment failed')           // Too casual
+```
+
+### 2. Add Context
+
+```typescript
+// ✅ Good - Rich context
+console.log('Order created:', {
+  orderId: order.id,
+  userId: order.userId,
+  total: order.total,
+  items: order.items.length
+})
+
+// ❌ Bad - No context
+console.log('Order created')
+```
+
+### 3. Don't Log Sensitive Data
+
+```typescript
+// ✅ Good - Safe logging
+console.log('User authenticated:', { userId: user.id })
+
+// ❌ Bad - Leaking secrets
+console.log('User authenticated:', {
+  userId: user.id,
+  password: user.password,  // Never log passwords!
+  apiKey: user.apiKey       // Never log API keys!
+})
+```
+
+### 4. Use Structured Logging
+
+```typescript
+// ✅ Good - Structured
+console.log('Payment processed', {
+  amount: 99.99,
+  currency: 'USD',
+  provider: 'stripe'
+})
+
+// ❌ Bad - String concatenation
+console.log('Payment processed: $99.99 USD via stripe')
+```
+
+### 5. Log Important Events
+
+```typescript
+// ✅ Good - Track important events
+console.log('User registered:', user.email)
+console.log('Order placed:', order.id)
+console.error('Payment failed:', error.message)
+
+// ❌ Bad - Too verbose
+console.log('Variable x assigned')
+console.log('If statement executed')
+console.log('Loop iteration 1')
+```
+
+## Debugging Workflow
+
+1. **See error in logs** - Filter by ERROR level
+2. **Find related trace** - Click log to see trace
+3. **Inspect request** - View request body, headers
+4. **Check spans** - See which operation failed
+5. **Review timeline** - Understand what happened when
+
+## Export Logs
+
+<Callout type="info">
+  Coming soon: Export logs as JSON, CSV, or text files
+</Callout>
+
+Future features:
+- **Export to file** - Download logs for offline analysis
+- **Log aggregation** - Group similar logs
+- **Alerting** - Get notified of errors
+- **Log forwarding** - Send to external services
+
+## Next Steps
+
+- [Request Tracing](/docs/features/tracing) - Correlate logs with traces
+- [API Explorer](/docs/features/api-explorer) - Test and debug endpoints
+- [Services](/docs/features/services) - View your service catalog

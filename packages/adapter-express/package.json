@@ -1,0 +1,28 @@
+{
+  "name": "@getvision/adapter-express",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@getvision/core": "workspace:*",
+    "zod": "^4.1.11"
+  },
+  "peerDependencies": {
+    "express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.14.9",
+    "express": "^5.1.0",
+    "typescript": "5.9.3"
+  }
+}

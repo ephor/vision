@@ -1,0 +1,10 @@
+{
+  "title": "Features",
+  "pages": [
+    "tracing",
+    "api-explorer",
+    "services",
+    "logs",
+    "schemas"
+  ]
+}

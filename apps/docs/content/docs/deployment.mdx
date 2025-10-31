@@ -1,0 +1,244 @@
+---
+title: Deployment
+description: Deploy Vision dashboard alongside your application
+---
+
+# Self-Hosted Deployment
+
+Deploy Vision dashboard alongside your application for free.
+
+## Quick Start
+
+Vision runs as part of your application - no separate services needed!
+
+```typescript
+import { visionAdapter } from '@getvision/adapter-hono'
+
+app.use('*', visionAdapter({
+  port: 9500,  // Dashboard accessible at :9500
+}))
+```
+
+That's it! Vision starts automatically when your app starts.
+
+## Production Considerations
+
+### Environment Variables
+
+```bash
+# Enable only in development
+VISION_ENABLED=true
+
+# Or use NODE_ENV
+NODE_ENV=development
+```
+
+```typescript
+app.use('*', visionAdapter({
+  enabled: process.env.VISION_ENABLED === 'true',
+  // or
+  enabled: process.env.NODE_ENV === 'development',
+}))
+```
+
+### Security
+
+Vision dashboard has **no authentication** by default. For production:
+
+#### Option 1: Disable in Production ✅ Recommended
+
+```typescript
+app.use('*', visionAdapter({
+  enabled: process.env.NODE_ENV === 'development',
+}))
+```
+
+#### Option 2: Use Tunnel (ngrok, Cloudflare Tunnel)
+
+```bash
+# Expose local dashboard securely
+ngrok http 9500
+```
+
+#### Option 3: Add Custom Auth (Coming Soon)
+
+```typescript
+// Future API
+app.use('*', visionAdapter({
+  auth: {
+    username: process.env.VISION_USER,
+    password: process.env.VISION_PASS,
+  },
+}))
+```
+
+### Memory Management
+
+Vision stores traces in-memory by default:
+
+```typescript
+app.use('*', visionAdapter({
+  maxTraces: 1000,  // Limit traces to prevent memory leaks
+}))
+```
+
+**Memory usage:**
+- ~1KB per trace
+- 1000 traces ≈ 1MB
+- Auto-cleanup when limit reached (FIFO)
+
+For production with high traffic, consider:
+- Lower `maxTraces` (e.g., 500)
+- Enable only for specific services
+- Use sampling (coming soon)
+
+## Deployment Platforms
+
+### Cloudflare Workers
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter } from '@getvision/adapter-hono'
+
+const app = new Hono()
+
+app.use('*', visionAdapter({
+  // Works on Cloudflare Workers!
+  enabled: true,
+}))
+
+export default app
+```
+
+### Docker
+
+```dockerfile
+FROM oven/bun:1 as base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
+
+# Copy source
+COPY . .
+
+# Expose ports
+EXPOSE 3000
+EXPOSE 9500
+
+CMD ["bun", "run", "start"]
+```
+
+```bash
+docker build -t my-app .
+docker run -p 3000:3000 -p 9500:9500 my-app
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+      - "9500:9500"  # Vision dashboard
+    environment:
+      - NODE_ENV=development
+      - VISION_ENABLED=true
+    volumes:
+      - ./src:/app/src  # Hot reload in dev
+```
+
+## Reverse Proxy
+
+### Nginx
+
+```nginx
+# Proxy Vision dashboard
+location /vision {
+    proxy_pass http://localhost:9500;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+```
+
+### Caddy
+
+```
+example.com {
+    route /vision* {
+        reverse_proxy localhost:9500
+    }
+    
+    route {
+        reverse_proxy localhost:3000
+    }
+}
+```
+
+## Monitoring
+
+Vision itself is lightweight:
+
+- **CPU**: < 1% overhead
+- **Memory**: ~1-2MB + traces
+- **Network**: WebSocket for real-time updates
+
+Monitor with standard tools:
+- `top` / `htop` - CPU/memory
+- `lsof -i :9500` - Port usage
+- Application logs - Vision logs trace count
+
+## Troubleshooting
+
+### Dashboard Not Accessible
+
+1. **Check port is open:**
+   ```bash
+   lsof -i :9500
+   ```
+
+2. **Check firewall:**
+   ```bash
+   # Allow port 9500
+   ufw allow 9500
+   ```
+
+3. **Check Vision is enabled:**
+   ```typescript
+   console.log('Vision enabled:', visionInstance !== null)
+   ```
+
+### High Memory Usage
+
+1. **Reduce max traces:**
+   ```typescript
+   visionAdapter({ maxTraces: 500 })
+   ```
+
+2. **Enable only in dev:**
+   ```typescript
+   visionAdapter({ enabled: process.env.NODE_ENV === 'development' })
+   ```
+
+### WebSocket Errors
+
+Vision uses WebSocket for real-time updates. If behind proxy:
+
+```nginx
+# Nginx - Enable WebSocket
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+```
+
+## Next Steps
+
+- [Hono Adapter](/docs/adapters/hono)
+- [API Explorer](/docs/features/api-explorer)

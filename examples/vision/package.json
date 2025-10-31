@@ -1,0 +1,31 @@
+{
+  "name": "vision-basic-example",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit src/index.ts",
+    "start": "tsx src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@getvision/server": "workspace:*",
+    "@getvision/core": "workspace:*",
+    "dotenv": "^16.4.5",
+    "hono": "^4.6.14",
+    "better-sqlite3": "^12.4.1",
+    "drizzle-orm": "^0.44.6",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "drizzle-kit": "^0.31.5",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.3"
+  }
+}

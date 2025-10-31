@@ -1,0 +1,9 @@
+{
+  "title": "Vision Server",
+  "pages": [
+    "index",
+    "service-builder",
+    "file-based-routing",
+    "nextjs-integration"
+  ]
+}

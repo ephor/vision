@@ -1,16 +1,27 @@
 {
+  "name": "vision",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "example:hono": "bun --filter hono-basic-example dev",
+    "example:express": "bun --filter express-basic-example dev",
+    "example:fastify": "bun --filter fastify-basic-example dev",
+    "example:server": "bun --filter server-basic-example dev",
+    "docs:dev": "bun --filter docs dev",
+    "docs:build": "bun --filter docs build"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "examples/*"
+  ],
   "devDependencies": {
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
-    "turbo": "^2.5.8"
+    "turbo": "^2.5.9-canary.7"
   },
-  "packageManager": "pnpm@8.15.6",
-  "name": "with-vite-react"
+  "packageManager": "bun@1.3.0"
 }

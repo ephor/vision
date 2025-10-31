@@ -1,0 +1,41 @@
+{
+  "name": "@getvision/server",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Vision Server - Meta-framework with built-in observability, pub/sub, and type-safe APIs",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@getvision/core": "workspace:*",
+    "@hono/node-server": "^1.19.5",
+    "bullmq": "^5.62.0",
+    "hono": "^4.10.3",
+    "ioredis": "^5.8.2",
+    "zod": "^4.1.11"
+  },
+  "peerDependencies": {
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.14.9",
+    "typescript": "5.9.3"
+  },
+  "keywords": [
+    "vision",
+    "framework",
+    "observability",
+    "tracing",
+    "hono",
+    "bullmq",
+    "pub-sub",
+    "type-safe",
+    "event-driven"
+  ]
+}

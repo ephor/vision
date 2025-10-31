@@ -1,0 +1,227 @@
+---
+title: Quickstart
+description: Get Vision Server up and running in under 5 minutes
+---
+
+# Quickstart
+
+Get Vision Server up and running in under 5 minutes.
+
+## Installation
+
+Install Vision Server:
+
+```bash
+npm install @getvision/server
+# or
+bun add @getvision/server
+```
+
+**Already using Hono or Fastify?** Check out [Adapters](/docs/adapters) to add Vision to your existing app.
+
+## Basic Setup
+
+Create your first Vision Server app:
+
+```typescript title="src/index.ts"
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({
+  service: {
+    name: 'My API',
+    version: '1.0.0',
+    description: 'My awesome API'
+  }
+})
+
+// Define a service
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string()
+    })
+  }, async ({ id }, c) => {
+    // Your handler logic
+    return {
+      id,
+      name: 'John Doe',
+      email: 'john@example.com'
+    }
+  })
+
+app.start(3000)
+```
+
+**That's it!** Start your app and visit:
+- **API:** http://localhost:3000
+- **Dashboard:** http://localhost:9500 🎉
+
+## File-based Routes (Vision Server)
+
+Vision Server supports file-based routing with auto-loaded sub-apps. Create sub-apps under `app/routes/**/index.ts` that export a `Vision` instance. The folder path becomes the base path.
+
+```typescript title="app/routes/products/index.ts"
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision()
+
+// Base path for this sub-app will be "/products" (from folder name)
+app.service('products')
+  .endpoint('GET', '/', {
+    input: z.object({}),
+    output: z.object({ items: z.array(z.object({ id: z.string() })) })
+  }, async (_input, c) => {
+    return { items: [{ id: 'p1' }] }
+  })
+
+export default app
+```
+
+Nested folders compose the path and dynamic segments:
+
+- `app/routes/analytics/dashboard/index.ts` → `GET /analytics/dashboard`
+- `app/routes/products/[id]/index.ts` → `GET /products/:id`
+- `app/routes/notifications/index.ts` → `POST /notifications`
+
+Important:
+
+- Define endpoint paths relative to the sub-app base. Use `'/'` for the index of that folder.
+- Vision auto-discovers sub-apps on startup; no manual mounting is required.
+
+## With Database Tracing
+
+Use `c.span()` to trace database queries:
+
+```typescript
+import { db } from './db'
+import { users } from './db/schema'
+import { eq } from 'drizzle-orm'
+
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({ id: z.string(), name: z.string() })
+  }, async ({ id }, c) => {
+    // Trace database query
+    const user = c.span('db.select', {
+      'db.system': 'sqlite',
+      'db.table': 'users'
+    }, () => {
+      return db.select().from(users).where(eq(users.id, id)).get()
+    })
+    
+    return user
+  })
+```
+
+Vision Dashboard will show:
+- Request → Handler → DB Query waterfall
+- Query timing and attributes
+- Full trace correlation
+
+## With Pub/Sub Events
+
+Add event-driven features:
+
+```typescript
+const app = new Vision({
+  service: { name: 'My API' },
+  pubsub: {
+    schemas: {
+      'user/created': {
+        data: z.object({
+          userId: z.string(),
+          email: z.string().email()
+        })
+      }
+    }
+  }
+})
+
+app.service('users')
+  .endpoint('POST', '/users', {
+    input: z.object({ name: z.string(), email: z.string() }),
+    output: z.object({ id: z.string() })
+  }, async (data, c) => {
+    const user = { id: '123', ...data }
+    
+    // Send event
+    await app.getInngest().send({
+      name: 'user/created',
+      data: { userId: user.id, email: user.email }
+    })
+    
+    return { id: user.id }
+  })
+  .on('user/created', async (event) => {
+    console.log('Send welcome email to:', event.data.email)
+  })
+```
+
+## With Drizzle Studio
+
+Auto-start Drizzle Studio:
+
+```typescript
+const app = new Vision({
+  service: {
+    name: 'My API',
+    integrations: {
+      database: 'sqlite://./dev.db'
+    },
+    drizzle: {
+      autoStart: true,  // Auto-start Drizzle Studio
+      port: 4983
+    }
+  }
+})
+```
+
+Vision will:
+- ✅ Detect `drizzle.config.ts`
+- ✅ Start Drizzle Studio on port 4983
+- ✅ Show link in Dashboard → Integrations
+- ✅ Open https://local.drizzle.studio
+
+## Configuration
+
+Full configuration options:
+
+```typescript
+const app = new Vision({
+  service: {
+    name: 'My API',
+    version: '1.0.0',
+    description: 'Optional description',
+    integrations: {
+      database: 'postgresql://localhost/mydb',
+      redis: 'redis://localhost:6379'
+    },
+    drizzle: {
+      autoStart: true,
+      port: 4983
+    }
+  },
+  vision: {
+    enabled: true,      // Enable/disable dashboard
+    port: 9500,         // Dashboard port
+    maxTraces: 1000,    // Max traces to store
+    maxLogs: 10000      // Max logs to store
+  },
+  pubsub: {
+    id: 'my-app',      // Inngest app ID (optional)
+    schemas: { /* ... */ }
+  }
+})
+```
+
+## Next Steps
+
+- [Vision Server Guide](/docs/server) - Full documentation
+- [Core Concepts](/docs/concepts) - Understanding Vision
+- [Adapters](/docs/adapters) - Add Vision to existing apps

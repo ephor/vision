@@ -1,0 +1,273 @@
+---
+title: API Reference
+description: Complete API reference for Vision Core and adapters
+---
+
+# API Reference
+
+Complete API reference for Vision Core and adapters.
+
+## @getvision/core
+
+Core Vision functionality - traces, spans, and the dashboard server.
+
+### `VisionCore`
+
+Main Vision instance that manages traces and serves the dashboard.
+
+```typescript
+import { VisionCore } from '@getvision/core'
+
+const vision = new VisionCore({
+  port: 9500,        // Dashboard port
+  maxTraces: 1000,   // Max traces to store
+})
+```
+
+#### Options
+
+```typescript
+interface VisionOptions {
+  port?: number           // Dashboard port (default: 9500)
+  maxTraces?: number      // Max traces in memory (default: 1000)
+}
+```
+
+#### Methods
+
+**`vision.createTrace(metadata)`**
+
+Create a new trace:
+
+```typescript
+const trace = vision.createTrace({
+  method: 'GET',
+  path: '/users',
+  timestamp: Date.now(),
+})
+```
+
+**`vision.addSpan(traceId, span)`**
+
+Add span to trace:
+
+```typescript
+vision.addSpan(traceId, {
+  name: 'db.query',
+  startTime: Date.now(),
+  duration: 50,
+  attributes: {
+    'db.table': 'users',
+  },
+})
+```
+
+**`vision.completeTrace(traceId, metadata)`**
+
+Complete a trace:
+
+```typescript
+vision.completeTrace(traceId, {
+  statusCode: 200,
+  duration: 150,
+  response: { data: '...' },
+})
+```
+
+**`vision.start()`**
+
+Start the dashboard server:
+
+```typescript
+await vision.start()
+console.log('Vision running at http://localhost:9500')
+```
+
+---
+
+## @getvision/adapter-hono
+
+Hono framework adapter with auto-discovery.
+
+### `visionAdapter(options)`
+
+Middleware for Hono apps:
+
+```typescript
+import { visionAdapter } from '@getvision/adapter-hono'
+
+app.use('*', visionAdapter({
+  enabled: true,
+  port: 9500,
+  maxTraces: 1000,
+  service: {
+    name: 'my-api',
+    version: '1.0.0',
+  },
+}))
+```
+
+#### Options
+
+```typescript
+interface VisionHonoOptions {
+  enabled?: boolean        // Enable Vision (default: true)
+  port?: number           // Dashboard port (default: 9500)
+  maxTraces?: number      // Max traces (default: 1000)
+  logging?: boolean       // Console logs (default: true)
+  
+  // Service metadata
+  service?: {
+    name?: string         // Service name
+    version?: string      // Service version
+    description?: string  // Service description
+    integrations?: Record<string, string>  // Integrations (DB, Redis, etc.)
+  }
+}
+```
+
+### `enableAutoDiscovery(app, options?)`
+
+Enable automatic route discovery:
+
+```typescript
+import { enableAutoDiscovery } from '@getvision/adapter-hono'
+
+enableAutoDiscovery(app, {
+  services: [
+    {
+      name: 'Users',
+      description: 'User management',
+      routes: [/* manual routes */],
+    },
+  ],
+})
+```
+
+### `useVisionSpan()`
+
+Create custom spans in route handlers:
+
+```typescript
+import { useVisionSpan } from '@getvision/adapter-hono'
+
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+  
+  const users = withSpan('db.query', {
+    'db.table': 'users',
+  }, async () => {
+    return await db.select().from(users).all()
+  })
+  
+  return c.json(users)
+})
+```
+
+**Parameters:**
+- `name: string` - Span name
+- `attributes: Record<string, any>` - Span attributes
+- `operation: () => T | Promise<T>` - Operation to track
+
+**Returns:** Result of the operation
+
+### `getVisionContext()`
+
+Get current Vision context:
+
+```typescript
+import { getVisionContext } from '@getvision/adapter-hono'
+
+app.get('/debug', (c) => {
+  const { vision, traceId } = getVisionContext()
+  return c.json({ traceId })
+})
+```
+
+**Returns:**
+```typescript
+interface VisionContext {
+  vision: VisionCore  // Vision instance
+  traceId: string     // Current trace ID
+}
+```
+
+### `zValidator(target, schema, hook?)`
+
+Monkey-patched zValidator that stores schema for Vision:
+
+```typescript
+import { zValidator } from '@getvision/adapter-hono'
+import { z } from 'zod'
+
+const schema = z.object({
+  name: z.string().describe('User name'),
+})
+
+app.post('/users', zValidator('json', schema), handler)
+```
+
+Same API as `@hono/zod-validator`, but stores schema for auto-documentation.
+
+### `launchDrizzleStudio(db, port?)`
+
+Launch Drizzle Studio from Vision:
+
+```typescript
+import { launchDrizzleStudio } from '@getvision/adapter-hono'
+
+launchDrizzleStudio(db, 4983)
+```
+
+---
+
+## Types
+
+### `Trace`
+
+```typescript
+interface Trace {
+  id: string
+  timestamp: number
+  duration?: number
+  metadata?: {
+    method?: string
+    path?: string
+    statusCode?: number
+    request?: any
+    response?: any
+  }
+  spans: Span[]
+}
+```
+
+### `Span`
+
+```typescript
+interface Span {
+  id: string
+  traceId: string
+  parentId?: string
+  name: string
+  startTime: number
+  duration?: number
+  attributes?: Record<string, any>
+}
+```
+
+### `RouteMetadata`
+
+```typescript
+interface RouteMetadata {
+  method: string
+  path: string
+  handler?: string
+  schema?: any
+  service?: string
+}
+```
+
+## Next Steps
+
+- [Quickstart](/docs/quickstart)
+- [Hono Adapter](/docs/adapters/hono)

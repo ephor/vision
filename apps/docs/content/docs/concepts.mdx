@@ -1,0 +1,169 @@
+---
+title: Core Concepts
+description: Understanding the key concepts behind Vision's observability model
+---
+
+# Core Concepts
+
+Understanding the key concepts behind Vision's observability model.
+
+## Traces
+
+A **trace** represents the complete journey of a single request through your system.
+
+```
+Request → Middleware → Handler → Database → Response
+         └─────────── One Trace ──────────┘
+```
+
+Each trace contains:
+- **Trace ID** - Unique identifier (UUID)
+- **Timestamp** - When the request started
+- **Duration** - Total request time
+- **Status** - HTTP status code
+- **Spans** - Child operations within the trace
+- **Metadata** - Headers, query params, etc.
+
+### Example
+
+```typescript
+// This creates one trace
+app.get('/users/:id', async (c) => {
+  const user = await db.query('SELECT * FROM users WHERE id = ?', [id])
+  return c.json(user)
+})
+```
+
+## Spans
+
+A **span** represents a single operation within a trace.
+
+```
+Trace: GET /users/123
+├── Span: middleware.cors (2ms)
+├── Span: middleware.auth (5ms)
+├── Span: handler (50ms)
+│   ├── Span: db.query (30ms)
+│   └── Span: cache.set (5ms)
+└── Total: 62ms
+```
+
+### Creating Custom Spans
+
+```typescript
+import { useVisionSpan } from '@getvision/adapter-hono'
+
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+  
+  // Automatically tracked
+  const users = withSpan('db.query', {
+    'db.system': 'postgresql',
+    'db.statement': 'SELECT * FROM users',
+  }, async () => {
+    return await db.select().from(users).all()
+  })
+  
+  return c.json(users)
+})
+```
+
+### Span Attributes
+
+Spans can have custom attributes:
+
+```typescript
+withSpan('operation.name', {
+  // Common attributes
+  'service.name': 'my-api',
+  'service.version': '1.0.0',
+  
+  // Database spans
+  'db.system': 'postgresql',
+  'db.table': 'users',
+  'db.statement': 'SELECT...',
+  
+  // HTTP spans
+  'http.method': 'POST',
+  'http.url': 'https://api.example.com',
+  'http.status_code': 200,
+  
+  // Custom attributes
+  'user.id': '123',
+  'feature.flag': true,
+}, operation)
+```
+
+## Context
+
+Vision uses **async context** to track the current trace across async operations.
+
+```typescript
+// Middleware creates context
+app.use('*', visionAdapter())
+
+// Available in handlers
+app.get('/users', async (c) => {
+  const { vision, traceId } = getVisionContext()
+  
+  // Same context in nested calls
+  await someAsyncFunction() // Still has traceId!
+})
+```
+
+### How It Works
+
+Vision uses Node.js `AsyncLocalStorage` to maintain context:
+
+```typescript
+import { AsyncLocalStorage } from 'async_hooks'
+
+const storage = new AsyncLocalStorage()
+
+// Middleware sets context
+app.use(async (c, next) => {
+  const traceId = generateId()
+  await storage.run({ traceId }, async () => {
+    await next()
+  })
+})
+
+// Available anywhere in the async chain
+function deepNestedFunction() {
+  const { traceId } = storage.getStore()
+  console.log(traceId) // Same ID!
+}
+```
+
+## Trace Lifecycle
+
+**Trace Lifecycle Steps:**
+
+1. **Request arrives** → Vision middleware creates trace
+2. **Context is set** → `AsyncLocalStorage` stores trace ID
+3. **Route handler** → Business logic executes
+4. **Spans created** → Database, API calls, etc.
+5. **Response sent** → Trace is completed
+6. **Stored** → Trace saved to dashboard (in-memory or DB)
+
+## Best Practices
+
+### Do's ✅
+
+- **Use meaningful span names** - `db.query.users` not `query`
+- **Add relevant attributes** - Help debugging later
+- **Track critical paths** - Database, external APIs
+- **Keep spans focused** - One operation per span
+
+### Don'ts ❌
+
+- **Don't create too many spans** - Overhead adds up
+- **Don't log sensitive data** - Passwords, tokens, etc.
+- **Don't forget error handling** - Trace errors too
+- **Don't block on tracing** - Vision is async by default
+
+## Next Steps
+
+- [Hono Adapter](/docs/adapters/hono)
+- [API Explorer](/docs/features/api-explorer)
+- [Deployment](/docs/deployment)

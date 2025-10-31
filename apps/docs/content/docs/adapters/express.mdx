@@ -1,0 +1,189 @@
+---
+title: Express Adapter
+description: Vision adapter for Express with tracing, Zod validation, auto-discovery, and services catalog.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Express Adapter
+
+Vision adapter for Express adds zero-config tracing, request/response capture, a service catalog, and Zod-powered validation tooling.
+
+## Installation
+
+```bash
+bun add @getvision/adapter-express
+# or
+npm i @getvision/adapter-express
+```
+
+## Quick Start
+
+```ts
+import express from 'express'
+import { visionMiddleware, enableAutoDiscovery, zValidator } from '@getvision/adapter-express'
+import { z } from 'zod'
+
+const app = express()
+app.use(express.json())
+
+// Add Vision (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use(visionMiddleware({ port: 9500 }))
+}
+
+// Routes
+app.get('/users', (req, res) => res.json([{ id: 1, name: 'Alice' }]))
+
+// Zod validation → schema appears in Service Catalog and API Explorer template
+const CreateUser = z.object({
+  name: z.string().min(1).describe('Full name'),
+  email: z.string().email().describe('Email'),
+  age: z.number().int().positive().optional().describe('Age (optional)'),
+})
+app.post('/users', zValidator('body', CreateUser), (req, res) => res.status(201).json(req.body))
+
+// Auto-discover routes (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  enableAutoDiscovery(app)
+}
+
+app.listen(3000)
+```
+
+Open Dashboard at http://localhost:9500.
+
+## Features
+
+- Automatic request tracing (root `http.request` span + child spans)
+- Request/response capture (headers, body, params)
+- Service Catalog with auto-grouping and manual grouping
+- Zod validation with schema templates for API Explorer
+- CORS headers for Dashboard (including `X-Vision-Trace-Id`, `X-Vision-Session`)
+
+## Middleware Options
+
+```ts
+interface VisionExpressOptions {
+  port?: number              // Dashboard port (default: 9500)
+  enabled?: boolean          // Enable Vision (default: true)
+  maxTraces?: number         // Trace store size (default: 1000)
+  maxLogs?: number           // Log store size (default: 10000)
+  logging?: boolean          // Console request logs (default: true)
+  cors?: boolean             // CORS for Dashboard (default: true)
+  service?: {
+    name?: string
+    version?: string
+    description?: string
+    integrations?: Record<string, string>
+  }
+}
+```
+
+## Services Catalog
+
+By default, routes are grouped by first path segment.
+
+```ts
+// Auto-grouping
+enableAutoDiscovery(app)
+
+// Manual grouping with globs
+enableAutoDiscovery(app, {
+  services: [
+    { name: 'Users', description: 'User management', routes: ['/users/*'] },
+    { name: 'Auth', routes: ['/auth/*'] },
+  ],
+})
+```
+
+### Registration Order and Nested Routers
+
+- Call `enableAutoDiscovery(app)` only after you register all routes and nested routers.
+- For nested modules, mount an `express.Router()` under a base path; define child paths relative to it.
+
+```ts
+// routers/analytics.ts
+import { Router } from 'express'
+import { useVisionSpan } from '@getvision/adapter-express'
+
+const router = Router()
+router.get('/dashboard', (req, res) => {
+  const withSpan = useVisionSpan()
+  const analytics = withSpan('db.select', { 'db.table': 'analytics' }, () => ({ ok: true }))
+  res.json({ analytics })
+})
+export default router
+```
+
+```ts
+// index.ts
+import analytics from './routers/analytics'
+
+app.use('/analytics', analytics) // results in GET /analytics/dashboard
+
+// enable after mounting routers
+enableAutoDiscovery(app, { services: [
+  { name: 'Users', routes: ['/users', '/users/*'] },
+  { name: 'Analytics', routes: ['/analytics', '/analytics/*'] },
+]})
+```
+
+## Zod Validation
+
+```ts
+import { z } from 'zod'
+import { zValidator } from '@getvision/adapter-express'
+
+const UpdateUser = z.object({
+  name: z.string().min(1).optional().describe('Full name (optional)'),
+  email: z.string().email().optional().describe('Email (optional)'),
+})
+
+app.put('/users/:id', zValidator('body', UpdateUser), (req, res) => {
+  res.json(req.body)
+})
+```
+
+The adapter attaches the Zod schema to route metadata so API Explorer can generate a commented JSON template. Comments are stripped automatically when sending.
+
+## Custom Spans
+
+Use `useVisionSpan()` to create child spans attached to the current request's root span.
+
+```ts
+import { useVisionSpan } from '@getvision/adapter-express'
+
+app.get('/users/:id', (req, res) => {
+  const withSpan = useVisionSpan()
+
+  const user = withSpan('db.select', { 'db.system': 'postgresql', 'db.table': 'users' }, () => {
+    return { id: 1, name: 'Alice' }
+  })
+
+  res.json(user)
+})
+```
+
+## CORS
+
+When `cors` is enabled (default), the middleware sets:
+
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, Authorization, X-Vision-Trace-Id, X-Vision-Session`
+- `Access-Control-Expose-Headers: X-Vision-Trace-Id, X-Vision-Session`
+
+<Callout>
+If you proxy the Dashboard or run on a different origin, keep these headers to allow the API Explorer to call your API.
+</Callout>
+
+## Troubleshooting
+
+- API Explorer shows “No schema defined” → ensure the route uses `zValidator('body', schema)` and `enableAutoDiscovery(app)` ran after route registration
+- Response body shows as string → make sure the adapter is updated (response is now captured before stringify when using `res.json`)
+- Spans look flat → ensure you use `useVisionSpan()` to create child spans; they will be parented under `http.request`
+
+## Example
+
+See repository example: `examples/express-basic/`.

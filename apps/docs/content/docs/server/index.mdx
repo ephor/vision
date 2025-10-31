@@ -1,0 +1,237 @@
+---
+title: Vision Server Overview
+description: Meta-framework with built-in observability
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Vision Server
+
+**Vision Server** is a meta-framework built on Hono with automatic observability. Everything you need, nothing you don't.
+
+<Callout type="info">
+  Vision Server extends Hono, so all Hono features work seamlessly!
+</Callout>
+
+## Why Vision Server?
+
+**vs NestJS:** 10x faster, 10x simpler, built-in observability  
+**vs Encore.ts:** 100% open source, no vendor lock-in  
+**vs Plain Hono:** Built-in observability, type-safety, pub/sub
+
+## Quick Start
+
+```bash
+npm install @getvision/server
+```
+
+```typescript
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({
+  service: {
+    name: 'My API',
+    version: '1.0.0'
+  }
+})
+
+// Define services with type-safe endpoints
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({ id: z.string(), name: z.string() })
+  }, async ({ id }, c) => {
+    // c.span() is built-in! 🔥
+    const user = c.span('db.select', { 'db.table': 'users' }, () => {
+      return { id, name: 'John' }
+    })
+    return user
+  })
+
+app.start(3000)
+```
+
+**That's it!** You get:
+- ✅ Vision Dashboard on port 9500
+- ✅ Automatic request tracing
+- ✅ Type-safe validation
+- ✅ Service catalog
+
+## Two Ways to Build APIs
+
+Vision Server gives you flexibility in how you structure your code:
+
+### 1. Service Builder Pattern (Inline)
+
+Best for: Small to medium APIs, grouped logic, when you need pub/sub + cron
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users', schema, handler)
+  .endpoint('POST', '/users', schema, handler)
+  .on('user/created', eventHandler)
+  .cron('0 0 * * *', cronHandler)
+```
+
+[Learn more →](/docs/server/service-builder)
+
+### 2. File-Based Routing (Next.js Style)
+
+Best for: Large APIs, Next.js users, file-system organization
+
+```
+app/api/
+├── users/
+│   ├── route.ts          → GET, POST /users
+│   └── [id]/
+│       └── route.ts      → GET /users/:id
+└── products/
+    └── route.ts          → GET, POST /products
+```
+
+```typescript
+// app/api/users/route.ts
+export async function GET(req, c) {
+  const users = c.span('db.select', {}, () => db.users.all())
+  return { users }
+}
+
+export const GET_schema = {
+  output: z.object({ users: z.array(...) })
+}
+```
+
+[Learn more →](/docs/server/file-based-routing)
+
+## Core Features
+
+### 🚀 Zero Configuration
+
+Everything works out of the box:
+- Vision Dashboard automatically starts
+- Tracing middleware auto-installed
+- Service catalog auto-discovered
+- No manual setup required
+
+### 🔥 c.span() Built Into Context
+
+No more manual imports or setup:
+
+```typescript
+async (data, c) => {
+  // Just use c.span()!
+  const user = c.span('db.select', { 'db.table': 'users' }, () => {
+    return db.users.findOne(data.id)
+  })
+  
+  const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
+    return db.posts.findMany({ userId: user.id })
+  })
+  
+  return { user, posts }
+}
+```
+
+### ✅ Type-Safe Everything
+
+Zod validation for inputs and outputs:
+
+```typescript
+.endpoint('POST', '/users', {
+  input: z.object({
+    name: z.string().min(1).describe('User full name'),
+    email: z.string().email().describe('Email address')
+  }),
+  output: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string()
+  })
+}, handler)
+```
+
+**Invalid request?** Automatic 400 with Zod error details.
+
+### 📊 Built-in Pub/Sub & Cron
+
+Powered by BullMQ (automatic):
+
+```typescript
+app.service('notifications')
+  .on('user/created', async (event) => {
+    console.log('Send welcome email to:', event.data.email)
+  })
+  .cron('0 9 * * *', async () => {
+    console.log('Send daily digest')
+  })
+```
+
+**No extra setup!** Event bus is auto-initialized.
+
+> Note: Declare `service.on('event', { schema, handler })` BEFORE any endpoint that calls
+> `c.emit('event', ...)` so TypeScript can infer the event type for `c.emit`.
+
+### 🎯 Hono Compatible
+
+Use any Hono feature:
+
+```typescript
+import { logger } from 'hono/logger'
+import { cors } from 'hono/cors'
+import { jwt } from 'hono/jwt'
+
+// Global middleware
+app.use('*', logger())
+app.use('*', cors())
+
+// Service middleware
+app.service('admin')
+  .use(jwt({ secret: 'secret' }))
+  .endpoint('GET', '/admin/users', schema, handler)
+
+// Plain Hono routes still work
+app.get('/health', (c) => c.json({ status: 'ok' }))
+```
+
+## Configuration
+
+```typescript
+const app = new Vision({
+  service: {
+    name: 'My API',
+    version: '1.0.0',
+    description: 'Optional description',
+    integrations: {
+      database: 'postgresql://localhost/mydb',
+      redis: 'redis://localhost:6379'
+    },
+    drizzle: {
+      autoStart: true,  // Auto-start Drizzle Studio
+      port: 4983
+    }
+  },
+  vision: {
+    enabled: true,      // Enable/disable dashboard
+    port: 9500,         // Dashboard port
+    maxTraces: 1000,    // Max traces to store
+    maxLogs: 10000,     // Max logs to store
+    logging: true       // Console logging
+  },
+  pubsub: {
+    id: 'my-app',      // Inngest app ID
+    schemas: {         // Event schemas
+      'user/created': {
+        data: z.object({ userId: z.string(), email: z.string() })
+      }
+    }
+  }
+})
+```
+
+## Next Steps
+
+- [Service Builder Pattern](/docs/server/service-builder) - Learn the inline approach
+- [File-Based Routing](/docs/server/file-based-routing) - Learn the Next.js approach
+- [Next.js Integration](/docs/server/nextjs-integration) - Use with Next.js projects
+- [Features](/docs/features) - Explore all Vision features

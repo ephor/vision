@@ -1,0 +1,22 @@
+{
+  "name": "express-basic-example",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@getvision/adapter-express": "workspace:*",
+    "@getvision/core": "workspace:*",
+    "express": "^4.21.2",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.14.9",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.3"
+  }
+}

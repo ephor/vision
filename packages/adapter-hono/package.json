@@ -1,0 +1,28 @@
+{
+  "name": "@getvision/adapter-hono",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.3",
+    "@getvision/core": "workspace:*",
+    "zod": "^4.1.11"
+  },
+  "peerDependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.14.9",
+    "hono": "^4.6.14",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,265 @@
+---
+title: Request Tracing
+description: Real-time request tracing with waterfall visualization
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Request Tracing
+
+Vision automatically traces every request to your API, giving you complete visibility into what's happening under the hood.
+
+## What is Request Tracing?
+
+Every HTTP request creates a **trace** - a timeline showing exactly what happened during that request:
+- When the request started and ended
+- What database queries were executed
+- What external APIs were called
+- Custom operations you want to track
+- Total duration and individual span timings
+
+## Waterfall Visualization
+
+The Traces page shows all your requests in a waterfall view:
+
+```
+GET /users/123                    [200] 45ms
+├─ http.request                   45ms
+   ├─ db.select                   12ms
+   │  └─ users table
+   ├─ db.select                   8ms
+   │  └─ posts table
+   └─ external.api                15ms
+      └─ payment-service
+```
+
+## Automatic Tracing
+
+### With Vision Server
+
+Tracing is built into the context - no setup required:
+
+```typescript
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+app.service('users')
+  .endpoint('GET', '/users/:id', schema, async ({ id }, c) => {
+    // c.span() is built-in!
+    const user = c.span('db.select', {
+      'db.system': 'postgresql',
+      'db.table': 'users',
+      'user.id': id
+    }, () => {
+      return db.select().from(users).where(eq(users.id, id)).get()
+    })
+    
+    const posts = c.span('db.select', {
+      'db.system': 'postgresql',
+      'db.table': 'posts'
+    }, () => {
+      return db.select().from(posts).where(eq(posts.userId, id)).all()
+    })
+    
+    return { user, posts }
+  })
+```
+
+### With Vision Adapters
+
+Use `useVisionSpan()` helper:
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter, useVisionSpan } from '@getvision/adapter-hono'
+
+const app = new Hono()
+app.use('*', visionAdapter())
+
+app.get('/users/:id', async (c) => {
+  const id = c.req.param('id')
+  const withSpan = useVisionSpan()
+  
+  const user = withSpan('db.select', {
+    'db.system': 'postgresql',
+    'db.table': 'users'
+  }, () => {
+    return db.select().from(users).where(eq(users.id, id)).get()
+  })
+  
+  return c.json(user)
+})
+```
+
+<Callout type="info">
+  **Vision Server** has `c.span()` built into the context. **Adapters** require `useVisionSpan()` import.
+</Callout>
+
+## Custom Spans
+
+Track any operation with custom spans:
+
+### Database Queries
+
+```typescript
+c.span('db.select', {
+  'db.system': 'postgresql',
+  'db.table': 'users',
+  'db.operation': 'select'
+}, () => {
+  return db.query()
+})
+```
+
+### External API Calls
+
+```typescript
+c.span('http.client', {
+  'http.method': 'POST',
+  'http.url': 'https://api.stripe.com/v1/charges',
+  'service.name': 'stripe'
+}, async () => {
+  return await fetch('https://api.stripe.com/v1/charges', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+})
+```
+
+### Business Logic
+
+```typescript
+c.span('email.send', {
+  'email.to': user.email,
+  'email.template': 'welcome'
+}, async () => {
+  return await sendEmail(user.email, 'welcome')
+})
+```
+
+### Cache Operations
+
+```typescript
+c.span('cache.get', {
+  'cache.system': 'redis',
+  'cache.key': `user:${id}`
+}, async () => {
+  return await redis.get(`user:${id}`)
+})
+```
+
+## Span Attributes
+
+Add context to your spans with attributes:
+
+```typescript
+c.span('operation.name', {
+  // Standard attributes
+  'service.name': 'payment-service',
+  'service.version': '1.0.0',
+  
+  // Database attributes
+  'db.system': 'postgresql',
+  'db.table': 'orders',
+  'db.operation': 'insert',
+  
+  // HTTP attributes
+  'http.method': 'POST',
+  'http.url': 'https://api.example.com',
+  'http.status_code': 200,
+  
+  // Custom attributes
+  'user.id': '123',
+  'order.total': 99.99,
+  'feature.flag': 'new-checkout'
+}, () => {
+  // Your code
+})
+```
+
+## Trace Correlation
+
+Vision automatically correlates:
+- **Parent-child relationships** - See which spans belong to which request
+- **Service boundaries** - Track requests across microservices
+- **Async operations** - Follow async/await chains
+- **Event handlers** - Connect pub/sub events to their triggers
+
+## Filtering Traces
+
+On the Traces page, filter by:
+- **Method** - GET, POST, PUT, DELETE
+- **Path** - Specific endpoints
+- **Status** - 2xx, 4xx, 5xx
+- **Duration** - Slow requests
+- **Service** - Specific services
+- **Time range** - Last hour, day, week
+
+## Performance Insights
+
+Vision shows you:
+- **Slowest endpoints** - Which routes need optimization
+- **Database bottlenecks** - Slow queries
+- **External API latency** - Third-party service performance
+- **Error rates** - Which endpoints are failing
+
+## Best Practices
+
+### 1. Use Semantic Naming
+
+```typescript
+// ✅ Good - Clear what's happening
+c.span('db.select.users', { 'db.table': 'users' }, ...)
+c.span('stripe.create_charge', { 'amount': 1000 }, ...)
+
+// ❌ Bad - Unclear
+c.span('query', {}, ...)
+c.span('api_call', {}, ...)
+```
+
+### 2. Add Relevant Attributes
+
+```typescript
+// ✅ Good - Rich context
+c.span('db.select', {
+  'db.system': 'postgresql',
+  'db.table': 'orders',
+  'user.id': userId,
+  'order.status': 'pending'
+}, ...)
+
+// ❌ Bad - No context
+c.span('db.select', {}, ...)
+```
+
+### 3. Don't Over-Trace
+
+```typescript
+// ✅ Good - Trace meaningful operations
+c.span('db.select', { ... }, () => db.query())
+c.span('email.send', { ... }, () => sendEmail())
+
+// ❌ Bad - Too granular
+c.span('variable.assignment', {}, () => x = 1)
+c.span('if.statement', {}, () => { if (x) ... })
+```
+
+### 4. Handle Errors
+
+```typescript
+c.span('operation', { ... }, () => {
+  try {
+    return riskyOperation()
+  } catch (error) {
+    // Error is automatically captured in span
+    throw error
+  }
+})
+```
+
+## Next Steps
+
+- [API Explorer](/docs/features/api-explorer) - Test your traced endpoints
+- [Services](/docs/features/services) - View all your services
+- [Logs](/docs/features/logs) - Correlate logs with traces
