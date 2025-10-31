@@ -11,7 +11,11 @@
     "example:fastify": "bun --filter fastify-basic-example dev",
     "example:server": "bun --filter server-basic-example dev",
     "docs:dev": "bun --filter docs dev",
-    "docs:build": "bun --filter docs build"
+    "docs:build": "bun --filter docs build",
+    "commitlint": "commitlint",
+    "changeset": "changeset",
+    "ci:version": "changeset version",
+    "release": "bun run build && changeset publish"
   },
   "workspaces": [
     "apps/*",
@@ -20,6 +24,10 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@changesets/cli": "2.26.2",
+    "@changesets/changelog-github": "^0.4.8",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
     "turbo": "^2.5.9-canary.7"

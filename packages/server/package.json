@@ -38,5 +38,6 @@
     "pub-sub",
     "type-safe",
     "event-driven"
-  ]
+  ],
+  "config": {}
 }
