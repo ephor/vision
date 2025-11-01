@@ -1,6 +1,6 @@
 {
   "name": "@getvision/core",
-  "version": "0.0.0-develop-20251031183955",
+  "version": "0.0.0-6a35e1d-develop",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
