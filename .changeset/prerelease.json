@@ -10,7 +10,7 @@
     "@getvision/adapter-express": "0.0.2",
     "@getvision/adapter-fastify": "0.0.2",
     "@getvision/adapter-hono": "0.0.2",
-    "@getvision/core": "0.0.2",
+    "@getvision/core": "0.0.3",
     "@repo/eslint-config": "0.0.1",
     "@getvision/server": "0.1.0",
     "@repo/typescript-config": "0.0.1",
