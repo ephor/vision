@@ -3,14 +3,26 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server/index.ts",
-    "./tracing": "./src/tracing/index.ts",
-    "./types": "./src/types/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./tracing": {
+      "types": "./dist/tracing/index.d.ts",
+      "import": "./dist/tracing/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    }
   },
   "scripts": {
     "dev": "tsc --watch",
-    "build": "bun build src/index.ts --outdir dist --target bun --minify && bun build:ui",
+    "build": "tsc && bun build:ui",
     "build:ui": "cd ../../apps/web && bun run build && mkdir -p ../../packages/core/dist/ui && cp -r dist/* ../../packages/core/dist/ui/",
     "test": "bun test",
     "test:watch": "bun test --watch",
