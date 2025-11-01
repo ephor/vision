@@ -16,7 +16,7 @@
     "@getvision/core": "workspace:*",
     "@hono/node-server": "^1.19.5",
     "bullmq": "^5.62.0",
-    "hono": "^4.10.3",
+    "hono": "^4.10.4",
     "ioredis": "^5.8.2",
     "zod": "^4.1.11"
   },

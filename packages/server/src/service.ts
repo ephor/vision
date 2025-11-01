@@ -1,7 +1,7 @@
-import type { Hono, Context, MiddlewareHandler } from 'hono'
+import type { Hono, Context, MiddlewareHandler, Env, Input } from 'hono'
 import type { z } from 'zod'
 import { VisionCore, generateZodTemplate } from '@getvision/core'
-import type { EndpointConfig, Handler, VisionContext } from './types'
+import type { EndpointConfig, Handler } from './types'
 import { getVisionContext } from './vision-app'
 import { eventRegistry } from './event-registry'
 import type { EventBus } from './event-bus'
@@ -29,11 +29,15 @@ type EventSchemaMap = Record<string, z.ZodSchema<any>>
  *   })
  * ```
  */
-export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
+export class ServiceBuilder<
+  TEvents extends EventSchemaMap = {},
+  E extends Env = Env,
+  I extends Input = {}
+> {
   private endpoints: Map<string, any> = new Map()
   private eventHandlers: Map<string, any> = new Map()
   private cronJobs: Map<string, any> = new Map()
-  private globalMiddleware: MiddlewareHandler[] = []
+  private globalMiddleware: MiddlewareHandler<E, string, any, any>[] = []
   private eventSchemas: EventSchemaMap = {}
   
   constructor(
@@ -45,7 +49,7 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
   /**
    * Add global middleware for all endpoints in this service
    */
-  use(...middleware: MiddlewareHandler[]) {
+  use(...middleware: MiddlewareHandler<E, string, any, any>[]) {
     this.globalMiddleware.push(...middleware)
     return this
   }
@@ -109,15 +113,23 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
    */
   endpoint<
     TInputSchema extends z.ZodType,
-    TOutputSchema extends z.ZodType
+    TOutputSchema extends z.ZodType | undefined,
+    PPath extends string
   >(
     method: EndpointConfig['method'],
-    path: string,
+    path: PPath,
     schema: {
       input: TInputSchema
-      output: TOutputSchema
+      output?: TOutputSchema
     },
-    handler: Handler<z.infer<TInputSchema>, z.infer<TOutputSchema>, TEvents>,
+    handler: Handler<
+      z.infer<TInputSchema>,
+      TOutputSchema extends z.ZodType ? z.infer<TOutputSchema> : any,
+      TEvents,
+      E,
+      PPath,
+      I
+    >,
     config?: Partial<EndpointConfig>
   ) {
     this.endpoints.set(`${method}:${path}`, {
@@ -166,7 +178,7 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
       tags?: string[]
       handler: (event: T) => Promise<void>
     }
-  ): ServiceBuilder<TEvents & { [key in K]: T }> {
+  ): ServiceBuilder<TEvents & { [key in K]: T }, E, I> {
     const { schema, handler, description, icon, tags } = config
     
     // Store schema for type inference
@@ -187,7 +199,7 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
     this.eventHandlers.set(eventName, config)
     
     // Return typed ServiceBuilder with accumulated events
-    return this as ServiceBuilder<TEvents & { [key in K]: T }>
+    return this as ServiceBuilder<TEvents & { [key in K]: T }, E, I>
   }
   
   /**
@@ -307,7 +319,7 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
       const allMiddleware = [...this.globalMiddleware, ...ep.middleware]
       
       // Create handler with middleware chain
-      const finalHandler = async (c: Context) => {
+      const finalHandler = async (c: Context<E, any, I>) => {
         try {
           // Add span helper and emit to context
           const visionCtx = getVisionContext()
@@ -378,11 +390,18 @@ export class ServiceBuilder<TEvents extends EventSchemaMap = {}> {
           
           // Execute handler
           const result = await ep.handler(validated, c as any)
-          
-          // Validate output with Zod
-          const validatedOutput = ep.schema.output.parse(result)
-          
-          return c.json(validatedOutput)
+
+          // If an output schema exists, validate and return JSON
+          if (ep.schema.output) {
+            const validatedOutput = ep.schema.output.parse(result)
+            return c.json(validatedOutput)
+          }
+
+          // No output schema: allow raw Response or JSON
+          if (result instanceof Response) {
+            return result
+          }
+          return c.json(result)
         } catch (error) {
           if ((error as any).name === 'ZodError') {
             return c.json({ 

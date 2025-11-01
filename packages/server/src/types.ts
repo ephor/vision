@@ -1,11 +1,10 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import type { z } from 'zod'
+import type { Context, Env, Input, MiddlewareHandler } from 'hono'
 import type { VisionCore } from '@getvision/core'
 
 /**
  * Vision context stored in AsyncLocalStorage
  */
-export interface VisionContext {
+export interface VisionContext<E extends Env = any, P extends string = any, I extends Input = {}> extends Context<E, P, I> {
   vision: VisionCore
   traceId: string
   rootSpanId: string
@@ -18,6 +17,7 @@ export interface EndpointConfig {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   path: string
   middleware?: MiddlewareHandler[]
+  // TODO: Below not implemented yet features
   auth?: boolean
   ratelimit?: { requests: number; window: string }
   cache?: { ttl: number }
@@ -28,7 +28,12 @@ export interface EndpointConfig {
  * 
  * Generic TEvents parameter allows type-safe event emission
  */
-export interface ExtendedContext<TEvents extends Record<string, any> = {}> extends Context {
+export interface ExtendedContext<
+  TEvents extends Record<string, any> = {},
+  E extends Env = any,
+  P extends string = any,
+  I extends Input = {}
+> extends Context<E, P, I> {
   span<T>(
     name: string,
     attributes?: Record<string, any>,
@@ -68,7 +73,14 @@ export interface ExtendedContext<TEvents extends Record<string, any> = {}> exten
 /**
  * Handler type with Zod-validated input and Vision-enhanced context
  */
-export type Handler<TInput = any, TOutput = any, TEvents extends Record<string, any> = {}> = (
+export type Handler<
+  TInput = any,
+  TOutput = any,
+  TEvents extends Record<string, any> = {},
+  E extends Env = any,
+  P extends string = any,
+  I extends Input = {}
+> = (
   req: TInput,
-  ctx: ExtendedContext<TEvents>
+  ctx: ExtendedContext<TEvents, E, P, I>
 ) => Promise<TOutput> | TOutput

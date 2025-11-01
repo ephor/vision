@@ -10,6 +10,10 @@ config({ path: '.env.development' })
 // Create Vision App - Everything automatic! 🚀
 // ============================================================================
 
+type Variables = {
+  db: any;
+};
+
 const app = new Vision({
   service: {
     name: 'Vision hybrid routes',
@@ -40,7 +44,14 @@ app.use('*', cors())
 // ============================================================================
 
 // User Service
-app.service('users')
+app.service<{ Variables: Variables; }>('users')
+  // some middleware that ingects something in context (db as well)))
+  .use((c, next) => {
+    c.set("db", () => {
+      return "db";
+    });
+    return next();
+  })
   .endpoint(
     'GET',
     '/users',
@@ -55,7 +66,7 @@ app.service('users')
       })
     },
     async (_, c) => {
-      // c.span() is built into context! 🔥
+      // c.span() and c.get("db") are built into context! 🔥
       const users = c.span('db.select', {
         'db.system': 'postgresql',
         'db.table': 'users'

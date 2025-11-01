@@ -6,11 +6,16 @@ import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
 import { ServiceBuilder } from './service'
-import type { VisionContext } from './types'
 import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
 
-const visionContext = new AsyncLocalStorage<VisionContext>()
+export interface VisionALSContext {
+  vision: VisionCore
+  traceId: string
+  rootSpanId: string
+}
+
+const visionContext = new AsyncLocalStorage<VisionALSContext>()
 
 /**
  * Vision Server configuration
@@ -81,7 +86,7 @@ export class Vision<
   private visionCore: VisionCore
   private eventBus: EventBus
   private config: VisionConfig
-  private serviceBuilders: ServiceBuilder<any>[] = []
+  private serviceBuilders: ServiceBuilder<any, E>[] = []
   private fileBasedRoutes: RouteMetadata[] = []
 
   constructor(config?: VisionConfig) {
@@ -253,11 +258,11 @@ export class Vision<
       
       // Run request in AsyncLocalStorage context
       return visionContext.run(
-        { 
-          vision: this.visionCore, 
-          traceId: trace.id, 
-          rootSpanId: '' 
-        }, 
+        {
+          vision: this.visionCore,
+          traceId: trace.id,
+          rootSpanId: ''
+        },
         async () => {
           // Start main span
           const tracer = this.visionCore.getTracer()
@@ -427,11 +432,11 @@ export class Vision<
    *   .on('user/created', handler)
    * ```
    */
-  service<TEvents extends Record<string, any> = {}>(name: string) {
-    const builder = new ServiceBuilder<TEvents>(name, this.eventBus, this.visionCore)
+  service<E2 extends Env = E, TEvents extends Record<string, any> = {}>(name: string) {
+    const builder = new ServiceBuilder<TEvents, E2>(name, this.eventBus, this.visionCore)
     
-    // Зберігаємо builder для реєстрації в start()
-    this.serviceBuilders.push(builder)
+    // Preserve builder for registration in start()
+    this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, E>)
     
     return builder
   }
@@ -610,7 +615,7 @@ export class Vision<
 /**
  * Get Vision context (internal use)
  */
-export function getVisionContext(): VisionContext | undefined {
+export function getVisionContext(): VisionALSContext | undefined {
   return visionContext.getStore()
 }
 

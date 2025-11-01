@@ -15,7 +15,7 @@
     },
     "apps/docs": {
       "name": "docs",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "fumadocs-core": "15.8.5",
         "fumadocs-mdx": "12.0.3",
@@ -38,7 +38,7 @@
     },
     "apps/web": {
       "name": "web",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@monaco-editor/react": "^4.7.0",
@@ -80,7 +80,7 @@
     },
     "examples/express": {
       "name": "express-basic-example",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@getvision/adapter-express": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -96,7 +96,7 @@
     },
     "examples/fastify": {
       "name": "fastify-basic-example",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@getvision/adapter-fastify": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -112,7 +112,7 @@
     },
     "examples/hono": {
       "name": "hono-basic-example",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@getvision/adapter-hono": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -133,7 +133,7 @@
     },
     "examples/vision": {
       "name": "vision-basic-example",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@getvision/server": "workspace:*",
@@ -237,7 +237,7 @@
     },
     "packages/eslint-config": {
       "name": "@repo/eslint-config",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@typescript-eslint/eslint-plugin": "^7.1.0",
         "@typescript-eslint/parser": "^7.1.0",
@@ -251,7 +251,7 @@
         "@getvision/core": "workspace:*",
         "@hono/node-server": "^1.19.5",
         "bullmq": "^5.62.0",
-        "hono": "^4.10.3",
+        "hono": "^4.10.4",
         "ioredis": "^5.8.2",
         "zod": "^4.1.11",
       },
@@ -264,11 +264,11 @@
     },
     "packages/typescript-config": {
       "name": "@repo/typescript-config",
-      "version": "0.0.0",
+      "version": "0.0.1",
     },
     "packages/ui": {
       "name": "@repo/ui",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
@@ -2429,6 +2429,8 @@
     "@fastify/proxy-addr/ipaddr.js": ["ipaddr.js@2.2.0", "", {}, "sha512-Ag3wB2o37wslZS19hZqorUnrnzSkpOVy+IiiDEiTqNubEYpYuHWIf6K4psgN2ZWKExS4xhVCrRVfb/wfW8fWJA=="],
 
     "@getvision/adapter-fastify/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+
+    "@getvision/server/hono": ["hono@4.10.4", "", {}, "sha512-YG/fo7zlU3KwrBL5vDpWKisLYiM+nVstBQqfr7gCPbSYURnNEP9BDxEMz8KfsDR9JX0lJWDRNc6nXX31v7ZEyg=="],
 
     "@isaacs/cliui/string-width": ["string-width@5.1.2", "", { "dependencies": { "eastasianwidth": "^0.2.0", "emoji-regex": "^9.2.2", "strip-ansi": "^7.0.1" } }, "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA=="],
 
