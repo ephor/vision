@@ -1,5 +1,11 @@
 # @getvision/server
 
+## 0.2.0
+
+### Minor Changes
+
+- b49d8db: Added per-endpoint rate limiting with hono-rate-limiter: configure ratelimit in EndpointConfig with requests, window, and optional store for distributed caching. Includes docs and example.
+
 ## 0.1.0
 
 ### Minor Changes

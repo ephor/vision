@@ -1,22 +1,20 @@
 {
-  "mode": "snapshot",
+  "mode": "stable",
   "initialVersions": {
     "docs": "0.0.1",
     "web": "0.0.2",
     "express-basic-example": "0.0.3",
     "fastify-basic-example": "0.0.3",
     "hono-basic-example": "0.0.3",
-    "vision-basic-example": "0.0.3",
+    "vision-basic-example": "0.0.4",
     "@getvision/adapter-express": "0.0.2",
     "@getvision/adapter-fastify": "0.0.2",
     "@getvision/adapter-hono": "0.0.2",
     "@getvision/core": "0.0.3",
     "@repo/eslint-config": "0.0.1",
-    "@getvision/server": "0.1.0",
+    "@getvision/server": "0.2.0",
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": [
-    "wet-fans-cover"
-  ]
+  "changesets": []
 }
