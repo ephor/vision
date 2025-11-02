@@ -33,6 +33,44 @@ function getClientKey(c: Context, method: string, path: string): string {
 }
 
 /**
+ * Create a minimal Hono-like Context for event handlers
+ * so service-level middleware can populate c.set(...)
+ */
+function createEventContext<E extends Env = any, I extends Input = {}>(): Context<E, any, I> {
+  const store: Record<string, any> = {}
+  const fake: Partial<Context<E, any, I>> = {
+    get: (key: string) => store[key],
+    set: (key: string, value: any) => { store[key] = value },
+    req: {
+      header: () => undefined,
+      param: () => ({}),
+      query: () => ({}),
+      json: async () => ({}),
+      raw: {} as any,
+    } as any,
+  }
+  return fake as Context<E, any, I>
+}
+
+/**
+ * Run Hono middleware chain on a context
+ */
+async function runMiddlewareChain<E extends Env, I extends Input>(
+  middlewares: MiddlewareHandler<E, string, any, any>[],
+  c: Context<E, any, I>
+): Promise<void> {
+  let index = -1
+  const dispatch = async (i: number): Promise<void> => {
+    if (i <= index) throw new Error('next() called multiple times')
+    index = i
+    const mw = middlewares[i]
+    if (!mw) return
+    await mw(c, () => dispatch(i + 1))
+  }
+  await dispatch(0)
+}
+
+/**
  * Event schema map - accumulates event types as they're registered
  */
 type EventSchemaMap = Record<string, z.ZodSchema<any>>
@@ -202,7 +240,7 @@ export class ServiceBuilder<
       description?: string
       icon?: string
       tags?: string[]
-      handler: (event: T) => Promise<void>
+      handler: (event: T, c: Context<E, any, I>) => Promise<void>
     }
   ): ServiceBuilder<TEvents & { [key in K]: T }, E, I> {
     const { schema, handler, description, icon, tags } = config
@@ -210,16 +248,27 @@ export class ServiceBuilder<
     // Store schema for type inference
     this.eventSchemas[eventName] = schema
     
-    // Register in event registry
+    // Wrap handler to provide Hono-like context with middleware support
+    const wrappedHandler = async (data: T) => {
+      const ctx = createEventContext<E, I>()
+      // Run service-level middleware to populate ctx (e.g., c.set('db', db))
+      if (this.globalMiddleware.length > 0) {
+        await runMiddlewareChain(this.globalMiddleware, ctx)
+      }
+      // Call original handler with event data and context
+      await handler(data, ctx)
+    }
+    
+    // Register wrapped handler in event registry (for metadata/stats)
     eventRegistry.registerEvent(
       eventName,
       schema,
-      handler,
+      wrappedHandler,
       { description, icon, tags }
     )
     
-    // Register handler in event bus
-    this.eventBus.registerHandler(eventName, handler)
+    // Register wrapped handler in event bus
+    this.eventBus.registerHandler(eventName, wrappedHandler)
     
     // Store for later reference
     this.eventHandlers.set(eventName, config)

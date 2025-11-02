@@ -3,6 +3,7 @@ import { Vision } from '@getvision/server'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
+import type { DrizzleD1Database } from 'drizzle-orm/d1' // example
 
 config({ path: '.env.development' })
 
@@ -11,7 +12,7 @@ config({ path: '.env.development' })
 // ============================================================================
 
 type Variables = {
-  db: any;
+  db: DrizzleD1Database;
 };
 
 const app = new Vision({
@@ -47,9 +48,7 @@ app.use('*', cors())
 app.service<{ Variables: Variables; }>('users')
   // some middleware that ingects something in context (db as well)))
   .use((c, next) => {
-    c.set("db", () => {
-      return "db";
-    });
+    c.set("db", "db" as unknown as DrizzleD1Database);
     return next();
   })
   .endpoint(
@@ -151,7 +150,11 @@ app.service<{ Variables: Variables; }>('users')
     description: 'User account created',
     icon: '👤',
     tags: ['user', 'auth'],
-    handler: async (event) => {
+    handler: async (event, c) => {
+      // Demonstrate event handler context: read db injected by service middleware
+      const db = c.get('db');
+      // Simulate a write using the db
+      console.log('🗄️ Saving user to DB via event handler with db =', db)
       console.log('📧 Sending welcome email to:', event.email)
     }
   })

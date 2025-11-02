@@ -309,6 +309,40 @@ await c.emit('user/created', {
 })
 ```
 
+### Event Handler Context
+
+Event handlers receive a Hono-like `Context` as the second argument. You can run service-level middleware to inject resources using `c.set(...)` and then access them in the handler via `c.get(...)`.
+
+```typescript
+// Define a typed Variables shape for the service
+type Variables = {
+  db: DrizzleD1Database // example; use your actual DB client type
+}
+
+// Inject DB via service-level middleware
+app.service<{ Variables: Variables }>('users')
+  .use((c, next) => {
+    c.set('db', dbInstance)
+    return next()
+  })
+  .on('user/created', {
+    schema: z.object({
+      userId: z.string(),
+      email: z.string().email(),
+      name: z.string()
+    }),
+    handler: async (event, c) => {
+      const db = c.get('db') // strongly typed
+      await db.insert(/* ... */)
+    }
+  })
+```
+
+Notes:
+- Only service-level middleware (`service.use(...)`) run for events.
+- Event handlers have no real HTTP request; `c.req.*` values will be empty.
+- Type `Variables` precisely to get strong typing for `c.get('key')`.
+
 <Callout type="info">
   Declare <code>.on('event', ...)</code> <b>before</b> any endpoint that calls <code>c.emit('event', ...)</code> so TypeScript can infer the event type for <code>c.emit</code>.
 </Callout>
