@@ -19,7 +19,7 @@ export interface EndpointConfig {
   middleware?: MiddlewareHandler[]
   // TODO: Below not implemented yet features
   auth?: boolean
-  ratelimit?: { requests: number; window: string }
+  ratelimit?: { requests: number; window: string; store?: any }
   cache?: { ttl: number }
 }
 

@@ -16,7 +16,6 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@getvision/server": "workspace:*",
-    "@getvision/core": "workspace:*",
     "dotenv": "^16.4.5",
     "hono": "^4.6.14",
     "better-sqlite3": "^12.4.1",

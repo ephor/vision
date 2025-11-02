@@ -1,0 +1,86 @@
+---
+title: Per-Endpoint Rate Limiting
+description: Configure rate limiting on ServiceBuilder endpoints using hono-rate-limiter
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Per-Endpoint Rate Limiting
+
+Vision Server integrates the `hono-rate-limiter` middleware, allowing you to enable rate limiting per endpoint via `EndpointConfig.ratelimit`.
+
+## Quick Start
+
+```ts
+app.service('users')
+  .endpoint(
+    'GET',
+    '/users',
+    {
+      input: z.object({}),
+      output: z.object({ users: z.array(z.object({ id: z.string() })) })
+    },
+    async (_, c) => {
+      // ...
+      return { users }
+    },
+    {
+      ratelimit: {
+        requests: 100,
+        window: '15m'
+      }
+    }
+  )
+```
+
+- **requests**: max number of requests allowed per window.
+- **window**: time window. Supported formats: `'30s'`, `'15m'`, `'1h'`, `'2d'`, or raw milliseconds as string like `'900000'`.
+
+<Callout>
+Rate limiting is applied before endpoint-level middleware and after any service-level global middleware.
+</Callout>
+
+## Using a Distributed Store (Redis, etc.)
+
+By default, the limiter uses an in-memory store. For multi-instance deployments, provide a distributed store.
+
+```ts
+import { RedisStore } from '@hono-rate-limiter/redis'
+import { Redis } from '@upstash/redis'
+
+const store = new RedisStore({
+  client: new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+  })
+})
+
+app.service('users')
+  .endpoint(
+    'POST',
+    '/users',
+    { input, output },
+    handler,
+    {
+      ratelimit: {
+        requests: 50,
+        window: '1h',
+        store
+      }
+    }
+  )
+```
+
+## What Vision Applies Under the Hood
+
+The following is wired automatically in `ServiceBuilder.build()`:
+
+- **Middleware**: `rateLimiter({ windowMs, limit, keyGenerator, standardHeaders: 'draft-6', store? })`
+- **Key generation**: combines client IP (or `User-Agent` fallback) + HTTP method + endpoint path to scope limits per endpoint.
+- **Headers**: `RateLimit-*` response headers are enabled via `standardHeaders: 'draft-6'`.
+
+## Tips
+
+- **Clusters/Serverless**: Always use a distributed store to ensure consistent limits across instances.
+- **Endpoint-specific**: Configure different limits per endpoint as needed.
+- **Observability**: Limits run before your handler; use Vision tracing in your handler as usual.

@@ -5,6 +5,32 @@ import type { EndpointConfig, Handler } from './types'
 import { getVisionContext } from './vision-app'
 import { eventRegistry } from './event-registry'
 import type { EventBus } from './event-bus'
+import { rateLimiter } from 'hono-rate-limiter'
+
+// Simple window parser supporting values like '15m', '1h', '30s', '2d' or plain milliseconds as number string
+function parseWindowMs(window: string): number {
+  const trimmed = window.trim()
+  if (/^\d+$/.test(trimmed)) return Number(trimmed)
+  const match = trimmed.match(/^(\d+)\s*([smhd])$/i)
+  if (!match) throw new Error(`Invalid ratelimit window: ${window}`)
+  const value = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const multipliers: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
+  return value * multipliers[unit]
+}
+
+function getClientKey(c: Context, method: string, path: string): string {
+  const ip =
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+    c.req.header('x-real-ip') ||
+    c.req.header('cf-connecting-ip') ||
+    c.req.header('fly-client-ip') ||
+    c.req.header('x-client-ip') ||
+    ''
+  // Fallback to UA if no IP available (still scoped per endpoint)
+  const ua = c.req.header('user-agent') || 'unknown'
+  return `${ip || ua}:${method}:${path}`
+}
 
 /**
  * Event schema map - accumulates event types as they're registered
@@ -315,8 +341,28 @@ export class ServiceBuilder<
     
     // Register HTTP endpoints
     this.endpoints.forEach((ep) => {
-      // Combine global + endpoint-specific middleware
-      const allMiddleware = [...this.globalMiddleware, ...ep.middleware]
+      // Prepare rate limiter when configured per-endpoint
+      let rateLimitMw: MiddlewareHandler<E, string, any, any> | undefined
+      const rl = ep.config?.ratelimit as EndpointConfig['ratelimit'] | undefined
+      if (rl) {
+        const windowMs = parseWindowMs(rl.window)
+        const limit = rl.requests
+        rateLimitMw = rateLimiter({
+          windowMs,
+          limit,
+          standardHeaders: 'draft-6',
+          keyGenerator: (c) => getClientKey(c, ep.method, ep.path),
+          // If user provides a distributed store (e.g., RedisStore), pass it through
+          ...(rl.store ? { store: rl.store } : {}),
+        })
+      }
+
+      // Combine global + rate-limit (if any) + endpoint-specific middleware
+      const allMiddleware = [
+        ...this.globalMiddleware,
+        ...(rateLimitMw ? [rateLimitMw] as MiddlewareHandler<E, string, any, any>[] : []),
+        ...ep.middleware,
+      ]
       
       // Create handler with middleware chain
       const finalHandler = async (c: Context<E, any, I>) => {

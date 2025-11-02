@@ -4,6 +4,7 @@
     "index",
     "service-builder",
     "file-based-routing",
-    "nextjs-integration"
+    "nextjs-integration",
+    "rate-limiting"
   ]
 }

@@ -85,6 +85,12 @@ app.service<{ Variables: Variables; }>('users')
       })
       
       return { users }
+    },
+    {
+      ratelimit: {
+        requests: 10,
+        window: '15m'
+      }
     }
   )
   .endpoint(
