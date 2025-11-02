@@ -1,6 +1,6 @@
 {
   "name": "@getvision/server",
-  "version": "0.1.0",
+  "version": "0.2.0-b49d8db-develop",
   "type": "module",
   "description": "Vision Server - Meta-framework with built-in observability, pub/sub, and type-safe APIs",
   "exports": {
