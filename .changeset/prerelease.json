@@ -1,5 +1,5 @@
 {
-  "mode": "stable",
+  "mode": "snapshot",
   "initialVersions": {
     "docs": "0.0.1",
     "web": "0.0.2",
@@ -16,5 +16,7 @@
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": []
+  "changesets": [
+    "many-papayas-ring"
+  ]
 }
