@@ -45,6 +45,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/bun.lock', '**/bun.lockb', 'turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
       - name: Install deps
         run: bun install --frozen-lockfile
       - name: Build
@@ -89,6 +103,20 @@ jobs:
         with:
           node-version: 18
           registry-url: https://registry.npmjs.org/
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/bun.lock', '**/bun.lockb', 'turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
       - name: Install deps
         run: bun install --frozen-lockfile
       - name: Build
