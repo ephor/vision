@@ -424,10 +424,11 @@ app/routes/data/index.ts
 
 ```typescript
 // ✅ Good - Full type safety + docs
-export const GET_schema = {
+.endpoint('GET', '/', {
   input: z.object({ id: z.string() }),
-  output: z.object({ ... })
-}
+  output: z.object({ users: z.array(z.object({ id: z.string() })) }) },
+  async () => ({ users: [] })
+)
 
 // ❌ Bad - No schemas
 // (works but no validation or docs)
