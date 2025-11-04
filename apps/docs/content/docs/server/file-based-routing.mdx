@@ -1,16 +1,16 @@
 ---
 title: File-Based Routing
-description: Next.js App Router style routing for Vision Server
+description: Autodiscovered Vision sub-app routing (app/routes/**/index.ts)
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # File-Based Routing
 
-Vision Server supports **Next.js App Router** style file-based routing - use the exact same syntax!
+Vision Server automatically discovers and mounts route sub-apps from your filesystem. Place Vision sub-apps under `app/routes/**/index.ts` and they become HTTP endpoints. Dynamic segments use `[param]` folders.
 
 <Callout type="success">
-  If you know Next.js App Router, you already know how to use Vision Server file-based routing!
+  Zero config: routes are autodiscovered from `app/routes/` by default. No manual import or registration required.
 </Callout>
 
 ## When to Use
@@ -28,330 +28,246 @@ Vision Server supports **Next.js App Router** style file-based routing - use the
 
 ## Quick Start
 
-### 1. Create API Directory
+### 1. Create routes directory
 
 ```
-app/api/
+app/routes/
 ├── products/
-│   ├── route.ts
+│   ├── index.ts
 │   └── [id]/
-│       └── route.ts
-└── users/
-    └── route.ts
+│       └── index.ts
+└── analytics/
+    └── dashboard/
+        └── index.ts
 ```
 
-### 2. Define Routes (Next.js Style!)
+### 2. Define a sub-app per folder
 
-```typescript
-// app/api/products/route.ts
+```ts
+// app/routes/products/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
 
-export async function GET(_, c) {
-  const products = c.span('db.select', { 'db.table': 'products' }, () => {
-    return db.products.all()
-  })
-  return { products }
-}
+const app = new Vision()
 
-export const GET_schema = {
-  input: z.object({}),
-  output: z.object({
-    products: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      price: z.number()
-    }))
+app
+  .service('products')
+  .endpoint('GET', '/', { 
+    input: z.object({}),
+    output: z.object({
+      products: z.array(z.object({ id: z.string(), name: z.string(), price: z.number() }))
+    })
+  }, async (_, c) => {
+    const products = c.span('db.select', { 'db.table': 'products' }, () => [
+      { id: '1', name: 'Laptop', price: 999 },
+    ])
+    return { products }
   })
-}
+
+export default app
 ```
 
-### 3. Load Routes
+### 3. Start your server
 
-```typescript
+```ts
 // src/index.ts
 import { Vision } from '@getvision/server'
 
-const app = new Vision({ service: { name: 'My API' } })
-
-// Load all file-based routes
-await app.loadFileBasedRoutes('./app/api')
+const app = new Vision({
+  service: { name: 'My API' },
+  // optional
+  routes: { autodiscover: true, dirs: ['app/routes'] }
+})
 
 app.start(3000)
 ```
 
-**Done!** Routes automatically appear in Vision Dashboard grouped by path.
+**Done!** Vision autoloads sub-apps from `app/routes/**/index.ts` and shows them in the Dashboard.
 
 ## File Structure
 
 ### Conventions
 
-#### route.ts or +endpoint.ts
+#### index.ts per folder
 
-Both work the same way - choose what you prefer:
+- Place an `index.ts` in each folder under `app/routes/` that exports a default Vision app.
+- Folder path maps to URL base. The sub-app registers endpoints relative to that base using `'/'`.
 
 ```
-app/api/products/route.ts       ← Recommended (Next.js style)
-app/api/products/+endpoint.ts   ← Alternative
+app/routes/products/index.ts       → mounts at /products
+app/routes/analytics/dashboard/index.ts → mounts at /analytics/dashboard
 ```
 
 #### Dynamic Segments
 
-Use `[param]` for dynamic routes (just like Next.js):
+Use `[param]` folders for dynamic routes:
 
 ```
-app/api/products/[id]/route.ts           → /products/:id
-app/api/users/[userId]/posts/[postId]/route.ts  → /users/:userId/posts/:postId
+app/routes/products/[id]/index.ts                 → /products/:id
+app/routes/users/[userId]/posts/[postId]/index.ts → /users/:userId/posts/:postId
 ```
 
 ### Example Structure
 
 ```
-app/api/
+app/routes/
 ├── products/
-│   ├── route.ts              → GET, POST /products
+│   ├── index.ts                 → GET /products
 │   ├── [id]/
-│   │   └── route.ts          → GET, PUT, DELETE /products/:id
-│   └── search/
-│       └── route.ts          → GET /products/search
+│   │   └── index.ts             → GET /products/:id
+│   └── create/
+│       └── index.ts             → POST /products/create
 ├── users/
-│   ├── route.ts              → GET, POST /users
 │   └── [id]/
-│       ├── route.ts          → GET /users/:id
 │       └── orders/
-│           └── route.ts      → GET /users/:id/orders
+│           └── index.ts         → GET /users/:id/orders
 └── analytics/
     ├── dashboard/
-    │   └── route.ts          → GET /analytics/dashboard
+    │   └── index.ts             → GET /analytics/dashboard
     └── track/
-        └── route.ts          → POST /analytics/track
+        └── index.ts             → POST /analytics/track
 ```
 
 ## Route Files
 
 ### Exports
 
-Each route file exports HTTP method functions:
+Each route folder contains an `index.ts` that exports a Vision sub-app with one or more endpoints:
 
-```typescript
-// app/api/products/route.ts
+```ts
+// app/routes/products/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
 
-// GET /products
-export async function GET(req, c) {
-  // Handler logic
-  return { products: [] }
-}
+const app = new Vision()
 
-// POST /products
-export async function POST(req, c) {
-  // Handler logic
-  return { id: '123' }
-}
+app.service('products')
+  .use(authMiddleware) // optional service-level middleware
+  .endpoint('GET', '/', { input: z.object({}), output: z.object({ products: z.array(z.object({ id: z.string() })) }) }, async (_, c) => {
+    return { products: [] }
+  })
+  .endpoint('POST', '/', { input: z.object({ name: z.string(), price: z.number() }), output: z.object({ id: z.string() }) }, async (data, c) => {
+    return { id: '123' }
+  })
 
-// Optional: Schemas for validation + docs
-export const GET_schema = {
-  input: z.object({}),
-  output: z.object({ products: z.array(...) })
-}
-
-export const POST_schema = {
-  input: z.object({ name: z.string(), price: z.number() }),
-  output: z.object({ id: z.string() })
-}
-
-// Optional: Middleware
-export const middleware = [authMiddleware]
-```
-
-### Supported Methods
-
-Export any HTTP method function:
-
-- `GET`
-- `POST`
-- `PUT`
-- `PATCH`
-- `DELETE`
-
-```typescript
-export async function GET(req, c) { /* ... */ }
-export async function POST(req, c) { /* ... */ }
-export async function PUT(req, c) { /* ... */ }
-export async function PATCH(req, c) { /* ... */ }
-export async function DELETE(req, c) { /* ... */ }
-```
-
-### Multiple Methods per File
-
-You can export multiple methods from the same file:
-
-```typescript
-// app/api/products/route.ts
-export async function GET(_, c) {
-  // List products
-  const products = c.span('db.select', {}, () => db.products.all())
-  return { products }
-}
-
-export async function POST(data, c) {
-  // Create product
-  const product = c.span('db.insert', {}, () => db.products.create(data))
-  return product
-}
-
-export const GET_schema = { /* ... */ }
-export const POST_schema = { /* ... */ }
+export default app
 ```
 
 ## Examples
 
 ### GET with Path Parameters
 
-```typescript
-// app/api/products/[id]/route.ts
+```ts
+// app/routes/products/[id]/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
 
-export async function GET({ id }, c) {
-  const product = c.span('db.select', {
-    'db.table': 'products',
-    'product.id': id
-  }, () => {
-    return db.products.findById(id)
-  })
-  
-  if (!product) {
-    return c.json({ error: 'Product not found' }, 404)
-  }
-  
-  return product
-}
+const app = new Vision()
 
-export const GET_schema = {
-  input: z.object({
-    id: z.string().describe('Product ID')
-  }),
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-    price: z.number(),
-    description: z.string()
+app.service('products')
+  .endpoint('GET', '/', {
+    input: z.object({ id: z.string().describe('Product ID') }),
+    output: z.object({ id: z.string(), name: z.string(), price: z.number(), description: z.string() })
+  }, async ({ id }, c) => {
+    const product = c.span('db.select', { 'db.table': 'products', 'product.id': id }, () => db.products.findById(id))
+    if (!product) return c.json({ error: 'Product not found' }, 404)
+    return product
   })
-}
+
+export default app
 ```
 
 ### POST with Body
 
-```typescript
-// app/api/products/route.ts
+```ts
+// app/routes/products/create/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
 
-export async function POST(data, c) {
-  const product = c.span('db.insert', { 'db.table': 'products' }, () => {
-    return db.products.create({
-      ...data,
-      id: generateId(),
-      createdAt: new Date().toISOString()
-    })
-  })
-  
-  console.log('Product created:', product.id)
-  
-  return product
-}
+const app = new Vision()
 
-export const POST_schema = {
-  input: z.object({
-    name: z.string().min(1).describe('Product name'),
-    price: z.number().positive().describe('Product price'),
-    description: z.string().optional().describe('Product description')
-  }),
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-    price: z.number(),
-    createdAt: z.string()
+app.service('products')
+  .endpoint('POST', '/', {
+    input: z.object({ name: z.string().min(1), price: z.number().positive(), description: z.string().optional() }),
+    output: z.object({ id: z.string(), name: z.string(), price: z.number(), createdAt: z.string() })
+  }, async (data, c) => {
+    const product = c.span('db.insert', { 'db.table': 'products' }, () => ({
+      id: `prod_${Date.now()}`,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }))
+    return product
   })
-}
+
+export default app
 ```
 
 ### Nested Dynamic Routes
 
-```typescript
-// app/api/users/[userId]/orders/[orderId]/route.ts
-export async function GET({ userId, orderId }, c) {
-  const order = c.span('db.select', {
-    'db.table': 'orders',
-    'user.id': userId,
-    'order.id': orderId
-  }, () => {
-    return db.orders.findOne({
-      id: orderId,
-      userId: userId
-    })
-  })
-  
-  return order
-}
+```ts
+// app/routes/users/[userId]/orders/[orderId]/index.ts
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
 
-export const GET_schema = {
-  input: z.object({
-    userId: z.string().describe('User ID'),
-    orderId: z.string().describe('Order ID')
-  }),
-  output: z.object({
-    id: z.string(),
-    userId: z.string(),
-    total: z.number(),
-    items: z.array(z.object({
-      productId: z.string(),
-      quantity: z.number()
+const app = new Vision()
+
+app.service('orders')
+  .endpoint('GET', '/', {
+    input: z.object({ userId: z.string().describe('User ID'), orderId: z.string().describe('Order ID') }),
+    output: z.object({
+      id: z.string(),
+      userId: z.string(),
+      total: z.number(),
+      items: z.array(z.object({ productId: z.string(), quantity: z.number() }))
+    })
+  }, async ({ userId, orderId }, c) => {
+    const order = c.span('db.select', { 'db.table': 'orders', 'user.id': userId, 'order.id': orderId }, () => ({
+      id: orderId,
+      userId,
+      total: 123.45,
+      items: [{ productId: 'p1', quantity: 2 }]
     }))
+    return order
   })
-}
+
+export default app
 ```
 
 ### Search/Query Params
 
-```typescript
-// app/api/products/search/route.ts
-export async function GET({ q, category, minPrice }, c) {
-  const products = c.span('db.select', {
-    'db.table': 'products',
-    'search.query': q
-  }, () => {
-    let query = db.products.where({ published: true })
-    
-    if (q) {
-      query = query.where({ name: { contains: q } })
-    }
-    if (category) {
-      query = query.where({ category })
-    }
-    if (minPrice) {
-      query = query.where({ price: { gte: minPrice } })
-    }
-    
-    return query.all()
-  })
-  
-  return { products, total: products.length }
-}
+```ts
+// app/routes/products/search/index.ts
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
 
-export const GET_schema = {
-  input: z.object({
-    q: z.string().optional().describe('Search query'),
-    category: z.string().optional().describe('Filter by category'),
-    minPrice: z.number().optional().describe('Minimum price')
-  }),
-  output: z.object({
-    products: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      price: z.number()
-    })),
-    total: z.number()
+const app = new Vision()
+
+app.service('products')
+  .endpoint('GET', '/', {
+    input: z.object({
+      q: z.string().optional().describe('Search query'),
+      category: z.string().optional().describe('Filter by category'),
+      minPrice: z.number().optional().describe('Minimum price')
+    }),
+    output: z.object({
+      products: z.array(z.object({ id: z.string(), name: z.string(), price: z.number() })),
+      total: z.number()
+    })
+  }, async ({ q, category, minPrice }, c) => {
+    const products = c.span('db.select', { 'db.table': 'products', 'search.query': q }, () => {
+      const all = [
+        { id: '1', name: 'Laptop', price: 999, category: 'computers' },
+        { id: '2', name: 'Mouse', price: 29, category: 'accessories' },
+      ]
+      return all
+        .filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+        .filter(p => !category || p.category === category)
+        .filter(p => !minPrice || p.price >= minPrice)
+    })
+    return { products, total: products.length }
   })
-}
+
+export default app
 ```
 
 ## Context Helpers
@@ -361,17 +277,29 @@ export const GET_schema = {
 Same as service builder - built into context:
 
 ```typescript
-export async function GET(_, c) {
-  const user = c.span('db.select', { 'db.table': 'users' }, () => {
-    return db.users.findById('123')
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision()
+
+app.service('users')
+  .endpoint('GET', '/', {
+    input: z.object({}),
+    output: z.object({
+      user: z.object({ id: z.string() }).passthrough(),
+      posts: z.array(z.object({ id: z.string() })).passthrough(),
+    })
+  }, async (_, c) => {
+    const user = c.span('db.select', { 'db.table': 'users' }, () => {
+      return { id: '123' }
+    })
+    const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
+      return [{ id: 'p1' }, { id: 'p2' }]
+    })
+    return { user, posts }
   })
-  
-  const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
-    return db.posts.findMany({ userId: user.id })
-  })
-  
-  return { user, posts }
-}
+
+export default app
 ```
 
 ### Standard Hono Context
@@ -379,44 +307,49 @@ export async function GET(_, c) {
 All Hono methods work:
 
 ```typescript
-export async function POST(data, c) {
-  // Get headers
-  const token = c.req.header('Authorization')
-  if (!token) {
-    return c.json({ error: 'Unauthorized' }, 401)
-  }
-  
-  // Set response headers
-  c.header('X-Request-ID', generateId())
-  
-  // Custom status codes
-  return c.json({ created: true }, 201)
-}
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision()
+
+app.service('examples')
+  .endpoint('POST', '/', {
+    input: z.object({ name: z.string().optional() }),
+    output: z.object({ created: z.boolean() })
+  }, async (data, c) => {
+    // Get headers
+    const token = c.req.header('Authorization')
+    if (!token) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+    // Set response headers
+    c.header('X-Request-ID', 'req_' + Date.now())
+    // Custom status codes
+    return c.json({ created: true }, 201)
+  })
+
+export default app
 ```
 
 ## Middleware
 
-### File-Level Middleware
+### Service-Level Middleware
 
-Apply to all methods in the file:
+Apply to all endpoints within the service in a sub-app:
 
-```typescript
-// app/api/admin/users/route.ts
+```ts
+// app/routes/admin/users/index.ts
+import { Vision } from '@getvision/server'
 import { jwt } from 'hono/jwt'
+import { z } from 'zod'
 
-export const middleware = [
-  jwt({ secret: process.env.JWT_SECRET })
-]
+const app = new Vision()
 
-export async function GET(_, c) {
-  // Protected by JWT
-  return { users: [] }
-}
+app.service('admin-users')
+  .use(jwt({ secret: process.env.JWT_SECRET! }))
+  .endpoint('GET', '/', { input: z.object({}), output: z.object({ users: z.array(z.object({ id: z.string() })) }) }, async () => ({ users: [] }))
 
-export async function POST(data, c) {
-  // Also protected by JWT
-  return { id: '123' }
-}
+export default app
 ```
 
 ## Service Grouping
@@ -424,12 +357,11 @@ export async function POST(data, c) {
 Routes are automatically grouped by path prefix in the Vision Dashboard:
 
 ```
-app/api/
-├── products/route.ts         → Products service
-├── products/[id]/route.ts    → Products service
-├── users/route.ts            → Users service
-├── users/[id]/route.ts       → Users service
-└── analytics/dashboard/route.ts  → Analytics service
+app/routes/
+├── products/index.ts               → Products service
+├── products/[id]/index.ts          → Products service
+├── users/[id]/orders/index.ts      → Users service
+└── analytics/dashboard/index.ts    → Analytics service
 ```
 
 **Dashboard shows:**
@@ -439,7 +371,7 @@ app/api/
 
 ## Mixing Approaches
 
-You can use both file-based routes AND service builder:
+You can use both inline services in your root app AND file-based sub-apps:
 
 ```typescript
 import { Vision } from '@getvision/server'
@@ -451,8 +383,8 @@ app.service('notifications')
   .on('user/created', handler)
   .cron('0 9 * * *', handler)
 
-// File-based routes (HTTP endpoints)
-await app.loadFileBasedRoutes('./app/api')
+// File-based routes (HTTP endpoints) are autodiscovered from app/routes/**/index.ts
+// No manual loading required.
 
 app.start(3000)
 ```
@@ -467,25 +399,25 @@ app.start(3000)
 
 ```typescript
 // ✅ Good - One concern per file
-// app/api/products/route.ts - List & Create
-// app/api/products/[id]/route.ts - Get & Update & Delete
-// app/api/products/search/route.ts - Search
+// app/routes/products/index.ts - List & Create
+// app/routes/products/[id]/index.ts - Get & Update & Delete
+// app/routes/products/search/index.ts - Search
 
 // ❌ Bad - Everything in one file
-// app/api/products/route.ts - All product operations
+// app/routes/products/index.ts - All product operations
 ```
 
 ### 2. Use Meaningful Paths
 
 ```typescript
 // ✅ Good - Clear intent
-app/api/products/search/route.ts
-app/api/users/[id]/orders/route.ts
-app/api/analytics/dashboard/route.ts
+app/routes/products/search/index.ts
+app/routes/users/[id]/orders/index.ts
+app/routes/analytics/dashboard/index.ts
 
 // ❌ Bad - Unclear
-app/api/search/route.ts
-app/api/data/route.ts
+app/routes/search/index.ts
+app/routes/data/index.ts
 ```
 
 ### 3. Add Schemas
@@ -505,14 +437,14 @@ export const GET_schema = {
 
 ```
 // ✅ Good - Logical grouping
-app/api/
+app/routes/
 ├── products/
-│   ├── route.ts
-│   ├── [id]/route.ts
-│   └── search/route.ts
+│   ├── index.ts
+│   ├── [id]/index.ts
+│   └── search/index.ts
 
 // ❌ Bad - Flat structure
-app/api/
+app/routes/
 ├── products-list.ts
 ├── products-get.ts
 ├── products-search.ts
@@ -520,101 +452,71 @@ app/api/
 
 ## Complete Example
 
-```typescript
-// app/api/products/route.ts
+```ts
+// app/routes/products/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
-import { db } from '@/db'
-import { products } from '@/db/schema'
 
-// GET /products - List all products
-export async function GET(_, c) {
-  const allProducts = c.span('db.select', { 'db.table': 'products' }, () => {
-    return db.select().from(products).all()
+const app = new Vision()
+
+app.service('products')
+  // GET /products - List all products
+  .endpoint('GET', '/', {
+    input: z.object({}),
+    output: z.object({ products: z.array(z.object({ id: z.string(), name: z.string(), price: z.number(), inStock: z.boolean() })) })
+  }, async (_, c) => {
+    const allProducts = c.span('db.select', { 'db.table': 'products' }, () => [
+      { id: '1', name: 'Laptop', price: 999, inStock: true },
+    ])
+    return { products: allProducts }
   })
-  
-  console.log('📦 Fetched products:', allProducts.length)
-  
-  return { products: allProducts }
-}
-
-// POST /products - Create product
-export async function POST(data, c) {
-  const product = c.span('db.insert', { 'db.table': 'products' }, () => {
-    return db.insert(products).values({
+  // POST /products - Create product
+  .endpoint('POST', '/', {
+    input: z.object({
+      name: z.string().min(1).describe('Product name'),
+      price: z.number().positive().describe('Product price'),
+      description: z.string().optional().describe('Product description')
+    }),
+    output: z.object({ id: z.string(), name: z.string(), price: z.number(), createdAt: z.string() })
+  }, async (data, c) => {
+    const product = c.span('db.insert', { 'db.table': 'products' }, () => ({
+      id: `prod_${Date.now()}`,
       ...data,
-      id: generateId(),
-      createdAt: new Date().toISOString()
-    }).returning().get()
-  })
-  
-  console.log('📦 Product created:', product.id)
-  
-  return product
-}
-
-export const GET_schema = {
-  input: z.object({}),
-  output: z.object({
-    products: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      price: z.number(),
-      inStock: z.boolean()
+      createdAt: new Date().toISOString(),
     }))
+    return product
   })
-}
 
-export const POST_schema = {
-  input: z.object({
-    name: z.string().min(1).describe('Product name'),
-    price: z.number().positive().describe('Product price'),
-    description: z.string().optional().describe('Product description')
-  }),
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-    price: z.number(),
-    createdAt: z.string()
-  })
-}
+export default app
 ```
 
-```typescript
-// app/api/products/[id]/route.ts
+```ts
+// app/routes/products/[id]/index.ts
+import { Vision } from '@getvision/server'
 import { z } from 'zod'
 
-// GET /products/:id - Get product by ID
-export async function GET({ id }, c) {
-  const product = c.span('db.select', {
-    'db.table': 'products',
-    'product.id': id
-  }, () => {
-    return db.products.findById(id)
-  })
-  
-  if (!product) {
-    return c.json({ error: 'Product not found' }, 404)
-  }
-  
-  return product
-}
+const app = new Vision()
 
-export const GET_schema = {
-  input: z.object({
-    id: z.string().describe('Product ID')
-  }),
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-    price: z.number(),
-    inStock: z.boolean(),
-    description: z.string()
+app.service('products')
+  // GET /products/:id - Get product by ID
+  .endpoint('GET', '/', {
+    input: z.object({ id: z.string().describe('Product ID') }),
+    output: z.object({ id: z.string(), name: z.string(), price: z.number(), inStock: z.boolean(), description: z.string() })
+  }, async ({ id }, c) => {
+    const product = c.span('db.select', { 'db.table': 'products', 'product.id': id }, () => ({
+      id,
+      name: 'Laptop',
+      price: 999,
+      inStock: true,
+      description: 'High-performance laptop'
+    }))
+    return product
   })
-}
+
+export default app
 ```
 
 ## Next Steps
 
-- [Next.js Integration](/docs/server/nextjs-integration) - Use with Next.js projects
 - [Service Builder](/docs/server/service-builder) - Alternative approach
 - [Features](/docs/features) - Explore all Vision features
