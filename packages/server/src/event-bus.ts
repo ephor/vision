@@ -26,12 +26,38 @@ export class EventBus {
   private devModeHandlers = new Map<string, Array<(data: any) => Promise<void>>>()
 
   constructor(config: EventBusConfig = {}) {
-    this.config = {
-      devMode: config.devMode ?? process.env.NODE_ENV === 'development',
-      redis: config.redis ?? {
+    // Build Redis config from environment variables
+    const envUrl = process.env.REDIS_URL
+    let envRedis: { host?: string; port?: number; password?: string } | undefined
+    if (envUrl) {
+      try {
+        const u = new URL(envUrl)
+        envRedis = {
+          host: u.hostname || undefined,
+          port: u.port ? parseInt(u.port) : 6379,
+          // URL password takes precedence over REDIS_PASSWORD
+          password: u.password || process.env.REDIS_PASSWORD || undefined,
+        }
+      } catch {
+        // Fallback to individual env vars if URL is invalid
+        envRedis = undefined
+      }
+    }
+
+    if (!envRedis) {
+      envRedis = {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
-      },
+        password: process.env.REDIS_PASSWORD || undefined,
+      }
+    }
+
+    // Merge: explicit config.redis overrides env-derived values
+    const mergedRedis = { ...(envRedis || {}), ...(config.redis || {}) }
+
+    this.config = {
+      devMode: config.devMode ?? process.env.NODE_ENV === 'development',
+      redis: mergedRedis,
     }
   }
 
