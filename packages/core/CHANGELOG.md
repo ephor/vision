@@ -1,5 +1,11 @@
 # @getvision/core
 
+## 0.0.4
+
+### Patch Changes
+
+- a88ad97: Fix UI layout for events
+
 ## 0.0.2
 
 ### Patch Changes

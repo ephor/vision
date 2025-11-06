@@ -1,5 +1,13 @@
 # web
 
+## 0.0.3
+
+### Patch Changes
+
+- a88ad97: Fix UI layout for events
+- Updated dependencies [a88ad97]
+  - @getvision/core@0.0.4
+
 ## 0.0.2
 
 ### Patch Changes

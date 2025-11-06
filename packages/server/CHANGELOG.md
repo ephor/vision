@@ -1,5 +1,14 @@
 # @getvision/server
 
+## 0.2.2
+
+### Patch Changes
+
+- 94b139b: Bump @hono/node-server to 1.19.6
+- da87b81: Update router to pass EventBus from root app to file-based sub-apps
+- Updated dependencies [a88ad97]
+  - @getvision/core@0.0.4
+
 ## 0.2.1
 
 ### Patch Changes
