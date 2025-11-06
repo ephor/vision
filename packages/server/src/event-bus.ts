@@ -55,8 +55,22 @@ export class EventBus {
     // Merge: explicit config.redis overrides env-derived values
     const mergedRedis = { ...(envRedis || {}), ...(config.redis || {}) }
 
+    // Determine if Redis is configured by env or explicit config
+    const hasRedisFromEnv = Boolean(envUrl)
+    const hasRedisFromConfig = Boolean(
+      config.redis && (config.redis.host || config.redis.port || config.redis.password)
+    )
+    const hasRedis = hasRedisFromEnv || hasRedisFromConfig
+
+    // devMode precedence:
+    // 1) Respect explicit config.devMode when provided (true/false)
+    // 2) Otherwise, if Redis is configured (env or config), use production mode (devMode=false)
+    // 3) Otherwise, default to devMode=true (in-memory)
+    const resolvedDevMode =
+      typeof config.devMode === 'boolean' ? config.devMode : !hasRedis
+
     this.config = {
-      devMode: config.devMode ?? process.env.NODE_ENV === 'development',
+      devMode: resolvedDevMode,
       redis: mergedRedis,
     }
   }

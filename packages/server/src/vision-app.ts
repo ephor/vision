@@ -17,6 +17,30 @@ export interface VisionALSContext {
 
 const visionContext = new AsyncLocalStorage<VisionALSContext>()
 
+// Simple deep merge utility (objects only, arrays are overwritten by source)
+function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
+  const output: any = { ...target }
+  if (source && typeof source === 'object') {
+    for (const key of Object.keys(source)) {
+      const srcVal = source[key]
+      const tgtVal = output[key]
+      if (
+        srcVal &&
+        typeof srcVal === 'object' &&
+        !Array.isArray(srcVal) &&
+        tgtVal &&
+        typeof tgtVal === 'object' &&
+        !Array.isArray(tgtVal)
+      ) {
+        output[key] = deepMerge(tgtVal, srcVal)
+      } else {
+        output[key] = srcVal
+      }
+    }
+  }
+  return output as T
+}
+
 /**
  * Vision Server configuration
  */
@@ -61,20 +85,13 @@ export interface VisionConfig {
  *   service: {
  *     name: 'My API',
  *     version: '1.0.0'
- *   },
- *   pubsub: {
- *     schemas: {
- *       'user/created': {
- *         data: z.object({ userId: z.string() })
- *       }
- *     }
  *   }
  * })
  * 
  * const userService = app.service('users')
- *   .endpoint('GET', '/users/:id', schema, handler)
  *   .on('user/created', handler)
- * 
+ *   .endpoint('GET', '/users/:id', schema, handler)
+ *
  * app.start(3000)
  * ```
  */
@@ -100,24 +117,16 @@ export class Vision<
         enabled: false,
         port: 9500,
       },
-      pubsub: {
-        devMode: true,
-      },
+      // Do not set a default devMode here; let EventBus derive from Redis presence
+      pubsub: {},
       routes: {
         autodiscover: true,
         dirs: ['app/routes'],
       },
     }
 
-    // Merge shallowly (good enough for our config structure)
-    this.config = {
-      ...defaultConfig,
-      ...(config || {}),
-      service: { ...defaultConfig.service, ...(config?.service || {}) },
-      vision: { ...defaultConfig.vision, ...(config?.vision || {}) },
-      pubsub: { ...defaultConfig.pubsub, ...(config?.pubsub || {}) },
-      routes: { ...defaultConfig.routes, ...(config?.routes || {}) },
-    }
+    // Deep merge to respect nested overrides
+    this.config = deepMerge(defaultConfig, config || {})
     
     // Initialize Vision Core
     const visionEnabled = this.config.vision?.enabled !== false
