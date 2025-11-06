@@ -459,8 +459,10 @@ export class ServiceBuilder<
                 throw error
               }
             }
-            
-            // Add emit() method to context with type-safe event validation
+          }
+
+          // Always provide emit() so events work in sub-apps without local VisionCore
+          if (!(c as any).emit) {
             (c as any).emit = async <K extends keyof TEvents>(
               eventName: K,
               data: TEvents[K]

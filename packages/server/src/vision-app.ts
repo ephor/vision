@@ -73,6 +73,7 @@ export interface VisionConfig {
       password?: string
     }
     devMode?: boolean  // Use in-memory event bus (no Redis required)
+    eventBus?: EventBus  // Share EventBus instance across apps (for sub-apps)
   }
 }
 
@@ -193,8 +194,9 @@ export class Vision<
       this.visionCore = null as any
     }
     
-    // Initialize EventBus
-    this.eventBus = new EventBus({
+    // Use provided EventBus or create a new one
+    // Root app creates EventBus, sub-apps can share it via config.pubsub.eventBus
+    this.eventBus = this.config.pubsub?.eventBus || new EventBus({
       redis: this.config.pubsub?.redis,
       devMode: this.config.pubsub?.devMode,
     })
@@ -545,7 +547,8 @@ export class Vision<
     let allSubAppSummaries: Array<{ name: string; routes: any[] }> = []
     for (const d of existing) {
       try {
-        const summaries = await loadSubApps(this as any, d)
+        // Pass EventBus to sub-apps so they share the same instance
+        const summaries = await loadSubApps(this as any, d, this.eventBus)
         allSubAppSummaries = allSubAppSummaries.concat(summaries)
       } catch (e) {
         console.error(`❌ Failed to load sub-apps from ${d}:`, (e as any)?.message || e)
@@ -618,6 +621,13 @@ export class Vision<
       console.log('⚠️  Use your runtime\'s serve function')
       return this
     }
+  }
+
+  /**
+   * Set the EventBus instance (used internally by router to inject shared EventBus)
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus
   }
 }
 

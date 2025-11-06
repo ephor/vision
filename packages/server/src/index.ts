@@ -51,6 +51,10 @@ export type { VisionConfig } from './vision-app'
 // Service builder (usually accessed via app.service())
 export { ServiceBuilder } from './service'
 
+// Event bus
+export { EventBus } from './event-bus'
+export type { EventBusConfig } from './event-bus'
+
 // Types
 export type { 
   EndpointConfig, 

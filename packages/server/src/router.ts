@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import { readdirSync, statSync } from 'fs'
 import { join, resolve, relative, sep } from 'path'
 import { pathToFileURL } from 'url'
+import type { EventBus } from './event-bus'
 
 /**
  * Autoload Vision/Hono sub-apps from a directory structure like app/routes/.../index.ts
@@ -12,7 +13,7 @@ import { pathToFileURL } from 'url'
  * - app/routes/users/[id]/index.ts   -> /users/:id
  * - app/routes/index.ts              -> /
  */
-export async function loadSubApps(app: Hono, routesDir: string = './app/routes'): Promise<Array<{ name: string; routes: any[] }>> {
+export async function loadSubApps(app: Hono, routesDir: string = './app/routes', eventBus?: EventBus): Promise<Array<{ name: string; routes: any[] }>> {
   const mounted: Array<{ base: string }> = []
   const allSubAppSummaries: Array<{ name: string; routes: any[] }> = []
 
@@ -37,6 +38,10 @@ export async function loadSubApps(app: Hono, routesDir: string = './app/routes')
       const mod: any = await import(modUrl)
       const subApp = mod?.default
       if (subApp) {
+        // Inject EventBus into sub-app if it's a Vision instance
+        if (eventBus && typeof subApp?.setEventBus === 'function') {
+          subApp.setEventBus(eventBus)
+        }
         const base = toBasePath(dir)
         // If it's a Vision sub-app, build its services before mounting
         try {
