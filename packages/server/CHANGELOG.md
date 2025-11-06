@@ -1,5 +1,16 @@
 # @getvision/server
 
+## 0.2.1
+
+### Patch Changes
+
+- ec9cf8b: Redis password is now passed correctly and REDIS_URL is honored.
+- d0f3a53: Add event handler context
+
+  Event handlers receive a Hono-like `Context` as the second argument. You can run service-level middleware to inject resources using `c.set(...)` and then access them in the handler via `c.get(...)`.
+
+- 648a711: If Redis is configured use production mode in PubSub
+
 ## 0.2.0
 
 ### Minor Changes
