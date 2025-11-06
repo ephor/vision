@@ -1,6 +1,6 @@
 {
   "name": "@getvision/core",
-  "version": "0.0.3",
+  "version": "0.0.4-a88ad97-develop",
   "type": "module",
   "types": "dist/index.d.ts",
   "module": "dist/index.js",
@@ -10,9 +10,21 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./server": { "types": "./dist/server/index.d.ts", "import": "./dist/server/index.js", "default": "./dist/server/index.js" },
-    "./tracing": { "types": "./dist/tracing/index.d.ts", "import": "./dist/tracing/index.js", "default": "./dist/tracing/index.js" },
-    "./types": { "types": "./dist/types/index.d.ts", "import": "./dist/types/index.js", "default": "./dist/types/index.js" }
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
+    },
+    "./tracing": {
+      "types": "./dist/tracing/index.d.ts",
+      "import": "./dist/tracing/index.js",
+      "default": "./dist/tracing/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js",
+      "default": "./dist/types/index.js"
+    }
   },
   "scripts": {
     "dev": "tsc --watch",
