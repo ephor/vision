@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { Clock, Zap, ArrowLeft, Trash2, Download } from 'lucide-react'
-import {useTraces, useClearTraces, useExportTraces, useAddClientMetrics} from '../hooks/useVision'
+import { Clock, Zap, ArrowLeft, Trash2, Download, RefreshCcw } from 'lucide-react'
+import { useTraces, useClearTraces, useExportTraces, useAddClientMetrics } from '../hooks/useVision'
 import { Link, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
-import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
 import { SpansWaterfall } from './SpansWaterfall'
 import { TraceRequestResponse } from './TraceRequestResponse'
@@ -63,10 +62,10 @@ export function TracesPage() {
   }
 
   return (
-    <div className="h-full grid grid-cols-12 gap-0">
+    <div className="h-full flex">
       {/* Left: list */}
-      <div className="col-span-4 border-r bg-muted h-full flex flex-col">
-        <div className="px-6 py-4 border-b bg-background">
+     <div className="w-1/3 flex flex-col border-r">
+      <div className="p-4 bg-background border-b">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-semibold">Traces</h1>
@@ -97,7 +96,7 @@ export function TracesPage() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1" ref={listContainerRef}>
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {traces.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-6 text-muted-foreground">
               <Zap className="w-12 h-12 mb-4 opacity-30" />
@@ -116,12 +115,14 @@ export function TracesPage() {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Right: detail outlet */}
-      <div className="col-span-8 h-full overflow-y-auto p-6">
-        <Outlet />
+      <div className="w-2/3 flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
+          <Outlet />
+        </div>
       </div>
     </div>
   )
@@ -154,7 +155,7 @@ function TraceListItem({ trace, isActive }: { trace: Trace; isActive: boolean })
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
-    return date.toLocaleTimeString('en-US', { 
+    return date.toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
@@ -180,7 +181,7 @@ function TraceListItem({ trace, isActive }: { trace: Trace; isActive: boolean })
           </span>
         )}
       </div>
-      
+
       <div className="font-mono text-sm text-foreground truncate mb-2">
         {trace.path}
       </div>
@@ -236,13 +237,13 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
       const replayStartTime = Date.now()
       const response = await fetch(url, { method: trace.method, headers: { 'Content-Type': 'application/json' } })
       const replayDuration = Date.now() - replayStartTime
-      
+
       // Capture trace ID and send client metrics
       const replayTraceId = response.headers.get('X-Vision-Trace-Id')
       if (replayTraceId) {
         addClientMetrics.mutate({ traceId: replayTraceId, clientDuration: replayDuration })
       }
-      
+
       // Rely on websocket trace.new to render latest in list; navigation handled by /traces/$traceId route when user clicks
     } catch (error) {
       console.error('Failed to replay request:', error)
@@ -277,24 +278,24 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
   }
 
   return (
-    <div className="max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
-        {onBack && (
+    <div className="w-full">
+      {onBack && (
+        <div className="flex items-center justify-between mb-6">
           <Button variant="ghost" size="sm" onClick={onBack} className="text-sm font-medium">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Traces
           </Button>
-        )}
-        <Button onClick={handleReplay} size="sm" className="text-sm font-medium">
-          Replay Request
-        </Button>
-      </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Overview Card */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">Request Overview</CardTitle>
+            <Button onClick={handleReplay} variant="ghost" className="text-sm font-medium">
+              <RefreshCcw className="w-4 h-4" />
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
