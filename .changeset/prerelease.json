@@ -1,22 +1,20 @@
 {
-  "mode": "snapshot",
+  "mode": "stable",
   "initialVersions": {
     "docs": "0.0.1",
-    "web": "0.0.3",
-    "express-basic-example": "0.0.4",
-    "fastify-basic-example": "0.0.4",
-    "hono-basic-example": "0.0.4",
-    "vision-basic-example": "0.0.6",
-    "@getvision/adapter-express": "0.0.3",
-    "@getvision/adapter-fastify": "0.0.3",
-    "@getvision/adapter-hono": "0.0.3",
-    "@getvision/core": "0.0.4",
+    "web": "0.0.4",
+    "express-basic-example": "0.0.5",
+    "fastify-basic-example": "0.0.5",
+    "hono-basic-example": "0.0.5",
+    "vision-basic-example": "0.0.7",
+    "@getvision/adapter-express": "0.0.4",
+    "@getvision/adapter-fastify": "0.0.4",
+    "@getvision/adapter-hono": "0.0.4",
+    "@getvision/core": "0.0.5",
     "@repo/eslint-config": "0.0.1",
-    "@getvision/server": "0.2.2",
+    "@getvision/server": "0.2.3",
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": [
-    "angry-flowers-cover"
-  ]
+  "changesets": []
 }

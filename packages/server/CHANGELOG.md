@@ -1,5 +1,12 @@
 # @getvision/server
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [d227b1d]
+  - @getvision/core@0.0.5
+
 ## 0.2.2
 
 ### Patch Changes

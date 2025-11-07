@@ -1,5 +1,13 @@
 # hono-basic-example
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [d227b1d]
+  - @getvision/core@0.0.5
+  - @getvision/adapter-hono@0.0.4
+
 ## 0.0.4
 
 ### Patch Changes
