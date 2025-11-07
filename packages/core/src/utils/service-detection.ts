@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, spawnSync, type ChildProcess } from 'child_process'
 
 /**
  * Package info detected from package.json
@@ -104,6 +104,23 @@ export function startDrizzleStudio(port: number = 4983): boolean {
     console.warn('⚠️  Drizzle config not found. Skipping Drizzle Studio auto-start.')
     return false
   }
+
+  // If Drizzle Studio is already listening on this port, skip spawning but report available
+  try {
+    if (process.platform === 'win32') {
+      const res = spawnSync('powershell', ['-NoProfile', '-Command', `netstat -ano | Select-String -Pattern "LISTENING\\s+.*:${port}\\s"`], { encoding: 'utf-8' })
+      if ((res.stdout || '').trim().length > 0) {
+        console.log(`⚠️  Drizzle Studio port ${port} already in use; assuming it is running. Skipping auto-start.`)
+        return true
+      }
+    } else {
+      const res = spawnSync('lsof', ['-i', `tcp:${port}`, '-sTCP:LISTEN'], { encoding: 'utf-8' })
+      if ((res.stdout || '').trim().length > 0) {
+        console.log(`⚠️  Drizzle Studio port ${port} already in use; assuming it is running. Skipping auto-start.`)
+        return true
+      }
+    }
+  } catch {}
 
   console.log(`🗄️  Starting Drizzle Studio on port ${port}...`)
 
