@@ -1,5 +1,11 @@
 # @getvision/server
 
+## 0.2.4
+
+### Patch Changes
+
+- b0ab5ad: Run in Bun environment if Bun was detected
+
 ## 0.2.3
 
 ### Patch Changes
