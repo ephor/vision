@@ -38,7 +38,7 @@
     },
     "apps/web": {
       "name": "web",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@monaco-editor/react": "^4.7.0",
@@ -80,7 +80,7 @@
     },
     "examples/express": {
       "name": "express-basic-example",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "dependencies": {
         "@getvision/adapter-express": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -96,7 +96,7 @@
     },
     "examples/fastify": {
       "name": "fastify-basic-example",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "dependencies": {
         "@getvision/adapter-fastify": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -112,7 +112,7 @@
     },
     "examples/hono": {
       "name": "hono-basic-example",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "dependencies": {
         "@getvision/adapter-hono": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -133,7 +133,7 @@
     },
     "examples/vision": {
       "name": "vision-basic-example",
-      "version": "0.0.5",
+      "version": "0.0.7",
       "dependencies": {
         "@getvision/server": "workspace:*",
         "@hono/node-server": "^1.19.6",
@@ -152,7 +152,7 @@
     },
     "packages/adapter-express": {
       "name": "@getvision/adapter-express",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "zod": "^4.1.11",
@@ -171,7 +171,7 @@
     },
     "packages/adapter-fastify": {
       "name": "@getvision/adapter-fastify",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "dependencies": {
         "@fastify/request-context": "^6.2.1",
         "@getvision/core": "workspace:*",
@@ -193,7 +193,7 @@
     },
     "packages/adapter-hono": {
       "name": "@getvision/adapter-hono",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/zod-validator": "^0.7.3",
@@ -212,7 +212,7 @@
     },
     "packages/core": {
       "name": "@getvision/core",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "dependencies": {
         "mime-types": "^2.1.35",
         "nanoid": "^5.0.7",
@@ -245,7 +245,7 @@
     },
     "packages/server": {
       "name": "@getvision/server",
-      "version": "0.2.1",
+      "version": "0.2.3",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/node-server": "^1.19.6",

@@ -5,9 +5,11 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "bun --hot src/index.ts",
+    "dev:node": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit src/index.ts",
-    "start": "tsx src/index.ts",
+    "start": "bun src/index.ts",
+    "start:node": "tsx src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",

@@ -4,7 +4,7 @@ import { VisionCore } from '@getvision/core'
 import type { RouteMetadata } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import { ServiceBuilder } from './service'
 import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
@@ -106,6 +106,8 @@ export class Vision<
   private config: VisionConfig
   private serviceBuilders: ServiceBuilder<any, E>[] = []
   private fileBasedRoutes: RouteMetadata[] = []
+  private bunServer?: any
+  private shuttingDown = false
 
   constructor(config?: VisionConfig) {
     super()
@@ -599,18 +601,53 @@ export class Vision<
     console.log(`🚀 Starting ${this.config.service.name}...`)
     console.log(`📡 API Server: http://localhost:${port}`)
     
-    // Setup cleanup on exit
+    // Setup cleanup on exit (ensure it runs once)
     const cleanup = async () => {
+      if (this.shuttingDown) return
+      this.shuttingDown = true
       console.log('🛑 Shutting down...')
-      await this.eventBus.close()
+      try {
+        if (this.bunServer && typeof this.bunServer.stop === 'function') {
+          try { this.bunServer.stop() } catch {}
+        }
+        try { if ((globalThis as any).__vision_bun_server === this.bunServer) (globalThis as any).__vision_bun_server = undefined } catch {}
+      } catch {}
+      try { stopDrizzleStudio() } catch {}
+      try { await this.eventBus.close() } catch {}
     }
     
-    process.on('SIGINT', cleanup)
-    process.on('SIGTERM', cleanup)
+    const wrappedCleanup = async () => {
+      await cleanup()
+      try { process.exit(0) } catch {}
+    }
+    process.once('SIGINT', wrappedCleanup)
+    process.once('SIGTERM', wrappedCleanup)
+    try { process.once('SIGQUIT', wrappedCleanup) } catch {}
     
-    // For Node.js
-    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+    // Prefer Bun if available, then Node.js; otherwise instruct the user to serve manually
+    if (typeof process !== 'undefined' && process.versions?.bun) {
+      const BunServe = (globalThis as any).Bun?.serve
+      if (typeof BunServe === 'function') {
+        console.log(`Bun detected`)
+        try {
+          const existing = (globalThis as any).__vision_bun_server
+          if (existing && typeof existing.stop === 'function') {
+            try { existing.stop() } catch {}
+          }
+        } catch {}
+        this.bunServer = BunServe({
+          fetch: this.fetch.bind(this),
+          port,
+          hostname: options?.hostname
+        })
+        try { (globalThis as any).__vision_bun_server = this.bunServer } catch {}
+      } else {
+        console.warn('Bun detected but Bun.serve is unavailable')
+        return this
+      }
+    } else if (typeof process !== 'undefined' && process.versions?.node) {
       const { serve } = await import('@hono/node-server')
+      console.log(`Node.js detected`)
       serve({
         fetch: this.fetch.bind(this),
         port,
@@ -671,7 +708,22 @@ function startDrizzleStudio(port: number): boolean {
     return false
   }
 
-  console.log(`🗄️  Starting Drizzle Studio on port ${port}...`)
+  // If Drizzle Studio is already listening on this port, skip spawning but report available
+  try {
+    if (process.platform === 'win32') {
+      const res = spawnSync('powershell', ['-NoProfile', '-Command', `netstat -ano | Select-String -Pattern "LISTENING\\s+.*:${port}\\s"`], { encoding: 'utf-8' })
+      if ((res.stdout || '').trim().length > 0) {
+        console.log(`⚠️  Drizzle Studio port ${port} already in use; assuming it is running. Skipping auto-start.`)
+        return true
+      }
+    } else {
+      const res = spawnSync('lsof', ['-i', `tcp:${port}`, '-sTCP:LISTEN'], { encoding: 'utf-8' })
+      if ((res.stdout || '').trim().length > 0) {
+        console.log(`⚠️  Drizzle Studio port ${port} already in use; assuming it is running. Skipping auto-start.`)
+        return true
+      }
+    }
+  } catch {}
 
   try {
     drizzleStudioProcess = spawn('npx', ['drizzle-kit', 'studio', '--port', String(port), '--host', '0.0.0.0'], {
