@@ -14,7 +14,7 @@ export class VisionWebSocketServer {
   private wss: WebSocketServer
   private clients = new Set<WebSocket>()
   private rpc: JsonRpcHandler
-  private options: Required<VisionServerOptions>
+  private options: Required<Omit<VisionServerOptions, 'apiUrl'>> & { apiUrl?: string }
 
   constructor(options: VisionServerOptions = {}) {
     this.options = {
@@ -24,6 +24,7 @@ export class VisionWebSocketServer {
       maxLogs: options.maxLogs ?? 10_000,
       captureConsole: options.captureConsole ?? true,
       enableCors: options.enableCors ?? true,
+      apiUrl: options.apiUrl,
     }
 
     this.rpc = new JsonRpcHandler()
@@ -72,7 +73,7 @@ export class VisionWebSocketServer {
 
     // Try to serve static files from built UI
     const uiPath = getUIPath()
-    const served = await serveStatic(req, res, uiPath)
+    const served = await serveStatic(req, res, uiPath, this.options.apiUrl)
 
     if (!served) {
       // No static UI available — return 404 (no legacy HTML fallback)

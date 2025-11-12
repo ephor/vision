@@ -153,6 +153,7 @@ export interface VisionServerOptions {
   maxLogs?: number
   captureConsole?: boolean
   enableCors?: boolean
+  apiUrl?: string  // URL of the API server (for frontend to make HTTP requests)
 }
 
 // Adapter interface

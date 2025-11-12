@@ -13,7 +13,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export async function serveStatic(
   req: IncomingMessage,
   res: ServerResponse,
-  uiPath: string
+  uiPath: string,
+  apiUrl?: string
 ): Promise<boolean> {
   let filePath = req.url || '/'
   
@@ -40,8 +41,16 @@ export async function serveStatic(
   }
 
   try {
-    const content = await readFile(fullPath)
+    let content = await readFile(fullPath)
     const mimeType = lookup(fullPath) || 'application/octet-stream'
+    
+    // Inject config into index.html
+    if (filePath === '/index.html' && apiUrl) {
+      const configScript = `<script>window.VISION_CONFIG = ${JSON.stringify({ apiUrl })};</script>`
+      const html = content.toString()
+      const injected = html.replace('</head>', `${configScript}</head>`)
+      content = Buffer.from(injected)
+    }
     
     res.writeHead(200, {
       'Content-Type': mimeType,
