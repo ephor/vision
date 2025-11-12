@@ -1,5 +1,11 @@
 # @getvision/core
 
+## 0.0.7
+
+### Patch Changes
+
+- 96f97ad: Add apiUrl config param for adapters
+
 ## 0.0.6
 
 ### Patch Changes
