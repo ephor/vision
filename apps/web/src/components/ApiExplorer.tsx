@@ -10,6 +10,7 @@ import { useRoutes, useAddClientMetrics } from '../hooks/useVision'
 import { TracesPanel } from './TracesPanel'
 import { JsonViewer } from './JsonViewer'
 import { useToast } from '../contexts/ToastContext'
+import { getBackendUrl } from '../lib/config'
 import type { RouteMetadata } from '@getvision/core'
 
 type ExplorerTab = {
@@ -106,7 +107,7 @@ export function ApiExplorer() {
         url = url.replace(`:${key}`, value)
       })
       
-      const fullUrl = `http://localhost:3000${url}`
+      const fullUrl = `${getBackendUrl()}${url}`
       
       // Prepare request options
       const options: RequestInit = {
