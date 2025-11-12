@@ -1,5 +1,12 @@
 # @getvision/core
 
+## 0.0.6
+
+### Patch Changes
+
+- 633a138: Inject dashboard config into index.html via apiUrl and serveStatic
+  Make VisionWebSocketServer options accept optional apiUrl
+
 ## 0.0.5
 
 ### Patch Changes
