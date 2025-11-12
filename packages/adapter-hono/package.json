@@ -1,6 +1,6 @@
 {
   "name": "@getvision/adapter-hono",
-  "version": "0.0.6",
+  "version": "0.0.7-d4ccf5d-develop",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
