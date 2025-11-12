@@ -137,6 +137,7 @@ export function visionMiddleware(options: VisionExpressOptions = {}) {
       port: options.port ?? parseInt(process.env.VISION_PORT || '9500'),
       maxTraces: options.maxTraces ?? 1000,
       maxLogs: options.maxLogs ?? 10000,
+      apiUrl: options.apiUrl,
     })
 
     // Auto-detect service info
