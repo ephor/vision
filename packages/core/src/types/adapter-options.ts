@@ -46,6 +46,7 @@ export interface BaseAdapterOptions {
   port?: number
   maxTraces?: number
   logging?: boolean
+  apiUrl?: string // URL of the API server for dashboard HTTP calls
   service?: ServiceConfig
   services?: ServiceDefinition[]
   drizzle?: DrizzleConfig
