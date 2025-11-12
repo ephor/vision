@@ -1,5 +1,12 @@
 # fastify-basic-example
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [d4ccf5d]
+  - @getvision/adapter-fastify@0.0.7
+
 ## 0.0.7
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @getvision/adapter-fastify
 
+## 0.0.7
+
+### Patch Changes
+
+- d4ccf5d: Expose `apiUrl` in adapter and server options and pass it to VisionCore so the dashboard can target the backend API.
+
 ## 0.0.6
 
 ### Patch Changes
