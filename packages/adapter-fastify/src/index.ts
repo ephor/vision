@@ -90,6 +90,7 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
     maxLogs = 10000,
     logging = true,
     cors = true,
+    apiUrl
   } = options
 
   if (!enabled) {
@@ -101,6 +102,7 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
       port,
       maxTraces,
       maxLogs,
+      apiUrl
     })
   }
 
