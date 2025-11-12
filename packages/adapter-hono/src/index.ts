@@ -198,7 +198,7 @@ function extractParams(template: string, concrete: string): Record<string, strin
 }
 
 export function visionAdapter(options: VisionHonoOptions = {}): MiddlewareHandler {
-  const { enabled = true, port = 9500, maxTraces = 1000, logging = true } = options
+  const { enabled = true, port = 9500, maxTraces = 1000, logging = true, apiUrl } = options
 
   if (!enabled) {
     return async (c, next) => await next()
@@ -206,7 +206,7 @@ export function visionAdapter(options: VisionHonoOptions = {}): MiddlewareHandle
 
   // Initialize Vision Core once
   if (!visionInstance) {
-    visionInstance = new VisionCore({ port, maxTraces })
+    visionInstance = new VisionCore({ port, maxTraces, apiUrl })
 
     // Auto-detect service info
     const pkgInfo = autoDetectPackageInfo()
