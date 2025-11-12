@@ -61,6 +61,7 @@ export interface VisionConfig {
     maxTraces?: number
     maxLogs?: number
     logging?: boolean
+    apiUrl?: string  // URL of the API server (for frontend to make HTTP requests)
   }
   routes?: {
     autodiscover?: boolean
@@ -140,6 +141,7 @@ export class Vision<
         port: visionPort,
         maxTraces: this.config.vision?.maxTraces ?? 1000,
         maxLogs: this.config.vision?.maxLogs ?? 10000,
+        apiUrl: this.config.vision?.apiUrl,
       })
 
       // Detect and optionally start Drizzle Studio

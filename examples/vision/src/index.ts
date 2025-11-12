@@ -30,7 +30,8 @@ const app = new Vision({
   },
   vision: {
     enabled: true,
-    port: 9500
+    port: 9500,
+    apiUrl: 'http://localhost:4000'  // Tell dashboard where API server is running
   },
   pubsub: {
     devMode: true,  // Use in-memory event bus (no Redis required)
@@ -310,7 +311,7 @@ app.get('/', (c) => {
 // Start Server - Vision handles everything!
 // ============================================================================
 
-app.start(3000)
+app.start(4000)
 
 // Export AppType for Hono RPC client
 export type AppType = typeof app
