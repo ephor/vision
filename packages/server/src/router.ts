@@ -27,6 +27,10 @@ export async function loadSubApps(app: Hono, routesDir: string = './app/routes',
     return '/' + segments.join('/')
   }
 
+  function isDynamicSegment(name: string): boolean {
+    return name.startsWith('[') && name.endsWith(']')
+  }
+
   async function scan(dir: string) {
     const entries = readdirSync(dir)
     // If folder contains index.ts or index.js, treat it as a sub-app root
@@ -73,7 +77,16 @@ export async function loadSubApps(app: Hono, routesDir: string = './app/routes',
       }
     }
     // Recurse into child directories
-    for (const name of entries) {
+    // Sort entries: static folders first, then dynamic [param] folders
+    // This ensures static routes have priority over dynamic routes
+    const sortedEntries = [...entries].sort((a, b) => {
+      const aIsDynamic = isDynamicSegment(a)
+      const bIsDynamic = isDynamicSegment(b)
+      if (aIsDynamic && !bIsDynamic) return 1  // dynamic after static
+      if (!aIsDynamic && bIsDynamic) return -1 // static before dynamic
+      return a.localeCompare(b) // alphabetical within same type
+    })
+    for (const name of sortedEntries) {
       const full = join(dir, name)
       const st = statSync(full)
       if (st.isDirectory()) await scan(full)
