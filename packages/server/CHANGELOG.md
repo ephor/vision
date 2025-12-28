@@ -1,5 +1,16 @@
 # @getvision/server
 
+## 0.3.0
+
+### Minor Changes
+
+- 28c86e6: Added support for runtime-specific `start` options. Introduced new `VisionStartOptions` type for better handling of configuration parameters.
+  Added support for configurable worker concurrency per handler and default event bus settings
+
+### Patch Changes
+
+- 2d4e753: Fix priority for dynamic and static routes
+
 ## 0.2.7
 
 ### Patch Changes
