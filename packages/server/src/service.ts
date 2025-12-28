@@ -240,6 +240,11 @@ export class ServiceBuilder<
       description?: string
       icon?: string
       tags?: string[]
+      /**
+       * Max number of concurrent jobs this handler will process.
+       * Falls back to EventBus config.workerConcurrency (or 1).
+       */
+      concurrency?: number
       handler: (event: T, c: Context<E, any, I>) => Promise<void>
     }
   ): ServiceBuilder<TEvents & { [key in K]: T }, E, I> {
@@ -268,7 +273,9 @@ export class ServiceBuilder<
     )
     
     // Register wrapped handler in event bus
-    this.eventBus.registerHandler(eventName, wrappedHandler)
+    this.eventBus.registerHandler(eventName, wrappedHandler, {
+      concurrency: config.concurrency,
+    })
     
     // Store for later reference
     this.eventHandlers.set(eventName, config)

@@ -11,6 +11,10 @@ export interface EventBusConfig {
     port?: number
     password?: string
   }
+  /**
+   * Default BullMQ worker concurrency (per event). Per-handler options override this.
+   */
+  workerConcurrency?: number
   // Dev mode - use in-memory (no Redis required)
   devMode?: boolean
 }
@@ -72,6 +76,7 @@ export class EventBus {
     this.config = {
       devMode: resolvedDevMode,
       redis: mergedRedis,
+      workerConcurrency: config.workerConcurrency,
     }
   }
 
@@ -178,7 +183,14 @@ export class EventBus {
    */
   registerHandler<T>(
     eventName: string,
-    handler: (data: T) => Promise<void>
+    handler: (data: T) => Promise<void>,
+    options?: {
+      /**
+       * Max number of concurrent jobs this handler will process.
+       * Defaults to config.workerConcurrency (or 1).
+       */
+      concurrency?: number
+    }
   ): void {
     if (this.config.devMode) {
       // Dev mode - store handlers in memory
@@ -203,6 +215,7 @@ export class EventBus {
         },
         {
           connection,
+          concurrency: options?.concurrency ?? this.config.workerConcurrency ?? 1,
         }
       )
 

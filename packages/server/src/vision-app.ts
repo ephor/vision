@@ -75,6 +75,10 @@ export interface VisionConfig {
     }
     devMode?: boolean  // Use in-memory event bus (no Redis required)
     eventBus?: EventBus  // Share EventBus instance across apps (for sub-apps)
+    /**
+     * Default BullMQ worker concurrency for all handlers (overridable per handler)
+     */
+    workerConcurrency?: number
   }
 }
 
@@ -203,6 +207,7 @@ export class Vision<
     this.eventBus = this.config.pubsub?.eventBus || new EventBus({
       redis: this.config.pubsub?.redis,
       devMode: this.config.pubsub?.devMode,
+      workerConcurrency: this.config.pubsub?.workerConcurrency,
     })
     
     // Register JSON-RPC methods for events/cron
