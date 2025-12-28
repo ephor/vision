@@ -8,6 +8,7 @@ import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import { ServiceBuilder } from './service'
 import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
+import type { serve as honoServe } from '@hono/node-server'
 
 export interface VisionALSContext {
   vision: VisionCore
@@ -16,6 +17,12 @@ export interface VisionALSContext {
 }
 
 const visionContext = new AsyncLocalStorage<VisionALSContext>()
+
+type BunServeOptions = Parameters<typeof Bun['serve']>[0]
+type NodeServeOptions = Parameters<typeof honoServe>[0]
+
+type VisionStartOptions = Omit<Partial<BunServeOptions>, 'fetch' | 'port'> &
+  Omit<Partial<NodeServeOptions>, 'fetch' | 'port'>
 
 // Simple deep merge utility (objects only, arrays are overwritten by source)
 function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
@@ -572,7 +579,11 @@ export class Vision<
   /**
    * Start the server (convenience method)
    */
-  async start(port: number = 3000, options?: { hostname?: string }) {
+  async start(port: number = 3000, options?: VisionStartOptions) {
+    const { hostname, ...restOptions } = options || {}
+    const { fetch: _bf, port: _bp, ...bunRest } = restOptions as Partial<BunServeOptions>
+    const { fetch: _nf, port: _np, ...nodeRest } = restOptions as Partial<NodeServeOptions>
+
     // Build all services WITHOUT registering to VisionCore yet
     const rootSummaries = this.buildAllServices()
     // Autoload file-based Vision/Hono sub-apps if enabled (returns merged sub-app summaries)
@@ -643,9 +654,10 @@ export class Vision<
           }
         } catch {}
         this.bunServer = BunServe({
+          ...bunRest,
           fetch: this.fetch.bind(this),
           port,
-          hostname: options?.hostname
+          hostname
         })
         try { (globalThis as any).__vision_bun_server = this.bunServer } catch {}
       } else {
@@ -656,9 +668,10 @@ export class Vision<
       const { serve } = await import('@hono/node-server')
       console.log(`Node.js detected`)
       serve({
+        ...nodeRest,
         fetch: this.fetch.bind(this),
         port,
-        hostname: options?.hostname
+        hostname
       })
     } else {
       // For other runtimes, just return the app
