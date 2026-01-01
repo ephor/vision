@@ -1,5 +1,12 @@
 # @getvision/server
 
+## 0.3.1
+
+### Patch Changes
+
+- 9c3a582: Improve hot-reload cleanup and prevent memory leaks during development
+- 3b055ce: clean events and workers to avoid memory leaks
+
 ## 0.3.0
 
 ### Minor Changes
