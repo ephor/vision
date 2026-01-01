@@ -1,5 +1,12 @@
 # vision-basic-example
 
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [90d1d3a]
+  - @getvision/server@0.3.2
+
 ## 0.0.13
 
 ### Patch Changes
