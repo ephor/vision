@@ -38,15 +38,31 @@ function getClientKey(c: Context, method: string, path: string): string {
  */
 function createEventContext<E extends Env = any, I extends Input = {}>(): Context<E, any, I> {
   const store: Record<string, any> = {}
+  const mockRequest = new Request('http://localhost/event-trigger')
+  const resHeaders = new Headers()
+  
   const fake: Partial<Context<E, any, I>> = {
     get: (key: string) => store[key],
     set: (key: string, value: any) => { store[key] = value },
+    header: (key: string, value: string | undefined) => { 
+      if (value === undefined) {
+        resHeaders.delete(key)
+      } else {
+        resHeaders.set(key, value) 
+      }
+    },
+    status: (code: number) => {},
     req: {
-      header: () => undefined,
+      header: ((name?: string) => name ? undefined : {}) as any,
       param: () => ({}),
       query: () => ({}),
       json: async () => ({}),
-      raw: {} as any,
+      raw: mockRequest,
+      url: 'http://localhost/event-trigger',
+      method: 'POST',
+    } as any,
+    res: {
+      headers: resHeaders,
     } as any,
   }
   return fake as Context<E, any, I>

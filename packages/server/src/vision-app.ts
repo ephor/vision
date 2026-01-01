@@ -57,7 +57,6 @@ async function cleanupVisionInstance(instance: Vision<any, any, any>): Promise<v
 
     try { stopDrizzleStudio({ log: false }) } catch {}
     try { await (instance as any).eventBus?.close() } catch {}
-    try { eventRegistry.clear() } catch {}
   })()
 
   return (instance as any)._cleanupPromise
