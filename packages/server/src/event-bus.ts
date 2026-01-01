@@ -203,6 +203,15 @@ export class EventBus {
         host: 'localhost',
         port: 6379,
       }
+      const workerKey = `${eventName}-handler`
+      
+      // Close existing worker if it exists
+      const existingWorker = this.workers.get(workerKey)
+      if (existingWorker) {
+        void existingWorker.close().catch(() => {})
+        this.workers.delete(workerKey)
+      }
+      
       const worker = new Worker(
         eventName,
         async (job) => {
@@ -219,7 +228,7 @@ export class EventBus {
         }
       )
 
-      this.workers.set(`${eventName}-${Date.now()}`, worker)
+      this.workers.set(workerKey, worker)
 
       // Listen to queue events
       if (!this.queueEvents.has(eventName)) {
@@ -266,6 +275,15 @@ export class EventBus {
         host: 'localhost',
         port: 6379,
       }
+      const cronWorkerKey = `${cronName}-handler`
+      
+      // Close existing cron worker if it exists
+      const existingCronWorker = this.workers.get(cronWorkerKey)
+      if (existingCronWorker) {
+        void existingCronWorker.close().catch(() => {})
+        this.workers.delete(cronWorkerKey)
+      }
+      
       const worker = new Worker(
         cronName,
         async (job) => {
@@ -287,7 +305,7 @@ export class EventBus {
         }
       )
 
-      this.workers.set(`${cronName}-${Date.now()}`, worker)
+      this.workers.set(cronWorkerKey, worker)
 
       // Listen to cron job events
       if (!this.queueEvents.has(cronName)) {

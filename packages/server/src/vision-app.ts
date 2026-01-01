@@ -625,6 +625,10 @@ export class Vision<
       this.shuttingDown = true
       console.log('🛑 Shutting down...')
       try {
+        // Clear AsyncLocalStorage to prevent memory leaks
+        visionContext.disable()
+      } catch {}
+      try {
         if (this.bunServer && typeof this.bunServer.stop === 'function') {
           try { this.bunServer.stop() } catch {}
         }
@@ -632,6 +636,7 @@ export class Vision<
       } catch {}
       try { stopDrizzleStudio() } catch {}
       try { await this.eventBus.close() } catch {}
+      try { eventRegistry.clear() } catch {}
     }
     
     const wrappedCleanup = async () => {
@@ -641,6 +646,17 @@ export class Vision<
     process.once('SIGINT', wrappedCleanup)
     process.once('SIGTERM', wrappedCleanup)
     try { process.once('SIGQUIT', wrappedCleanup) } catch {}
+
+    // Bun hot-reload: ensure resources are released between reloads.
+    // Note: dispose must NOT call process.exit().
+    try {
+      const hot = (import.meta as any)?.hot
+      if (hot && typeof hot.dispose === 'function') {
+        hot.dispose(() => {
+          void cleanup()
+        })
+      }
+    } catch {}
     
     // Prefer Bun if available, then Node.js; otherwise instruct the user to serve manually
     if (typeof process !== 'undefined' && process.versions?.bun) {
@@ -774,6 +790,8 @@ function startDrizzleStudio(port: number): boolean {
  */
 function stopDrizzleStudio(): void {
   if (drizzleStudioProcess) {
+    // Remove all event listeners to prevent memory leaks
+    drizzleStudioProcess.removeAllListeners()
     drizzleStudioProcess.kill()
     drizzleStudioProcess = null
     console.log('🛑 Drizzle Studio stopped')
