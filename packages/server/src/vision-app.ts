@@ -18,6 +18,51 @@ export interface VisionALSContext {
 
 const visionContext = new AsyncLocalStorage<VisionALSContext>()
 
+// Global instance tracking for hot-reload cleanup
+// Must attach to globalThis because module-scoped variables are reset when the module is reloaded
+const GLOBAL_VISION_KEY = '__vision_instance_state'
+interface VisionGlobalState {
+  instance: Vision<any, any, any> | null
+  drizzleProcess: ChildProcess | null
+}
+
+// Initialize global state if needed
+if (!(globalThis as any)[GLOBAL_VISION_KEY]) {
+  (globalThis as any)[GLOBAL_VISION_KEY] = {
+    instance: null,
+    drizzleProcess: null
+  }
+}
+
+function getGlobalState(): VisionGlobalState {
+  return (globalThis as any)[GLOBAL_VISION_KEY]
+}
+
+async function cleanupVisionInstance(instance: Vision<any, any, any>): Promise<void> {
+  const existing = (instance as any)._cleanupPromise as Promise<void> | undefined
+  if (existing) return existing;
+
+  (instance as any)._cleanupPromise = (async () => {
+    const server = (instance as any).bunServer
+    const hasBunServer = server && typeof server.stop === 'function'
+
+    try {
+      if (hasBunServer) {
+        server.stop()
+      }
+      if ((globalThis as any).__vision_bun_server === server) {
+        (globalThis as any).__vision_bun_server = undefined
+      }
+    } catch {}
+
+    try { stopDrizzleStudio({ log: false }) } catch {}
+    try { await (instance as any).eventBus?.close() } catch {}
+    try { eventRegistry.clear() } catch {}
+  })()
+
+  return (instance as any)._cleanupPromise
+}
+
 type BunServeOptions = Parameters<typeof Bun['serve']>[0]
 type NodeServeOptions = Parameters<typeof honoServe>[0]
 
@@ -119,7 +164,8 @@ export class Vision<
   private serviceBuilders: ServiceBuilder<any, E>[] = []
   private fileBasedRoutes: RouteMetadata[] = []
   private bunServer?: any
-  private shuttingDown = false
+  private _cleanupPromise?: Promise<void>
+  private signalHandler?: () => Promise<void>
 
   constructor(config?: VisionConfig) {
     super()
@@ -616,44 +662,55 @@ export class Vision<
       console.log(`✅ Registered ${servicesToRegister.length} total services (${flatRoutes.length} routes)`)
     }
     
+    // Cleanup previous instance before starting new one (hot-reload)
+    const state = getGlobalState()
+    if (state.instance && state.instance !== this) {
+      await cleanupVisionInstance(state.instance)
+    }
+    state.instance = this
+
     console.log(`🚀 Starting ${this.config.service.name}...`)
     console.log(`📡 API Server: http://localhost:${port}`)
     
-    // Setup cleanup on exit (ensure it runs once)
-    const cleanup = async () => {
-      if (this.shuttingDown) return
-      this.shuttingDown = true
-      console.log('🛑 Shutting down...')
-      try {
-        // Clear AsyncLocalStorage to prevent memory leaks
-        visionContext.disable()
-      } catch {}
-      try {
-        if (this.bunServer && typeof this.bunServer.stop === 'function') {
-          try { this.bunServer.stop() } catch {}
+    // Register signal handlers (cleaned up on dispose)
+    if (!this.signalHandler) {
+      this.signalHandler = async () => {
+        const s = getGlobalState()
+        if (s.instance) {
+          await cleanupVisionInstance(s.instance)
         }
-        try { if ((globalThis as any).__vision_bun_server === this.bunServer) (globalThis as any).__vision_bun_server = undefined } catch {}
-      } catch {}
-      try { stopDrizzleStudio() } catch {}
-      try { await this.eventBus.close() } catch {}
-      try { eventRegistry.clear() } catch {}
+        try { process.exit(0) } catch {}
+      }
     }
-    
-    const wrappedCleanup = async () => {
-      await cleanup()
-      try { process.exit(0) } catch {}
-    }
-    process.once('SIGINT', wrappedCleanup)
-    process.once('SIGTERM', wrappedCleanup)
-    try { process.once('SIGQUIT', wrappedCleanup) } catch {}
 
-    // Bun hot-reload: ensure resources are released between reloads.
-    // Note: dispose must NOT call process.exit().
+    const handleSignal = this.signalHandler
+
+    process.removeListener('SIGINT', handleSignal)
+    process.removeListener('SIGTERM', handleSignal)
+    try { process.removeListener('SIGQUIT', handleSignal) } catch {}
+
+    process.on('SIGINT', handleSignal)
+    process.on('SIGTERM', handleSignal)
+    try { process.on('SIGQUIT', handleSignal) } catch {}
+      
+    // Bun hot-reload: register dispose callback
     try {
       const hot = (import.meta as any)?.hot
       if (hot && typeof hot.dispose === 'function') {
-        hot.dispose(() => {
-          void cleanup()
+        hot.dispose(async () => {
+          console.log('♻️ Hot reload: reloading...')
+
+          // 1. Remove signal listeners to prevent accumulation
+          process.off('SIGINT', handleSignal)
+          process.off('SIGTERM', handleSignal)
+          try { process.off('SIGQUIT', handleSignal) } catch {}
+
+          // 2. Cleanup this instance
+          const s = getGlobalState()
+          await cleanupVisionInstance(this)
+          if (s.instance === this) {
+            s.instance = null
+          }
         })
       }
     } catch {}
@@ -662,7 +719,6 @@ export class Vision<
     if (typeof process !== 'undefined' && process.versions?.bun) {
       const BunServe = (globalThis as any).Bun?.serve
       if (typeof BunServe === 'function') {
-        console.log(`Bun detected`)
         try {
           const existing = (globalThis as any).__vision_bun_server
           if (existing && typeof existing.stop === 'function') {
@@ -682,7 +738,6 @@ export class Vision<
       }
     } else if (typeof process !== 'undefined' && process.versions?.node) {
       const { serve } = await import('@hono/node-server')
-      console.log(`Node.js detected`)
       serve({
         ...nodeRest,
         fetch: this.fetch.bind(this),
@@ -715,8 +770,6 @@ export function getVisionContext(): VisionALSContext | undefined {
 // Drizzle Studio Integration
 // ============================================================================
 
-let drizzleStudioProcess: ChildProcess | null = null
-
 /**
  * Detect Drizzle configuration
  */
@@ -739,7 +792,8 @@ function detectDrizzle(): { detected: boolean; configPath?: string } {
  * Start Drizzle Studio
  */
 function startDrizzleStudio(port: number): boolean {
-  if (drizzleStudioProcess) {
+  const state = getGlobalState()
+  if (state.drizzleProcess) {
     console.log('⚠️  Drizzle Studio is already running')
     return false
   }
@@ -762,18 +816,26 @@ function startDrizzleStudio(port: number): boolean {
   } catch {}
 
   try {
-    drizzleStudioProcess = spawn('npx', ['drizzle-kit', 'studio', '--port', String(port), '--host', '0.0.0.0'], {
+    const proc = spawn('npx', ['drizzle-kit', 'studio', '--port', String(port), '--host', '0.0.0.0'], {
       stdio: 'inherit',
       detached: false,
+      shell: process.platform === 'win32',
     })
+    
+    state.drizzleProcess = proc
 
-    drizzleStudioProcess.on('error', (error) => {
+    proc.on('error', (error) => {
       console.error('❌ Failed to start Drizzle Studio:', error.message)
     })
 
-    drizzleStudioProcess.on('exit', (code) => {
+    proc.on('exit', (code) => {
       if (code !== 0 && code !== null) {
         console.error(`❌ Drizzle Studio exited with code ${code}`)
+      }
+      // Clear global state if it matches this process
+      const s = getGlobalState()
+      if (s.drizzleProcess === proc) {
+        s.drizzleProcess = null
       }
     })
 
@@ -788,12 +850,17 @@ function startDrizzleStudio(port: number): boolean {
 /**
  * Stop Drizzle Studio
  */
-function stopDrizzleStudio(): void {
-  if (drizzleStudioProcess) {
+function stopDrizzleStudio(options?: { log?: boolean }): boolean {
+  const state = getGlobalState()
+  if (state.drizzleProcess) {
     // Remove all event listeners to prevent memory leaks
-    drizzleStudioProcess.removeAllListeners()
-    drizzleStudioProcess.kill()
-    drizzleStudioProcess = null
-    console.log('🛑 Drizzle Studio stopped')
+    state.drizzleProcess.removeAllListeners()
+    state.drizzleProcess.kill()
+    state.drizzleProcess = null
+    if (options?.log !== false) {
+      console.log('🛑 Drizzle Studio stopped')
+    }
+    return true
   }
+  return false
 }
