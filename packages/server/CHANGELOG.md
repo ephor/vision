@@ -1,5 +1,11 @@
 # @getvision/server
 
+## 0.3.5
+
+### Patch Changes
+
+- 5fbff2a: bump deps versions
+
 ## 0.3.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @getvision/adapter-fastify
 
+## 0.0.10
+
+### Patch Changes
+
+- 5fbff2a: bump deps versions
+
 ## 0.0.9
 
 ### Patch Changes
