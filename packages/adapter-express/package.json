@@ -1,6 +1,6 @@
 {
   "name": "@getvision/adapter-express",
-  "version": "0.0.8",
+  "version": "0.0.9-22facf0-develop",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
