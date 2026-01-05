@@ -1,5 +1,11 @@
 # @getvision/server
 
+## 0.3.4
+
+### Patch Changes
+
+- 22facf0: Implement Wide Events concept for logging
+
 ## 0.3.3
 
 ### Patch Changes

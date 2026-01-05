@@ -1,22 +1,20 @@
 {
-  "mode": "snapshot",
+  "mode": "stable",
   "initialVersions": {
     "docs": "0.0.1",
     "web": "0.0.7",
-    "express-basic-example": "0.0.9",
-    "fastify-basic-example": "0.0.9",
-    "hono-basic-example": "0.0.9",
-    "vision-basic-example": "0.0.15",
-    "@getvision/adapter-express": "0.0.8",
-    "@getvision/adapter-fastify": "0.0.8",
-    "@getvision/adapter-hono": "0.0.8",
+    "express-basic-example": "0.0.10",
+    "fastify-basic-example": "0.0.10",
+    "hono-basic-example": "0.0.10",
+    "vision-basic-example": "0.0.16",
+    "@getvision/adapter-express": "0.0.9",
+    "@getvision/adapter-fastify": "0.0.9",
+    "@getvision/adapter-hono": "0.0.9",
     "@getvision/core": "0.0.8",
     "@repo/eslint-config": "0.0.1",
-    "@getvision/server": "0.3.3",
+    "@getvision/server": "0.3.4",
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": [
-    "fair-cars-wonder"
-  ]
+  "changesets": []
 }

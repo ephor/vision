@@ -1,6 +1,6 @@
 {
   "name": "@getvision/adapter-fastify",
-  "version": "0.0.9-22facf0-develop",
+  "version": "0.0.9",
   "description": "Fastify adapter for Vision Dashboard",
   "type": "module",
   "main": "./src/index.ts",

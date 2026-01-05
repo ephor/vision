@@ -1,5 +1,11 @@
 # @getvision/adapter-express
 
+## 0.0.9
+
+### Patch Changes
+
+- 22facf0: Implement Wide Events concept for logging
+
 ## 0.0.8
 
 ### Patch Changes
