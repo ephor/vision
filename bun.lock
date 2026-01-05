@@ -134,7 +134,7 @@
     },
     "examples/vision": {
       "name": "vision-basic-example",
-      "version": "0.0.11",
+      "version": "0.0.13",
       "dependencies": {
         "@getvision/server": "workspace:*",
         "@hono/node-server": "^1.19.6",
@@ -246,7 +246,7 @@
     },
     "packages/server": {
       "name": "@getvision/server",
-      "version": "0.2.7",
+      "version": "0.3.1",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/node-server": "^1.19.6",

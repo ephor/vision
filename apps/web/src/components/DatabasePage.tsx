@@ -49,7 +49,7 @@ export function DatabasePage() {
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b px-6 py-4 bg-muted">
+      <div className="border-b px-6 py-4 bg-background">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Database className="w-5 h-5 text-blue-600 dark:text-blue-500" />

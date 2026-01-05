@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
-import { visionAdapter, enableAutoDiscovery, useVisionSpan, zValidator } from '@getvision/adapter-hono'
+import { visionAdapter, enableAutoDiscovery, useVisionSpan, zValidator, getVisionContext } from '@getvision/adapter-hono'
 import { db } from './db'
 import { users } from './db/schema'
 import { eq } from 'drizzle-orm'
@@ -88,6 +88,17 @@ app.get('/users/:id', async (c) => {
   const id = parseInt(c.req.param('id'))
   const withSpan = useVisionSpan()
   
+  // Example: Add high-cardinality context to the current trace
+  try {
+    const { vision } = getVisionContext()
+    vision.addContext({
+      'user.id': id,
+      'user.plan': 'pro', // example of business logic context
+    })
+  } catch (e) {
+    // Context might not be available if vision is disabled
+  }
+
   const user = withSpan('db.select', { 'db.system': 'sqlite', 'db.table': 'users', 'user.id': id }, () => {
     return db.select().from(users).where(eq(users.id, id)).get()
   })
@@ -164,6 +175,7 @@ app.get('/error', (c) => {
   throw new Error('Something went wrong!')
 })
 
-serve(app, () => {
-  console.log(`Listening on http://localhost:3000`) // Listening on http://localhost:3000
+serve({
+  fetch: app.fetch,
+  port: 4000
 })

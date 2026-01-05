@@ -9,6 +9,7 @@ export interface LogEntry {
   level: LogLevel
   message: string
   args?: any[]
+  context?: Record<string, any>
   source?: string
   stack?: string
 }

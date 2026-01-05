@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Trace, Span } from '../types/index'
+import type {Trace, Span, LogEntry} from '../types/index'
 
 /**
  * In-memory trace store
@@ -51,6 +51,19 @@ export class TraceStore {
     const trace = this.traces.get(traceId)
     if (trace) {
       trace.spans.push(span)
+    }
+  }
+
+  /**
+   * Add a log to a trace
+   */
+  addLog(traceId: string, log: LogEntry): void {
+    const trace = this.traces.get(traceId)
+    if (trace) {
+      if (!trace.logs) {
+        trace.logs = []
+      }
+      trace.logs.push(log)
     }
   }
 

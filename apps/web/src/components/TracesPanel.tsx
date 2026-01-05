@@ -27,8 +27,8 @@ export function TracesPanel({ sessionId }: TracesPanelProps) {
   }, [filtered.length])
 
   return (
-    <div className="w-80 border-l glass-muted flex flex-col">
-      <div className="px-4 py-3 border-b glass">
+    <div className="w-80 border-l border-border bg-muted/20 flex flex-col">
+      <div className="px-4 py-3 border-b border-border bg-muted/20">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Traces</h2>
           <Badge variant="secondary" className="text-xs">{filtered.length}</Badge>

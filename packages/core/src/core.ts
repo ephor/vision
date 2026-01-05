@@ -1,5 +1,6 @@
 import { VisionWebSocketServer } from './server'
 import { TraceStore, Tracer } from './tracing'
+import { getActiveTraceId } from './tracing/context'
 import { LogStore } from './logs/store'
 import { ConsoleInterceptor } from './logs/interceptor'
 import type {
@@ -41,6 +42,7 @@ export class VisionCore {
     if (options.captureConsole !== false) {
       this.consoleInterceptor = new ConsoleInterceptor(
         this.logStore,
+        this.traceStore,
         () => {
           // Broadcast latest log entry to connected clients
           this.broadcast({ 
@@ -53,6 +55,21 @@ export class VisionCore {
     }
 
     this.registerMethods()
+  }
+
+  /**
+   * Add context to the current active trace
+   * This is the "Wide Event" API - allowing adding high-cardinality data
+   * to the current request context at any point.
+   */
+  addContext(context: Record<string, unknown>): void {
+    const traceId = getActiveTraceId()
+    if (traceId) {
+      const trace = this.traceStore.getTrace(traceId)
+      if (trace) {
+        trace.metadata = { ...trace.metadata, ...context }
+      }
+    }
   }
 
   /**

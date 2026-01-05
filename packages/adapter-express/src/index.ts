@@ -3,6 +3,7 @@ import {
   VisionCore,
   autoDetectPackageInfo,
   autoDetectIntegrations,
+  runInTraceContext,
 } from '@getvision/core'
 import type { RouteMetadata, VisionExpressOptions, ServiceDefinition } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
@@ -267,7 +268,10 @@ export function visionMiddleware(options: VisionExpressOptions = {}) {
       try {
         // Run handler in AsyncLocalStorage context with rootSpanId
         visionContext.run({ vision, traceId: trace.id, rootSpanId: rootSpan.id }, () => {
-          next()
+          // Also set the core trace context so ConsoleInterceptor can pick it up
+          runInTraceContext(trace.id, () => {
+            next()
+          })
         })
       } catch (error) {
         // Track error in span

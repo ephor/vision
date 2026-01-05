@@ -445,6 +445,18 @@ export class ServiceBuilder<
             const { vision, traceId, rootSpanId } = visionCtx
             const tracer = vision.getTracer();
             
+            // Add addContext() method to context
+            (c as any).addContext = (context: Record<string, unknown>) => {
+              const current = getVisionContext()
+              // Use current traceId from context if available (handles nested spans/async correctly)
+              const targetTraceId = current?.traceId || traceId
+              
+              const visionTrace = vision.getTraceStore().getTrace(targetTraceId)
+              if (visionTrace) {
+                visionTrace.metadata = { ...(visionTrace.metadata || {}), ...context }
+              }
+            }
+
             // Add span() method to context
             (c as any).span = <T>(
               name: string,

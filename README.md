@@ -11,6 +11,7 @@ Context Protocol), GraphQL, and more. Protocol-agnostic and fully open source.
 ## Why Vision?
 
 - **One dashboard, many protocols** — REST, GraphQL, tRPC, MCP.
+- **Wide Events Logging** — add context once, see it everywhere.
 - **Meta‑framework on Hono** — ship fast with the built‑in Vision Server.
 - **Adapters for existing apps** — Express, Fastify, Hono (more coming).
 - **Tracing, logs, testing** — unified view, live updates.
@@ -31,7 +32,7 @@ Add an adapter, get the same tracing, testing, monitoring, and service catalog.
 
 - **Cross‑protocol tracing** with a unified waterfall view
 - **API playground** with multi‑tab testing
-- **Live logs** with trace correlation and search
+- **Live logs** with smart badges, trace grouping, and context search
 - **Service catalog** with auto‑discovery
 - **Dark/Light UI**, persistence, and small UX niceties
 

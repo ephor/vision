@@ -9,6 +9,7 @@ import { Label } from './ui/label'
 import { useRoutes, useAddClientMetrics } from '../hooks/useVision'
 import { TracesPanel } from './TracesPanel'
 import { JsonViewer } from './JsonViewer'
+import { TraceLogs } from './TraceLogs'
 import { useToast } from '../contexts/ToastContext'
 import { getBackendUrl } from '../lib/config'
 import type { RouteMetadata } from '@getvision/core'
@@ -22,6 +23,7 @@ type ExplorerTab = {
   requestBody: string
   response: any
   requestTime: number | null
+  executedAt: number | null
 }
 
 function genId() {
@@ -41,6 +43,7 @@ export function ApiExplorer() {
     requestBody: '',
     response: null,
     requestTime: null,
+    executedAt: null,
   }), [])
 
   const [tabs, setTabs] = useState<ExplorerTab[]>([initialTab])
@@ -67,7 +70,6 @@ export function ApiExplorer() {
         }
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Persist tabs and active tab
@@ -86,7 +88,7 @@ export function ApiExplorer() {
     const requestBody = route.requestBody?.template || ''
     
     setTabs(tabs => tabs.map(t => t.id === activeTabId
-      ? { ...t, route, title: route.path, response: null, requestTime: null, urlParams: {}, requestBody }
+      ? { ...t, route, title: route.path, response: null, requestTime: null, executedAt: null, urlParams: {}, requestBody }
       : t
     ))
   }
@@ -148,6 +150,7 @@ export function ApiExplorer() {
         ...t,
         response: { status: res.status, data, headers },
         requestTime: duration,
+        executedAt: startTime,
       } : t))
       addToast(`API call completed in ${duration}ms`, 'success')
       
@@ -161,6 +164,7 @@ export function ApiExplorer() {
       setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
         ...t,
         response: { status: 0, error: error instanceof Error ? error.message : 'Unknown error' },
+        executedAt: startTime,
       } : t))
       addToast(error instanceof Error ? error.message : 'API call failed', 'error')
     } finally {
@@ -188,6 +192,7 @@ export function ApiExplorer() {
       requestBody: '',
       response: null,
       requestTime: null,
+      executedAt: null,
     }
     setTabs(prev => [...prev, t])
     setActiveTabId(t.id)
@@ -206,9 +211,9 @@ export function ApiExplorer() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-background">
       {/* Left Sidebar - Routes List */}
-      <div className="w-64 border-r glass-muted overflow-y-auto flex-shrink-0">
+      <div className="w-64 border-r border-border bg-muted/20 overflow-y-auto flex-shrink-0">
         <div className="p-4">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Endpoints</h2>
           <div className="space-y-1">
@@ -224,11 +229,11 @@ export function ApiExplorer() {
               >
                 <div className="flex items-center gap-2">
                   <Badge 
-                    className={`text-[10px] font-mono w-12 flex items-center justify-center
-                      ${route.method === 'GET' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900' : ''}
-                      ${route.method === 'POST' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900' : ''}
-                      ${route.method === 'PUT' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900' : ''}
-                      ${route.method === 'DELETE' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900' : ''}
+                    className={`text-[10px] font-mono w-12 flex items-center justify-center border-0
+                      ${route.method === 'GET' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''}
+                      ${route.method === 'POST' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : ''}
+                      ${route.method === 'PUT' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300' : ''}
+                      ${route.method === 'DELETE' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : ''}
                     `}
                   >
                     {route.method}
@@ -242,9 +247,9 @@ export function ApiExplorer() {
       </div>
 
       {/* Main Content - Tabs + API Caller */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-background">
         {/* Tabs Bar */}
-        <div className="px-6 pt-3 border-b glass-muted">
+        <div className="px-6 pt-3 border-b border-border bg-muted/20">
           <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-0">
             {tabs.map(tab => (
               <button
@@ -252,7 +257,7 @@ export function ApiExplorer() {
                 className={`relative flex-none inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all ${
                   tab.id === activeTabId 
                     ? 'bg-background text-foreground rounded-t-md border-t border-x border-border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-t-md'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50 rounded-t-md border-transparent border-t border-x'
                 }`}
                 onClick={() => setActiveTabId(tab.id)}
               >
@@ -426,22 +431,26 @@ export function ApiExplorer() {
               )}
 
               {/* Request Logs Section */}
-              {activeTab.response && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base font-semibold">Request Logs</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-gray-900 dark:bg-gray-950 rounded-md p-4 font-mono text-xs space-y-1 border">
-                      <div className="text-blue-400 dark:text-blue-300">
-                        INF starting request endpoint={activeTab.route?.path} service={activeTab.route?.handler}
-                      </div>
-                      <div className="text-green-400 dark:text-green-300">
-                        INF request completed code={activeTab.response.status} duration={activeTab.requestTime}ms
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+              {activeTab.response && activeTab.executedAt && (
+                <TraceLogs 
+                  title="Request Logs"
+                  logs={[
+                    {
+                      id: 'req-start',
+                      timestamp: activeTab.executedAt,
+                      level: 'info',
+                      message: `INF starting request endpoint=${activeTab.route?.path} service=${activeTab.route?.handler}`
+                    },
+                    {
+                      id: 'req-end',
+                      timestamp: activeTab.executedAt + (activeTab.requestTime || 0),
+                      level: activeTab.response.status === 0 || activeTab.response.status >= 500 ? 'error' : 'info',
+                      message: activeTab.response.status === 0 
+                        ? `INF request failed error="${activeTab.response.error}" duration=${activeTab.requestTime}ms`
+                        : `INF request completed code=${activeTab.response.status} duration=${activeTab.requestTime}ms`
+                    }
+                  ]}
+                />
               )}
             </div>
           ) : (

@@ -86,8 +86,8 @@ export function ServicesPage() {
   return (
     <div className="h-full flex bg-background">
       {/* Sidebar - Services Tree */}
-      <div className="w-80 border-r bg-muted flex flex-col">
-        <div className="px-4 py-3 border-b bg-background">
+      <div className="w-80 border-r border-border bg-muted/20 flex flex-col">
+        <div className="px-4 py-3 border-b border-border bg-muted/20">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Services</h2>
             <Badge variant="secondary" className="text-xs">{services.length}</Badge>

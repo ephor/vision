@@ -1,6 +1,7 @@
 /**
  * Core types for Vision Dashboard
  */
+import { LogEntry } from "./logs";
 
 // JSON-RPC 2.0 Protocol
 export interface JsonRpcRequest {
@@ -38,6 +39,7 @@ export interface Trace {
   statusCode?: number
   duration?: number
   spans: Span[]
+  logs?: LogEntry[]
   metadata?: Record<string, unknown>
 }
 

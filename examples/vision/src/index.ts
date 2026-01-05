@@ -111,10 +111,18 @@ app.service<{ Variables: Variables; }>('users')
       })
     },
     async ({ id }, c) => {
+      // Example: Add context using built-in c.addContext()
+      c.addContext({
+        'user.id': id,
+        'request.type': 'user_details'
+      })
+
       const sleep = (ms: number) => {
         const start = Date.now()
         while (Date.now() - start < ms) {}
       }
+
+      console.log('User ID:', id)
       
       // First span - fetch user (c.span is built-in!)
       const user = c.span('db.select', {
@@ -125,6 +133,10 @@ app.service<{ Variables: Variables; }>('users')
         sleep(50)
         return { id, name: 'Alice', email: 'alice@example.com' }
       })
+
+      console.log("------------user---------------");
+      console.log(user);
+      console.log("------------user---------------");
       
       // Second span - fetch articles
       const articles = c.span('db.select', {

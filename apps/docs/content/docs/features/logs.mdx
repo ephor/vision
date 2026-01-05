@@ -152,6 +152,16 @@ Log: [INFO] Fetching user: 123
 [ERROR] 10:31:22  User not found: 456
 ```
 
+### By Context Keys
+
+Search for logs containing specific context data, even if it's not in the message text.
+
+```
+[Search: "orderId=ord_123"]
+[INFO]  10:30:45  Creating order
+[INFO]  10:30:45  Order created successfully
+```
+
 ### By Service
 
 ```
@@ -238,34 +248,61 @@ app.service('users')
 [INFO] 10:30:45  Fetched 150 users in 45ms
 ```
 
-## Log Context
+## Smart Visuals
 
-Add context to your logs:
+Vision automatically cleans up your logs to make them easier to read:
+
+1.  **Inline Badges** - Key-value pairs like `code=200` or `duration=150ms` are automatically extracted from the message and displayed as stylish inline badges.
+2.  **Deduplication** - The extracted keys are removed from the text message to avoid repetition.
+3.  **Context Integration** - Trace context and metadata are seamlessly integrated into these badges.
+
+**Before (Raw):**
+```text
+INF request completed code=200 duration=131ms path=/users/1
+```
+
+**After (Vision UI):**
+```text
+INF request completed  [code=200] [duration=131ms] [path=/users/1]
+```
+
+## Log Context (Wide Events)
+
+Vision follows the **Wide Events** philosophy. Instead of manually adding IDs to every log message, you add context once to the request scope, and it's automatically attached to every log and span in that trace.
 
 ```typescript
 app.service('orders')
   .endpoint('POST', '/orders', schema, async (data, c) => {
     const orderId = generateId()
     
-    console.log('[Order]', orderId, 'Creating order for user:', data.userId)
+    // Add context once - available in all logs and spans
+    c.addContext({ 
+      orderId, 
+      userId: data.userId,
+      'request.type': 'order_creation'
+    })
+    
+    console.log('Creating order') // automatically has orderId & userId
     
     const order = c.span('db.insert', {}, () => {
-      console.log('[Order]', orderId, 'Inserting into database')
+      console.log('Inserting into database') // shares the same context
       return db.insert(orders).values({ ...data, id: orderId }).returning().get()
     })
     
-    console.log('[Order]', orderId, 'Order created successfully')
+    console.log('Order created successfully')
     
     return order
   })
 ```
 
 **Dashboard shows:**
+```text
+INF Creating order              [orderId=ord_123] [userId=user_456]
+INF Inserting into database     [orderId=ord_123] [userId=user_456]
+INF Order created successfully  [orderId=ord_123] [userId=user_456]
 ```
-[INFO] 10:30:45  [Order] ord_123 Creating order for user: user_456
-[INFO] 10:30:45  [Order] ord_123 Inserting into database
-[INFO] 10:30:45  [Order] ord_123 Order created successfully
-```
+
+This context is also indexed for search.
 
 ## Log Retention
 

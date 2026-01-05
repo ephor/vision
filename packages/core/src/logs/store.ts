@@ -16,7 +16,7 @@ export class LogStore {
   /**
    * Add a log entry
    */
-  addLog(level: LogLevel, message: string, args?: any[], stack?: string): LogEntry {
+  addLog(level: LogLevel, message: string, args?: any[], stack?: string, context?: Record<string, any>): LogEntry {
     const entry: LogEntry = {
       id: nanoid(),
       timestamp: Date.now(),
@@ -24,6 +24,7 @@ export class LogStore {
       message,
       args,
       stack,
+      context,
     }
 
     this.logs.push(entry)
@@ -65,7 +66,10 @@ export class LogStore {
           log.message.toLowerCase().includes(searchLower) ||
           log.args?.some((arg) =>
             String(arg).toLowerCase().includes(searchLower)
-          )
+          ) ||
+          (log.context && Object.values(log.context).some((val) => 
+            String(val).toLowerCase().includes(searchLower)
+          ))
       )
     }
 

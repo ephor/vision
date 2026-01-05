@@ -7,6 +7,7 @@ import {
   detectDrizzle,
   startDrizzleStudio,
   stopDrizzleStudio,
+  traceContext,
 } from '@getvision/core'
 import type {
   RequestBodySchema,
@@ -243,6 +244,14 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
       traceId: trace.id,
       rootSpanId: rootSpan.id,
     })
+
+    // Set core trace context for ConsoleInterceptor
+    // Fastify's onRequest hook doesn't wrap the handler execution in a callback,
+    // so we use enterWith() to set the context for the remainder of the sync execution
+    // and hopefully async chain if not broken.
+    if (traceContext) {
+      traceContext.enterWith(trace.id)
+    }
 
     tracer.setAttribute(rootSpan.id, 'http.method', request.method)
     tracer.setAttribute(rootSpan.id, 'http.path', request.url)

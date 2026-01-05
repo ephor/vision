@@ -1,5 +1,7 @@
 import type { LogStore } from './store'
 import type { LogLevel } from '../types/logs'
+import type { TraceStore } from '../tracing/store'
+import { getActiveTraceId } from '../tracing/context'
 
 /**
  * Console interceptor to capture logs
@@ -15,10 +17,16 @@ export class ConsoleInterceptor {
   }
 
   private logStore: LogStore
+  private traceStore?: TraceStore
   private onLog?: (level: LogLevel, message: string, args?: any[], stack?: string) => void
 
-  constructor(logStore: LogStore, onLog?: (level: LogLevel, message: string, args?: any[], stack?: string) => void) {
+  constructor(
+    logStore: LogStore,
+    traceStore?: TraceStore,
+    onLog?: (level: LogLevel, message: string, args?: any[], stack?: string) => void
+  ) {
     this.logStore = logStore
+    this.traceStore = traceStore
     this.onLog = onLog
   }
 
@@ -53,8 +61,24 @@ export class ConsoleInterceptor {
           }
         }
 
-        // Store log
-        this.logStore.addLog(level, message, args, stack)
+        // Get active trace context if available
+        const activeTraceId = getActiveTraceId()
+        let context: Record<string, any> | undefined
+
+        if (activeTraceId && this.traceStore) {
+          const trace = this.traceStore.getTrace(activeTraceId)
+          if (trace?.metadata) {
+            context = trace.metadata
+          }
+        }
+
+        // Store log in global store with context
+        const logEntry = this.logStore.addLog(level, message, args, stack, context)
+
+        // Attach to active trace if exists
+        if (activeTraceId && this.traceStore) {
+          this.traceStore.addLog(activeTraceId, logEntry)
+        }
 
         // Notify listener
         this.onLog?.(level, message, args, stack)

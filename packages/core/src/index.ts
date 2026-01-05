@@ -1,6 +1,6 @@
 export { VisionCore } from './core'
 export { VisionWebSocketServer } from './server/index'
-export { TraceStore, Tracer } from './tracing/index'
+export * from './tracing/index'
 export { generateZodTemplate } from './utils/zod-utils'
 export {
   autoDetectPackageInfo,

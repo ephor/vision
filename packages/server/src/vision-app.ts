@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Env, Schema, Input, MiddlewareHandler } from 'hono'
-import { VisionCore } from '@getvision/core'
+import { VisionCore, runInTraceContext } from '@getvision/core'
 import type { RouteMetadata } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
@@ -336,158 +336,172 @@ export class Vision<
           rootSpanId: ''
         },
         async () => {
-          // Start main span
-          const tracer = this.visionCore.getTracer()
-          const rootSpan = tracer.startSpan('http.request', trace.id)
-          
-          // Update context with rootSpanId
-          const ctx = visionContext.getStore()
-          if (ctx) {
-            ctx.rootSpanId = rootSpan.id
-          }
-
-          // Provide c.span globally for all downstream handlers (Vision/Hono sub-apps)
-          if (!(c as any).span) {
-            ;(c as any).span = <T>(
-              name: string,
-              attributes: Record<string, any> = {},
-              fn?: () => T
-            ): T => {
-              const current = visionContext.getStore()
-              const currentTraceId = current?.traceId || trace.id
-              const currentRootSpanId = current?.rootSpanId || rootSpan.id
-              const s = tracer.startSpan(name, currentTraceId, currentRootSpanId)
-              for (const [k, v] of Object.entries(attributes)) tracer.setAttribute(s.id, k, v)
-              try {
-                const result = fn ? fn() : (undefined as any)
-                const completed = tracer.endSpan(s.id)
-                if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
-                return result
-              } catch (err) {
-                tracer.setAttribute(s.id, 'error', true)
-                tracer.setAttribute(s.id, 'error.message', err instanceof Error ? err.message : String(err))
-                const completed = tracer.endSpan(s.id)
-                if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
-                throw err
-              }
-            }
-          }
-        
-          // Add request attributes
-          tracer.setAttribute(rootSpan.id, 'http.method', c.req.method)
-          tracer.setAttribute(rootSpan.id, 'http.path', c.req.path)
-          tracer.setAttribute(rootSpan.id, 'http.url', c.req.url)
-          
-          // Add query params if any
-          const url = new URL(c.req.url)
-          if (url.search) {
-            tracer.setAttribute(rootSpan.id, 'http.query', url.search)
-          }
-
-          // Capture request metadata
-          try {
-            const rawReq = c.req.raw
-            const headers: Record<string, string> = {}
-            rawReq.headers.forEach((v, k) => { headers[k] = v })
+          // Also set core trace context so VisionCore.addContext() works
+          return runInTraceContext(trace.id, async () => {
+            // Start main span
+            const tracer = this.visionCore.getTracer()
+            const rootSpan = tracer.startSpan('http.request', trace.id)
             
-            const urlObj = new URL(c.req.url)
-            const query: Record<string, string> = {}
-            urlObj.searchParams.forEach((v, k) => { query[k] = v })
-
-            let body: unknown = undefined
-            const ct = headers['content-type'] || headers['Content-Type']
-            if (ct && ct.includes('application/json')) {
-              try {
-                body = await rawReq.clone().json()
-              } catch {}
+            // Update context with rootSpanId
+            const ctx = visionContext.getStore()
+            if (ctx) {
+              ctx.rootSpanId = rootSpan.id
             }
 
-            const sessionId = headers['x-vision-session']
-            if (sessionId) {
-              tracer.setAttribute(rootSpan.id, 'session.id', sessionId)
-              trace.metadata = { ...(trace.metadata || {}), sessionId }
-            }
-
-            const requestMeta = {
-              method: c.req.method,
-              url: urlObj.pathname + (urlObj.search || ''),
-              headers,
-              query: Object.keys(query).length ? query : undefined,
-              body,
-            }
-            tracer.setAttribute(rootSpan.id, 'http.request', requestMeta)
-            trace.metadata = { ...(trace.metadata || {}), request: requestMeta }
-
-            // Emit start log
-            if (logging) {
-              const parts = [
-                `method=${c.req.method}`,
-                `path=${c.req.path}`,
-              ]
-              if (sessionId) parts.push(`sessionId=${sessionId}`)
-              parts.push(`traceId=${trace.id}`)
-              console.info(`INF starting request ${parts.join(' ')}`)
-            }
-
-            // Execute request
-            await next()
-            
-            // Add response attributes
-            tracer.setAttribute(rootSpan.id, 'http.status_code', c.res.status)
-            const resHeaders: Record<string, string> = {}
-            c.res.headers?.forEach((v, k) => { resHeaders[k] = v as unknown as string })
-
-            let respBody: unknown = undefined
-            const resCt = c.res.headers?.get('content-type') || ''
-            try {
-              const clone = c.res.clone()
-              if (resCt.includes('application/json')) {
-                const txt = await clone.text()
-                if (txt && txt.length <= 65536) {
-                  try { respBody = JSON.parse(txt) } catch { respBody = txt }
+            // Provide c.span and c.addContext globally for all downstream handlers (Vision/Hono sub-apps)
+            if (!(c as any).span) {
+              (c as any).addContext = (context: Record<string, unknown>) => {
+                const current = visionContext.getStore()
+                const currentTraceId = current?.traceId || trace.id
+                
+                // Add context to trace metadata via VisionCore
+                const visionTrace = this.visionCore.getTraceStore().getTrace(currentTraceId)
+                if (visionTrace) {
+                  visionTrace.metadata = { ...(visionTrace.metadata || {}), ...context }
                 }
               }
-            } catch {}
 
-            const responseMeta = {
-              status: c.res.status,
-              headers: Object.keys(resHeaders).length ? resHeaders : undefined,
-              body: respBody,
+              (c as any).span = <T>(
+                name: string,
+                attributes: Record<string, any> = {},
+                fn?: () => T
+              ): T => {
+                const current = visionContext.getStore()
+                const currentTraceId = current?.traceId || trace.id
+                const currentRootSpanId = current?.rootSpanId || rootSpan.id
+                const s = tracer.startSpan(name, currentTraceId, currentRootSpanId)
+                for (const [k, v] of Object.entries(attributes)) tracer.setAttribute(s.id, k, v)
+                try {
+                  const result = fn ? fn() : (undefined as any)
+                  const completed = tracer.endSpan(s.id)
+                  if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
+                  return result
+                } catch (err) {
+                  tracer.setAttribute(s.id, 'error', true)
+                  tracer.setAttribute(s.id, 'error.message', err instanceof Error ? err.message : String(err))
+                  const completed = tracer.endSpan(s.id)
+                  if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
+                  throw err
+                }
+              }
             }
-            tracer.setAttribute(rootSpan.id, 'http.response', responseMeta)
-            trace.metadata = { ...(trace.metadata || {}), response: responseMeta }
-            
-          } catch (error) {
-            // Track error
-            tracer.addEvent(rootSpan.id, 'error', {
-              message: error instanceof Error ? error.message : 'Unknown error',
-              stack: error instanceof Error ? error.stack : undefined,
-            })
-            
-            tracer.setAttribute(rootSpan.id, 'error', true)
-            throw error
-            
-          } finally {
-            // End span and add it to trace
-            const completedSpan = tracer.endSpan(rootSpan.id)
-            if (completedSpan) {
-              this.visionCore.getTraceStore().addSpan(trace.id, completedSpan)
-            }
-            
-            // Complete trace
-            const duration = Date.now() - startTime
-            this.visionCore.completeTrace(trace.id, c.res.status, duration)
-            
-            // Add trace ID to response headers
-            c.header('X-Vision-Trace-Id', trace.id)
+        
+              // Add request attributes
+              tracer.setAttribute(rootSpan.id, 'http.method', c.req.method)
+              tracer.setAttribute(rootSpan.id, 'http.path', c.req.path)
+              tracer.setAttribute(rootSpan.id, 'http.url', c.req.url)
 
-            // Emit completion log
-            if (logging) {
-              console.info(
-                `INF request completed code=${c.res.status} duration=${duration}ms method=${c.req.method} path=${c.req.path} traceId=${trace.id}`
-              )
+              // Add query params if any
+            const url = new URL(c.req.url)
+            if (url.search) {
+              tracer.setAttribute(rootSpan.id, 'http.query', url.search)
             }
-          }
+
+            // Capture request metadata
+            try {
+              const rawReq = c.req.raw
+              const headers: Record<string, string> = {}
+              rawReq.headers.forEach((v, k) => { headers[k] = v })
+
+              const urlObj = new URL(c.req.url)
+              const query: Record<string, string> = {}
+              urlObj.searchParams.forEach((v, k) => { query[k] = v })
+
+              let body: unknown = undefined
+              const ct = headers['content-type'] || headers['Content-Type']
+              if (ct && ct.includes('application/json')) {
+                try {
+                  body = await rawReq.clone().json()
+                } catch {}
+              }
+
+              const sessionId = headers['x-vision-session']
+              if (sessionId) {
+                tracer.setAttribute(rootSpan.id, 'session.id', sessionId)
+                trace.metadata = { ...(trace.metadata || {}), sessionId }
+              }
+
+              const requestMeta = {
+                method: c.req.method,
+                url: urlObj.pathname + (urlObj.search || ''),
+                headers,
+                query: Object.keys(query).length ? query : undefined,
+                body,
+              }
+              tracer.setAttribute(rootSpan.id, 'http.request', requestMeta)
+              trace.metadata = { ...(trace.metadata || {}), request: requestMeta }
+
+              // Emit start log
+              if (logging) {
+                const parts = [
+                  `method=${c.req.method}`,
+                  `path=${c.req.path}`,
+                ]
+                if (sessionId) parts.push(`sessionId=${sessionId}`)
+                parts.push(`traceId=${trace.id}`)
+                console.info(`INF starting request ${parts.join(' ')}`)
+              }
+
+              // Execute request
+              await next()
+
+              // Add response attributes
+              tracer.setAttribute(rootSpan.id, 'http.status_code', c.res.status)
+              const resHeaders: Record<string, string> = {}
+              c.res.headers?.forEach((v, k) => { resHeaders[k] = v as unknown as string })
+
+              let respBody: unknown = undefined
+              const resCt = c.res.headers?.get('content-type') || ''
+              try {
+                const clone = c.res.clone()
+                if (resCt.includes('application/json')) {
+                  const txt = await clone.text()
+                  if (txt && txt.length <= 65536) {
+                    try { respBody = JSON.parse(txt) } catch { respBody = txt }
+                  }
+                }
+              } catch {}
+
+              const responseMeta = {
+                status: c.res.status,
+                headers: Object.keys(resHeaders).length ? resHeaders : undefined,
+                body: respBody,
+              }
+              tracer.setAttribute(rootSpan.id, 'http.response', responseMeta)
+              trace.metadata = { ...(trace.metadata || {}), response: responseMeta }
+
+            } catch (error) {
+              // Track error
+              tracer.addEvent(rootSpan.id, 'error', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+              })
+
+              tracer.setAttribute(rootSpan.id, 'error', true)
+              throw error
+
+            } finally {
+              // End span and add it to trace
+              const completedSpan = tracer.endSpan(rootSpan.id)
+              if (completedSpan) {
+                this.visionCore.getTraceStore().addSpan(trace.id, completedSpan)
+              }
+
+              // Complete trace
+              const duration = Date.now() - startTime
+              this.visionCore.completeTrace(trace.id, c.res.status, duration)
+
+              // Add trace ID to response headers
+              c.header('X-Vision-Trace-Id', trace.id)
+
+              // Emit completion log
+              if (logging) {
+                console.info(
+                  `INF request completed code=${c.res.status} duration=${duration}ms method=${c.req.method} path=${c.req.path} traceId=${trace.id}`
+                )
+              }
+            }
+          })
         }
       )
     })

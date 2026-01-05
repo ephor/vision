@@ -39,6 +39,13 @@ export interface ExtendedContext<
     attributes?: Record<string, any>,
     fn?: () => T
   ): T
+
+  /**
+   * Add context to the current active trace
+   * This is the "Wide Event" API - allowing adding high-cardinality data
+   * to the current request context.
+   */
+  addContext(context: Record<string, unknown>): void
   
   /**
    * Emit an event with type-safe validation

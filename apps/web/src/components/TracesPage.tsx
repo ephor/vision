@@ -8,6 +8,7 @@ import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
 import { SpansWaterfall } from './SpansWaterfall'
 import { TraceRequestResponse } from './TraceRequestResponse'
+import { TraceLogs } from './TraceLogs'
 import { getVisionClient } from '../lib/websocket'
 import { useToast } from '../contexts/ToastContext'
 import type { Trace } from '@getvision/core'
@@ -62,10 +63,10 @@ export function TracesPage() {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex bg-background">
       {/* Left: list */}
-     <div className="w-1/3 flex flex-col border-r">
-      <div className="p-4 bg-background border-b">
+     <div className="w-1/3 flex flex-col border-r border-border bg-muted/20">
+      <div className="p-4 border-b border-border/50 bg-muted/20">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-semibold">Traces</h1>
@@ -185,6 +186,14 @@ function TraceListItem({ trace, isActive }: { trace: Trace; isActive: boolean })
       <div className="font-mono text-sm text-foreground truncate mb-2">
         {trace.path}
       </div>
+
+      {(trace.metadata as any)?.sessionId && (
+        <div className="mb-2">
+          <Badge variant="outline" className="text-[10px] h-5 font-mono text-muted-foreground">
+            session: {(trace.metadata as any).sessionId}
+          </Badge>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
@@ -350,8 +359,44 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
           </CardContent>
         </Card>
 
+        {/* Context Card */}
+        {(() => {
+          const systemKeys = ['request', 'response', 'sessionId', 'clientDuration']
+          const contextKeys = Object.keys(trace.metadata || {}).filter(k => !systemKeys.includes(k))
+          
+          if (contextKeys.length === 0) return null
+
+          return (
+            <Card>
+              <CardHeader className="py-4">
+                <CardTitle className="text-base font-semibold">Context</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {contextKeys.map(key => (
+                    <div key={key}>
+                      <p className="text-xs text-muted-foreground mb-1">{key}</p>
+                      <div className="font-mono text-sm bg-muted/50 rounded px-2 py-1 inline-block break-all">
+                        {typeof (trace.metadata as any)[key] === 'object' 
+                          ? JSON.stringify((trace.metadata as any)[key])
+                          : String((trace.metadata as any)[key])
+                        }
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })()}
+
         {/* Request & Response Details */}
         <TraceRequestResponse trace={trace} formatDuration={formatDuration} />
+
+        {/* Logs */}
+        {trace.logs && trace.logs.length > 0 && (
+          <TraceLogs logs={trace.logs} />
+        )}
 
         {/* Spans Card */}
         {trace.spans.length > 0 && (

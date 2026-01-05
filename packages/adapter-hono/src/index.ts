@@ -7,6 +7,7 @@ import {
   detectDrizzle,
   startDrizzleStudio,
   stopDrizzleStudio,
+  runInTraceContext,
 } from '@getvision/core'
 import type { RouteMetadata, VisionHonoOptions, ServiceDefinition } from '@getvision/core'
 import { existsSync } from 'fs'
@@ -298,135 +299,138 @@ export function visionAdapter(options: VisionHonoOptions = {}): MiddlewareHandle
     
     // Run request in AsyncLocalStorage context
     return visionContext.run({ vision, traceId: trace.id }, async () => {
-      // Also add to Hono context for compatibility
-      c.set('vision', vision)
-      c.set('traceId', trace.id)
-      
-      // Start main span
-      const tracer = vision.getTracer()
-      const span = tracer.startSpan('http.request', trace.id)
+      // Also set core trace context for ConsoleInterceptor
+      return runInTraceContext(trace.id, async () => {
+        // Also add to Hono context for compatibility
+        c.set('vision', vision)
+        c.set('traceId', trace.id)
+        
+        // Start main span
+        const tracer = vision.getTracer()
+        const span = tracer.startSpan('http.request', trace.id)
     
-    // Add request attributes
-    tracer.setAttribute(span.id, 'http.method', c.req.method)
-    tracer.setAttribute(span.id, 'http.path', c.req.path)
-    tracer.setAttribute(span.id, 'http.url', c.req.url)
-    
-    // Add query params if any
-    const url = new URL(c.req.url)
-    if (url.search) {
-      tracer.setAttribute(span.id, 'http.query', url.search)
-    }
+            // Add request attributes
+            tracer.setAttribute(span.id, 'http.method', c.req.method)
+            tracer.setAttribute(span.id, 'http.path', c.req.path)
+            tracer.setAttribute(span.id, 'http.url', c.req.url)
 
-    // Capture request metadata (headers, query, body if json)
-    try {
-      const rawReq = c.req.raw
-      const headers: Record<string, string> = {}
-      rawReq.headers.forEach((v, k) => { headers[k] = v })
-      const urlObj = new URL(c.req.url)
-      const query: Record<string, string> = {}
-      urlObj.searchParams.forEach((v, k) => { query[k] = v })
+        // Add query params if any
+        const url = new URL(c.req.url)
+        if (url.search) {
+          tracer.setAttribute(span.id, 'http.query', url.search)
+        }
 
-      let body: unknown = undefined
-      const ct = headers['content-type'] || headers['Content-Type']
-      if (ct && ct.includes('application/json')) {
+        // Capture request metadata (headers, query, body if json)
         try {
-          body = await rawReq.clone().json()
-        } catch {}
-      }
+          const rawReq = c.req.raw
+          const headers: Record<string, string> = {}
+          rawReq.headers.forEach((v, k) => { headers[k] = v })
+          const urlObj = new URL(c.req.url)
+          const query: Record<string, string> = {}
+          urlObj.searchParams.forEach((v, k) => { query[k] = v })
 
-      const sessionId = headers['x-vision-session']
-      if (sessionId) {
-        tracer.setAttribute(span.id, 'session.id', sessionId)
-        trace.metadata = { ...(trace.metadata || {}), sessionId }
-      }
+          let body: unknown = undefined
+          const ct = headers['content-type'] || headers['Content-Type']
+          if (ct && ct.includes('application/json')) {
+            try {
+              body = await rawReq.clone().json()
+            } catch {}
+          }
 
-      const requestMeta = {
-        method: c.req.method,
-        url: urlObj.pathname + (urlObj.search || ''),
-        headers,
-        query: Object.keys(query).length ? query : undefined,
-        body,
-      }
-      tracer.setAttribute(span.id, 'http.request', requestMeta)
-      // Also mirror to trace-level metadata for convenience
-      trace.metadata = { ...(trace.metadata || {}), request: requestMeta }
+          const sessionId = headers['x-vision-session']
+          if (sessionId) {
+            tracer.setAttribute(span.id, 'session.id', sessionId)
+            trace.metadata = { ...(trace.metadata || {}), sessionId }
+          }
 
-      // Emit start log (if enabled)
-      if (logging) {
-        const { endpoint, handler } = resolveEndpointTemplate(c.req.method, c.req.path)
-        const params = extractParams(endpoint, c.req.path)
-        const parts = [
-          `method=${c.req.method}`,
-          `endpoint=${endpoint}`,
-          `service=${handler}`,
-        ]
-        if (params) parts.push(`params=${JSON.stringify(params)}`)
-        if (Object.keys(query).length) parts.push(`query=${JSON.stringify(query)}`)
-        if ((trace.metadata as any)?.sessionId) parts.push(`sessionId=${(trace.metadata as any).sessionId}`)
-        parts.push(`traceId=${trace.id}`)
-        console.info(`INF starting request ${parts.join(' ')}`)
-      }
+          const requestMeta = {
+            method: c.req.method,
+            url: urlObj.pathname + (urlObj.search || ''),
+            headers,
+            query: Object.keys(query).length ? query : undefined,
+            body,
+          }
+          tracer.setAttribute(span.id, 'http.request', requestMeta)
+          // Also mirror to trace-level metadata for convenience
+          trace.metadata = { ...(trace.metadata || {}), request: requestMeta }
 
-      // Execute request
-      await next()
-      
-      // Add response attributes
-      tracer.setAttribute(span.id, 'http.status_code', c.res.status)
-      const resHeaders: Record<string, string> = {}
-      c.res.headers?.forEach((v, k) => { resHeaders[k] = v as unknown as string })
+          // Emit start log (if enabled)
+          if (logging) {
+            const { endpoint, handler } = resolveEndpointTemplate(c.req.method, c.req.path)
+            const params = extractParams(endpoint, c.req.path)
+            const parts = [
+              `method=${c.req.method}`,
+              `endpoint=${endpoint}`,
+              `service=${handler}`,
+            ]
+            if (params) parts.push(`params=${JSON.stringify(params)}`)
+            if (Object.keys(query).length) parts.push(`query=${JSON.stringify(query)}`)
+            if ((trace.metadata as any)?.sessionId) parts.push(`sessionId=${(trace.metadata as any).sessionId}`)
+            parts.push(`traceId=${trace.id}`)
+            console.info(`INF starting request ${parts.join(' ')}`)
+          }
 
-      let respBody: unknown = undefined
-      const resCt = c.res.headers?.get('content-type') || ''
-      try {
-        const clone = c.res.clone()
-        if (resCt.includes('application/json')) {
-          const txt = await clone.text()
-          if (txt && txt.length <= 65536) {
-            try { respBody = JSON.parse(txt) } catch { respBody = txt }
+          // Execute request
+          await next()
+
+          // Add response attributes
+          tracer.setAttribute(span.id, 'http.status_code', c.res.status)
+          const resHeaders: Record<string, string> = {}
+          c.res.headers?.forEach((v, k) => { resHeaders[k] = v as unknown as string })
+
+          let respBody: unknown = undefined
+          const resCt = c.res.headers?.get('content-type') || ''
+          try {
+            const clone = c.res.clone()
+            if (resCt.includes('application/json')) {
+              const txt = await clone.text()
+              if (txt && txt.length <= 65536) {
+                try { respBody = JSON.parse(txt) } catch { respBody = txt }
+              }
+            }
+          } catch {}
+
+          const responseMeta = {
+            status: c.res.status,
+            headers: Object.keys(resHeaders).length ? resHeaders : undefined,
+            body: respBody,
+          }
+          tracer.setAttribute(span.id, 'http.response', responseMeta)
+          trace.metadata = { ...(trace.metadata || {}), response: responseMeta }
+
+        } catch (error) {
+          // Track error
+          tracer.addEvent(span.id, 'error', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+
+          tracer.setAttribute(span.id, 'error', true)
+          throw error
+
+        } finally {
+          // End span and add it to trace
+          const completedSpan = tracer.endSpan(span.id)
+          if (completedSpan) {
+            vision.getTraceStore().addSpan(trace.id, completedSpan)
+          }
+
+          // Complete trace
+          const duration = Date.now() - startTime
+          vision.completeTrace(trace.id, c.res.status, duration)
+
+          // Add trace ID to response headers so client can correlate metrics
+          c.header('X-Vision-Trace-Id', trace.id)
+
+          // Emit completion log (if enabled)
+          if (logging) {
+            const { endpoint } = resolveEndpointTemplate(c.req.method, c.req.path)
+            console.info(
+              `INF request completed code=${c.res.status} duration=${duration}ms method=${c.req.method} endpoint=${endpoint} traceId=${trace.id}`
+            )
           }
         }
-      } catch {}
-
-      const responseMeta = {
-        status: c.res.status,
-        headers: Object.keys(resHeaders).length ? resHeaders : undefined,
-        body: respBody,
-      }
-      tracer.setAttribute(span.id, 'http.response', responseMeta)
-      trace.metadata = { ...(trace.metadata || {}), response: responseMeta }
-      
-    } catch (error) {
-      // Track error
-      tracer.addEvent(span.id, 'error', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-      })
-      
-      tracer.setAttribute(span.id, 'error', true)
-      throw error
-      
-    } finally {
-      // End span and add it to trace
-      const completedSpan = tracer.endSpan(span.id)
-      if (completedSpan) {
-        vision.getTraceStore().addSpan(trace.id, completedSpan)
-      }
-      
-      // Complete trace
-      const duration = Date.now() - startTime
-      vision.completeTrace(trace.id, c.res.status, duration)
-      
-      // Add trace ID to response headers so client can correlate metrics
-      c.header('X-Vision-Trace-Id', trace.id)
-
-      // Emit completion log (if enabled)
-      if (logging) {
-        const { endpoint } = resolveEndpointTemplate(c.req.method, c.req.path)
-        console.info(
-          `INF request completed code=${c.res.status} duration=${duration}ms method=${c.req.method} endpoint=${endpoint} traceId=${trace.id}`
-        )
-      }
-    }
+      }) // Close runInTraceContext
     }) // Close visionContext.run()
   }
 }

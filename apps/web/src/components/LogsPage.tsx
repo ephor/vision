@@ -1,11 +1,9 @@
 import { useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Trash2, Search, AlertCircle, Info, AlertTriangle, Bug } from 'lucide-react'
+import { Trash2, Search, Terminal, ArrowUpRight } from 'lucide-react'
 import { useLogs, useClearLogs } from '@/hooks/useVision'
 import { Button } from './ui/button'
-import { Badge } from './ui/badge'
 import { Input } from './ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import type { LogLevel } from '@getvision/core'
 import { useNavigate } from 'react-router-dom'
 
@@ -27,8 +25,8 @@ export function LogsPage() {
   const rowVirtualizer = useVirtualizer({
     count: logs.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72, // base estimate, rows can grow
-    overscan: 8,
+    estimateSize: () => 28, // Compact terminal rows are smaller
+    overscan: 20,
     measureElement: (el) => el.getBoundingClientRect().height,
   })
 
@@ -49,126 +47,120 @@ export function LogsPage() {
     return obj?.traceId as string | undefined
   }
 
-  const getStructured = (log: any): Record<string, any> | undefined => {
-    // Parse key=value pairs from message (e.g., "method=GET endpoint=/users/:id code=200")
-    const msg = log.message || ''
-    const kvPattern = /(\w+)=([^\s]+)/g
-    const matches = [...msg.matchAll(kvPattern)]
-    if (matches.length === 0) return undefined
+  const parseLogMessage = (msg: string) => {
+    if (!msg) return { cleanMessage: '', properties: null }
     
-    const result: Record<string, any> = {}
-    matches.forEach(([, key, value]) => {
-      // Parse JSON values if they look like JSON
-      if (value.startsWith('{') || value.startsWith('[')) {
-        try {
-          result[key] = JSON.parse(value)
-        } catch {
-          result[key] = value
-        }
-      } else {
-        result[key] = value
-      }
-    })
-    return Object.keys(result).length ? result : undefined
-  }
+    // Match key=value where value can be quoted string or non-whitespace
+    const pattern = /(\w+)=(?:"([^"]*)"|([^\s]*))/g
+    const matches = [...msg.matchAll(pattern)]
+    
+    if (matches.length === 0) return { cleanMessage: msg, properties: null }
 
-  const getLevelIcon = (level: string) => {
-    switch (level) {
-      case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />
-      case 'warn': return <AlertTriangle className="w-4 h-4 text-yellow-500" />
-      case 'info': return <Info className="w-4 h-4 text-blue-500" />
-      case 'debug': return <Bug className="w-4 h-4 text-gray-500" />
-      default: return <Info className="w-4 h-4 text-gray-400" />
+    let cleanMessage = msg
+    const properties: Record<string, any> = {}
+
+    matches.forEach((match) => {
+        const [fullMatch, key, quotedVal, simpleVal] = match
+        const value = quotedVal ?? simpleVal
+        
+        // Remove from message - use split/join to replace all occurrences or just careful replacement
+        // For logs, replace is usually safe enough
+        cleanMessage = cleanMessage.replace(fullMatch, '')
+        
+        try {
+            properties[key] = value.startsWith('{') || value.startsWith('[') ? JSON.parse(value) : value
+        } catch {
+            properties[key] = value
+        }
+    })
+    
+    return { 
+        cleanMessage: cleanMessage.replace(/\s+/g, ' ').trim(), 
+        properties 
     }
   }
 
-  const getLevelBgClass = (level: string) => {
-    switch (level) {
-      case 'error': return 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
-      case 'warn': return 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800'
-      case 'info': return 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
-      case 'debug': return 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800'
-      default: return 'bg-background border-border'
+  const getLevelColor = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case 'error': return 'text-red-500 dark:text-red-400'
+      case 'warn': return 'text-yellow-500 dark:text-yellow-400'
+      case 'info': return 'text-blue-500 dark:text-blue-400'
+      case 'debug': return 'text-purple-500 dark:text-purple-400'
+      default: return 'text-gray-500 dark:text-gray-400'
     }
   }
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
-    return date.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit',
-      fractionalSecondDigits: 3,
-    })
+    return date.toISOString().split('T')[1].slice(0, -1) // HH:mm:ss.ms
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="bg-background border-b px-6 py-4">
+      <div className="border-b border-border px-6 py-4 bg-background/80 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold">Logs</h1>
+          <div className="flex items-center gap-2">
+            <Terminal className="w-5 h-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold tracking-tight">System Logs</h1>
+          </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleClear} className="text-sm font-medium">
-              <Trash2 className="w-4 h-4 mr-1.5" />
-              Clear All
+            <Button variant="outline" size="sm" onClick={handleClear} className="text-xs font-mono h-8">
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              clear_logs
             </Button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex gap-4">
+        <div className="flex flex-col md:flex-row gap-4">
           {/* Level Filter */}
-          <div className="flex gap-1">
+          <div className="flex gap-1 p-1 bg-muted rounded-lg self-start">
             {(['all', 'log', 'info', 'warn', 'error', 'debug'] as const).map((level) => (
-              <Button
+              <button
                 key={level}
-                variant={levelFilter === level ? "default" : "outline"}
-                size="sm"
                 onClick={() => setLevelFilter(level)}
-                className="text-sm font-medium"
+                className={`px-3 py-1 text-[11px] font-medium font-mono uppercase tracking-wider rounded-md transition-all ${
+                  levelFilter === level 
+                    ? 'bg-background shadow-sm text-foreground' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                }`}
               >
-                {level.charAt(0).toUpperCase() + level.slice(1)}
-              </Button>
+                {level}
+              </button>
             ))}
           </div>
 
           {/* Search */}
-          <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="flex-1 max-w-md relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
               type="text"
-              placeholder="Search logs..."
+              placeholder="grep logs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-sm"
+              className="pl-9 h-9 text-sm font-mono bg-muted/50 border-transparent focus:border-border focus:bg-background transition-all"
             />
           </div>
 
           {/* Stats */}
-          <Badge variant="secondary" className="text-sm">
-            {logs.length.toLocaleString()} entries
-          </Badge>
+          <div className="flex items-center gap-2 ml-auto text-xs font-mono text-muted-foreground">
+            <span>{logs.length} entries</span>
+          </div>
         </div>
       </div>
 
       {/* Logs List (Virtualized) */}
       <div
         ref={parentRef}
-        className="flex-1 overflow-auto bg-muted px-6 py-4"
+        className="flex-1 overflow-auto px-4 py-2 font-mono text-[11px] md:text-xs"
       >
         {logs.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">No logs yet</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600">
-                Logs will appear here as your application runs. Try making some API calls or use console.log() in your code.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">
+            <Terminal className="w-12 h-12 mb-4 stroke-1" />
+            <p className="text-sm">No logs output</p>
+            <p className="text-xs mt-1 font-mono">Waiting for system activity...</p>
+          </div>
         ) : (
           <div
             style={{
@@ -180,7 +172,10 @@ export function LogsPage() {
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const log = logs[virtualRow.index]
               const traceId = getTraceId(log)
-              const meta = getStructured(log)
+              const isSystemLog = log.message.includes('starting request') || log.message.includes('request completed') || log.message.includes('request failed')
+              
+              const { cleanMessage, properties: msgProperties } = isSystemLog ? parseLogMessage(log.message) : { cleanMessage: log.message, properties: null }
+              
               return (
                 <div
                   key={virtualRow.key}
@@ -193,82 +188,81 @@ export function LogsPage() {
                     width: '100%',
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
+                  className="group flex items-start gap-3 hover:bg-muted/40 px-2 -mx-2 rounded transition-colors py-0.5"
                 >
-                  <div className={`mb-2 p-3 border rounded-lg ${getLevelBgClass(log.level)}`}>
-                    <div className="flex items-start gap-3">
-                      {/* Level Icon */}
-                      <div className="mt-0.5">{getLevelIcon(log.level)}</div>
+                  {/* Timestamp */}
+                  <span className="shrink-0 text-muted-foreground select-none w-20 md:w-24 tabular-nums opacity-60 group-hover:opacity-100 transition-opacity">
+                    {formatTime(log.timestamp)}
+                  </span>
 
-                      {/* Timestamp */}
-                      <div className="text-xs font-mono text-muted-foreground w-24 flex-shrink-0 mt-0.5">
-                        {formatTime(log.timestamp)}
-                      </div>
+                  {/* Level */}
+                  <span className={`shrink-0 w-10 md:w-12 font-bold uppercase tracking-wider text-[10px] md:text-[11px] py-px ${getLevelColor(log.level)}`}>
+                    {log.level}
+                  </span>
 
-                      {/* Message */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1">
-                            {/* Message text + tags inline */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-mono">{log.message}</span>
-                              {meta && (
-                                <>
-                                  {meta.method && <Badge className="font-mono text-xs">{meta.method}</Badge>}
-                                  {meta.endpoint && <Badge variant="secondary" className="font-mono text-xs">{meta.endpoint}</Badge>}
-                                  {meta.code !== undefined && <Badge variant="secondary" className="font-mono text-xs">code={meta.code}</Badge>}
-                                  {meta.duration && <Badge variant="secondary" className="font-mono text-xs">duration={meta.duration}</Badge>}
-                                  {meta.sessionId && <Badge variant="outline" className="font-mono text-xs">session={meta.sessionId}</Badge>}
-                                  {meta.params && typeof meta.params === 'object' && (
-                                    <>
-                                      {Object.entries(meta.params).map(([k, v]) => (
-                                        <Badge key={k} variant="outline" className="font-mono text-xs">
-                                          {k}={String(v)}
-                                        </Badge>
-                                      ))}
-                                    </>
-                                  )}
-                                  {meta.query && typeof meta.query === 'object' && (
-                                    <>
-                                      {Object.entries(meta.query).map(([k, v]) => (
-                                        <Badge key={k} variant="outline" className="font-mono text-xs">
-                                          {k}={String(v)}
-                                        </Badge>
-                                      ))}
-                                    </>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {traceId && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => navigate(`/traces/${traceId}`)}
-                              className="text-xs font-medium"
-                            >
-                              Go to trace
-                            </Button>
-                          )}
-                        </div>
+                  {/* Message & Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-foreground break-words whitespace-pre-wrap leading-relaxed">
+                        {cleanMessage}
+                      </span>
 
-                        {/* Stack Trace (for errors) */}
-                        {log.stack && (
-                          <details className="mt-2" onToggle={(e) => {
-                            // Re-measure row after expand/collapse
-                            const el = (e.currentTarget.closest('[data-index]') as HTMLElement) || undefined
-                            if (el) rowVirtualizer.measureElement(el)
-                          }}>
-                            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                              Stack trace
-                            </summary>
-                            <pre className="mt-2 text-xs bg-background p-2 rounded border overflow-auto whitespace-pre-wrap select-text">
-                              {log.stack}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
+                      {/* System Log Badges (Message Properties + Context) */}
+                      {isSystemLog && (
+                        <>
+                          {/* Message Properties */}
+                          {msgProperties && Object.entries(msgProperties).map(([k, v]) => (
+                            <span key={`meta-${k}`} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground border border-border">
+                              <span className="opacity-70 mr-1">{k}=</span>
+                              <span className="font-medium text-foreground">{String(v)}</span>
+                            </span>
+                          ))}
+
+                          {/* Context Properties */}
+                          {log.context && Object.entries(log.context).map(([k, v]) => {
+                            if (['request', 'response', 'sessionId', 'clientDuration'].includes(k)) return null
+                            // Avoid duplicating keys that were in message
+                            if (msgProperties && k in msgProperties) return null
+                            
+                            return (
+                              <span key={`ctx-${k}`} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50">
+                                <span className="opacity-70 mr-1">{k}=</span>
+                                <span className="font-medium">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                              </span>
+                            )
+                          })}
+                        </>
+                      )}
+
+                      {/* Trace Link */}
+                      {traceId && (
+                        <button
+                          onClick={() => navigate(`/traces/${traceId}`)}
+                          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
+                        >
+                          <span>trace:{traceId.slice(0, 7)}</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
+
+                    {/* Stack Trace */}
+                    {log.stack && (
+                      <details className="mt-1" onToggle={(e) => {
+                        // Re-measure row after expand/collapse
+                        const el = (e.currentTarget.closest('[data-index]') as HTMLElement) || undefined
+                        if (el) rowVirtualizer.measureElement(el)
+                      }}>
+                        <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none inline-flex items-center gap-1 transition-colors">
+                          <span className="text-[10px] uppercase tracking-wide">Show Stack Trace</span>
+                        </summary>
+                        <div className="mt-2 pl-3 border-l-2 border-border text-muted-foreground overflow-x-auto">
+                          <pre className="font-mono text-[10px] leading-relaxed whitespace-pre select-text">
+                            {log.stack}
+                          </pre>
+                        </div>
+                      </details>
+                    )}
                   </div>
                 </div>
               )

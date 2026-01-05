@@ -33,7 +33,7 @@ export function EventsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background">
       <div className="bg-background border-b px-6 py-4 flex-shrink-0">
         <h1 className="text-lg font-semibold">Events & Cron Jobs</h1>
         <p className="text-sm text-muted-foreground mt-1.5">Monitor your event-driven architecture and scheduled tasks</p>
