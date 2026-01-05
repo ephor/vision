@@ -1,5 +1,12 @@
 # web
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [2635948]
+  - @getvision/core@0.0.8
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @getvision/core
 
+## 0.0.8
+
+### Patch Changes
+
+- 2635948: Implement Wide Events concept for logging
+
 ## 0.0.7
 
 ### Patch Changes

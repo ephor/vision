@@ -1,5 +1,11 @@
 # vision-basic-example
 
+## 0.0.15
+
+### Patch Changes
+
+- @getvision/server@0.3.3
+
 ## 0.0.14
 
 ### Patch Changes
