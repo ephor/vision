@@ -1,7 +1,8 @@
 export { VisionCore } from './core'
 export { VisionWebSocketServer } from './server/index'
 export * from './tracing/index'
-export { generateZodTemplate } from './utils/zod-utils'
+export * from './validation/index'
+export { generateZodTemplate, generateTemplate } from './utils/template-generator'
 export {
   autoDetectPackageInfo,
   autoDetectIntegrations,

@@ -2,6 +2,7 @@
  * Core types for Vision Dashboard
  */
 import { LogEntry } from "./logs";
+import type { ValidationSchema } from '../validation';
 
 // JSON-RPC 2.0 Protocol
 export interface JsonRpcRequest {
@@ -98,7 +99,10 @@ export interface RouteMetadata {
   requestBody?: RequestBodySchema
   responseBody?: RequestBodySchema  // NEW: Response schema
   response?: RouteResponse
-  schema?: any // Zod schema for validation
+  schema?: {
+    input?: ValidationSchema
+    output?: ValidationSchema
+  } // Validation schemas for input/output
 }
 
 export interface RequestBodySchema {

@@ -10,6 +10,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js",
+      "default": "./dist/validation/index.js"
+    },
     "./server": {
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js",
