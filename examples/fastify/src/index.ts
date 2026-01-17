@@ -1,7 +1,8 @@
 import Fastify from 'fastify'
 import analyticsPlugin from './plugins/analytics'
-import { visionPlugin, enableAutoDiscovery, useVisionSpan } from '@getvision/adapter-fastify'
+import { visionPlugin, enableAutoDiscovery, useVisionSpan, validator } from '@getvision/adapter-fastify'
 import { z } from 'zod'
+import * as v from 'valibot'
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 
 async function start() {
@@ -20,6 +21,7 @@ async function start() {
     await app.register(visionPlugin, {
       port: 9500,
       logging: true,
+      apiUrl: 'http://localhost:3000',
       service: {
         name: 'Fastify Basic Example',
         version: '1.0.0',
@@ -41,6 +43,7 @@ async function start() {
         'GET /users',
         'GET /users/:id',
         'POST /users',
+        'POST /valibot/users',
         'PUT /users/:id',
         'DELETE /users/:id',
       ],
@@ -131,10 +134,17 @@ async function start() {
     age: z.number().int().positive().optional().describe('Age (optional)'),
   })
 
+  const CreateValibotUserSchema = v.object({
+    name: v.pipe(v.string(), v.minLength(1), v.description('Full name')),
+    email: v.pipe(v.string(), v.email(), v.description('Email address')),
+    age: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('Age (optional)'))),
+  })
+
   app.withTypeProvider<ZodTypeProvider>().post('/users', {
     schema: {
       body: CreateUserSchema
-    }
+    },
+    preHandler: validator('body', CreateUserSchema)
   }, async (request, reply) => {
     const withSpan = useVisionSpan()
 
@@ -145,6 +155,27 @@ async function start() {
       return {
         id: 3,
         ...request.body,
+      }
+    })
+
+    reply.code(201)
+    return newUser
+  })
+
+  // Create user with Valibot validation
+  app.post('/valibot/users', {
+    preHandler: validator('body', CreateValibotUserSchema)
+  }, async (request, reply) => {
+    const withSpan = useVisionSpan()
+    const body = request.body as { name: string; email: string; age?: number }
+
+    const newUser = withSpan('db.insert', {
+      'db.system': 'postgresql',
+      'db.table': 'users',
+    }, () => {
+      return {
+        id: 4,
+        ...body,
       }
     })
 
@@ -165,7 +196,8 @@ async function start() {
         id: z.string().describe('User ID'),
       }),
       body: UpdateUserSchema
-    }
+    },
+    preHandler: validator('body', UpdateUserSchema)
   }, async (request, reply) => {
     const id = parseInt(request.params.id)
     const withSpan = useVisionSpan()

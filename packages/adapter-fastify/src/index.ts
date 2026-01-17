@@ -7,6 +7,8 @@ import {
   detectDrizzle,
   startDrizzleStudio,
   stopDrizzleStudio,
+  generateTemplate,
+  runInTraceContext,
   traceContext,
 } from '@getvision/core'
 import type {
@@ -189,18 +191,38 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
   })
 
   const CAPTURE_KEY = Symbol.for('vision.fastify.routes')
-  const captured: Array<{ method: string; url: string; schema?: any; handlerName?: string }> =
-    ((fastify as any)[CAPTURE_KEY] = (fastify as any)[CAPTURE_KEY] || [])
-
-  fastify.addHook('onRoute', (routeOpts: any) => {
+  fastify.addHook('onRoute', (routeOpts) => {
+    if (!(fastify as any)[CAPTURE_KEY]) {
+      (fastify as any)[CAPTURE_KEY] = []
+    }
+    const captured = (fastify as any)[CAPTURE_KEY]
     const methods = Array.isArray(routeOpts.method) ? routeOpts.method : [routeOpts.method]
+    
+    // Extract schema from preHandler validator if present
+    let visionSchema: any = undefined
+    if (routeOpts.preHandler) {
+      const handlers = Array.isArray(routeOpts.preHandler) ? routeOpts.preHandler : [routeOpts.preHandler]
+      for (const handler of handlers) {
+        if ((handler as any).__visionSchema) {
+          visionSchema = (handler as any).__visionSchema
+          break
+        }
+      }
+    }
+    
     for (const m of methods) {
       const method = (m || '').toString().toUpperCase()
       if (!method || method === 'HEAD' || method === 'OPTIONS') continue
+      
+      const schema: any = routeOpts.schema ? { ...routeOpts.schema } : {}
+      if (visionSchema) {
+        schema.__visionSchema = visionSchema
+      }
+      
       captured.push({
         method,
         url: routeOpts.url as string,
-        schema: routeOpts.schema,
+        schema,
         handlerName: routeOpts.handler?.name || 'anonymous',
       })
     }
@@ -357,7 +379,13 @@ export function enableAutoDiscovery(
       }
 
       // Try to get schema from route
-      if (route.schema?.body) {
+      if (route.schema?.__visionSchema) {
+        try {
+          routeMeta.requestBody = generateTemplate(route.schema.__visionSchema)
+        } catch (e) {
+          console.error(`[Vision] Template generation error for ${route.method} ${route.url}:`, e)
+        }
+      } else if (route.schema?.body) {
         try {
           routeMeta.requestBody = jsonSchemaToTemplate(route.schema.body)
         } catch (e) {
@@ -442,12 +470,8 @@ function jsonSchemaToTemplate(schema: any): RequestBodySchema {
           value = 'null'
       }
 
-      const comment = description
-        ? ` // ${description}${isRequired ? '' : ' (optional)'}`
-        : (isRequired ? '' : ' // optional')
-
       const comma = index < props.length - 1 ? ',' : ''
-      lines.push(`  "${key}": ${value}${comma}${comment}`)
+      lines.push(`  "${key}": ${value}${comma}`)
 
       fields.push({
         name: key,
@@ -498,3 +522,5 @@ function matchPattern(path: string, pattern: string): boolean {
 }
 
 export { generateZodTemplate } from '@getvision/core'
+
+export { validator, toFastifySchema } from './validator'
