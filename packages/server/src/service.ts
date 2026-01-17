@@ -1,6 +1,11 @@
 import type { Hono, Context, MiddlewareHandler, Env, Input } from 'hono'
 import type { z } from 'zod'
-import { VisionCore, generateZodTemplate } from '@getvision/core'
+import { VisionCore, generateTemplate } from '@getvision/core'
+import {
+  ValidationError,
+  createValidationErrorResponse,
+  UniversalValidator
+} from '@getvision/core'
 import type { EndpointConfig, Handler } from './types'
 import { getVisionContext } from './vision-app'
 import { eventRegistry } from './event-registry'
@@ -152,11 +157,11 @@ export class ServiceBuilder<
     this.endpoints.forEach((ep) => {
       let requestBody = undefined
       if (ep.schema.input && ['POST', 'PUT', 'PATCH'].includes(ep.method)) {
-        requestBody = generateZodTemplate(ep.schema.input)
+        requestBody = generateTemplate(ep.schema.input)
       }
       let responseBody = undefined
       if (ep.schema.output) {
-        responseBody = generateZodTemplate(ep.schema.output)
+        responseBody = generateTemplate(ep.schema.output)
       }
       routes.push({
         method: ep.method,
@@ -382,13 +387,13 @@ export class ServiceBuilder<
       // Generate requestBody schema (input)
       let requestBody = undefined
       if (ep.schema.input && ['POST', 'PUT', 'PATCH'].includes(ep.method)) {
-        requestBody = generateZodTemplate(ep.schema.input)
+        requestBody = generateTemplate(ep.schema.input)
       }
       
       // Generate responseBody schema (output) - NEW!
       let responseBody = undefined
       if (ep.schema.output) {
-        responseBody = generateZodTemplate(ep.schema.output)
+        responseBody = generateTemplate(ep.schema.output)
       }
       
       return {
@@ -517,15 +522,15 @@ export class ServiceBuilder<
           
           const input = { ...params, ...query, ...body }
           
-          // Validate input with Zod
-          const validated = ep.schema.input.parse(input)
+          // Validate input with UniversalValidator (supports Zod, Valibot, etc.)
+          const validated = UniversalValidator.parse(ep.schema.input, input)
           
           // Execute handler
           const result = await ep.handler(validated, c as any)
 
           // If an output schema exists, validate and return JSON
           if (ep.schema.output) {
-            const validatedOutput = ep.schema.output.parse(result)
+            const validatedOutput = UniversalValidator.parse(ep.schema.output, result)
             return c.json(validatedOutput)
           }
 
@@ -535,11 +540,12 @@ export class ServiceBuilder<
           }
           return c.json(result)
         } catch (error) {
-          if ((error as any).name === 'ZodError') {
-            return c.json({ 
-              error: 'Validation error', 
-              details: (error as any).errors 
-            }, 400)
+          if (error instanceof ValidationError) {
+            const requestId = c.req.header('x-request-id')
+            return c.json(
+              createValidationErrorResponse(error.issues, requestId),
+              400
+            )
           }
           throw error
         }
