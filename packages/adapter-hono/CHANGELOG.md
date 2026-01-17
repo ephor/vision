@@ -1,5 +1,12 @@
 # @getvision/adapter-hono
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [d5bfbe0]
+  - @getvision/core@0.1.0
+
 ## 0.0.10
 
 ### Patch Changes

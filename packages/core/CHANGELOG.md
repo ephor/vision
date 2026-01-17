@@ -1,5 +1,11 @@
 # @getvision/core
 
+## 0.1.0
+
+### Minor Changes
+
+- d5bfbe0: Introduce UniversalValidator with multi-library validation support for Zod, Valibot, and Standard Schema v1. Enhanced template generation now handles complex schemas with nested objects, arrays, enums, and union types.
+
 ## 0.0.8
 
 ### Patch Changes
