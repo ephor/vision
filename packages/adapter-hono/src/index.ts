@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import {
   VisionCore,
-  generateZodTemplate,
+  generateTemplate,
   autoDetectPackageInfo,
   autoDetectIntegrations,
   detectDrizzle,
@@ -10,9 +10,8 @@ import {
   runInTraceContext,
 } from '@getvision/core'
 import type { RouteMetadata, VisionHonoOptions, ServiceDefinition } from '@getvision/core'
-import { existsSync } from 'fs'
 import { AsyncLocalStorage } from 'async_hooks'
-import { extractSchema } from './zod-validator'
+import { extractSchema } from "./validator";
 
 // Context storage for vision and traceId
 interface VisionContext {
@@ -114,7 +113,7 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
         for (const handler of handlers) {
           const schema = extractSchema(handler)
           if (schema) {
-            requestBodySchema = generateZodTemplate(schema)
+            requestBodySchema = generateTemplate(schema)
             break
           }
         }
@@ -560,6 +559,4 @@ export function getVisionInstance(): VisionCore | null {
   return visionInstance
 }
 
-// Re-export monkey-patched zValidator that stores schema for Vision introspection
-// Use this instead of @hono/zod-validator to enable automatic schema detection
-export { zValidator } from './zod-validator'
+export { validator, zValidator } from './validator';

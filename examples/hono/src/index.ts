@@ -2,7 +2,8 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
-import { visionAdapter, enableAutoDiscovery, useVisionSpan, zValidator, getVisionContext } from '@getvision/adapter-hono'
+import * as v from 'valibot'
+import { visionAdapter, enableAutoDiscovery, useVisionSpan, validator, getVisionContext } from '@getvision/adapter-hono'
 import { db } from './db'
 import { users } from './db/schema'
 import { eq } from 'drizzle-orm'
@@ -21,6 +22,12 @@ const updateUserSchema = z.object({
   age: z.number().int().positive().optional().describe('User age (optional)'),
 })
 
+const createValibotUserSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.description('User full name')),
+  email: v.pipe(v.string(), v.email(), v.description('User email address')),
+  age: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('User age (optional)'))),
+})
+
 const app = new Hono()
 
 // Add Vision Dashboard in development (BEFORE other middleware!)
@@ -34,26 +41,29 @@ if (process.env.NODE_ENV !== 'production') {
         database: 'sqlite://./dev.db'
       }
     },
+    apiUrl: 'http://localhost:4000',
     drizzle: {
       autoStart: true,  // Auto-start Drizzle Studio
       port: 4983,
     },
   }))
   // Enable auto-discovery after all routes and mounts
-  if (process.env.NODE_ENV !== 'production') {
-    enableAutoDiscovery(app, {
-      services: [
-        {
-          name: 'Users',
-          routes: ['/users', '/users/*']
-        },
-        {
-          name: 'Analytics',
-          routes: ['/analytics', '/analytics/*']
-        }
-      ]
-    })
-  }
+  enableAutoDiscovery(app, {
+    services: [
+      {
+        name: 'Users',
+        routes: ['/users', '/users/*']
+      },
+      {
+        name: 'Analytics',
+        routes: ['/analytics', '/analytics/*']
+      },
+      {
+        name: 'Valibot',
+        routes: ['/valibot', '/valibot/*']
+      }
+    ]
+  })
 }
 
 // Enable CORS for all routes and expose Vision headers
@@ -111,7 +121,7 @@ app.get('/users/:id', async (c) => {
 })
 
 // Create user (with Zod validation and DB span)
-app.post('/users', zValidator('json', createUserSchema), async (c) => {
+app.post('/users', validator('json', createUserSchema), async (c) => {
   const body = c.req.valid('json')
   const withSpan = useVisionSpan()
   
@@ -126,8 +136,24 @@ app.post('/users', zValidator('json', createUserSchema), async (c) => {
   return c.json(newUser, 201)
 })
 
+// Create user (Valibot validation)
+app.post('/valibot/users', validator('json', createValibotUserSchema), async (c) => {
+  const body = c.req.valid('json')
+  const withSpan = useVisionSpan()
+
+  const newUser = withSpan('db.insert', { 'db.system': 'sqlite', 'db.table': 'users' }, () => {
+    return db.insert(users).values({
+      name: body.name,
+      email: body.email,
+      age: body.age,
+    }).returning().get()
+  })
+
+  return c.json(newUser, 201)
+})
+
 // Update user (with Zod validation and DB span)
-app.put('/users/:id', zValidator('json', updateUserSchema), async (c) => {
+app.put('/users/:id', validator('json', updateUserSchema), async (c) => {
   const id = parseInt(c.req.param('id'))
   const body = c.req.valid('json')
   const withSpan = useVisionSpan()
@@ -171,7 +197,7 @@ app.get('/slow', async (c) => {
 
 app.route('/analytics', analytics)
 
-app.get('/error', (c) => {
+app.get('/error', () => {
   throw new Error('Something went wrong!')
 })
 
