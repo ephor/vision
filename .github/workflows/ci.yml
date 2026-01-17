@@ -59,8 +59,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Build
         run: bunx turbo run build
-#      - name: Test
-#        run: bunx turbo run test
+      - name: Test
+        run: bunx turbo run test
       - name: Release
         id: release
         uses: edenlabllc/changesets-action@v1

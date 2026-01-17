@@ -1,0 +1,135 @@
+---
+title: Validation
+description: "Support for Zod, Valibot, and Standard Schema v1"
+---
+
+Vision supports multiple validation libraries through its UniversalValidator. This means you can use your preferred validation library and still get full template generation, request body examples, and validation error handling in the Vision Dashboard.
+
+## Supported Libraries
+
+### Zod
+The original validation library supported by Vision. Full support for all Zod features including:
+- Objects, arrays, primitives
+- Enums, unions, literals
+- Optional and nullable fields
+- Custom validation with `.refine()`
+- Error messages and descriptions
+
+### Valibot
+A modern, modular validation library. Vision supports:
+- Valibot v1 schemas with pipe syntax
+- Object, array, and primitive types
+- Enums (`picklist`), unions, literals
+- Optional fields and default values
+- Custom error messages
+- Automatic description extraction from pipe metadata
+
+### Standard Schema v1
+Any library implementing the Standard Schema v1 interface:
+- Automatic schema detection
+- Template generation for supported types
+- Error handling with proper path normalization
+
+## Template Generation
+
+Vision automatically generates request body templates from your validation schemas:
+
+```typescript
+// Zod example
+const userSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  age: z.number().optional(),
+})
+
+// Generated template
+{
+  "name": "string",
+  "email": "user@example.com",
+  "age": 0
+}
+```
+
+The same works for Valibot:
+
+```typescript
+// Valibot example
+const userSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1)),
+  email: v.pipe(v.string(), v.email()),
+  age: v.optional(v.number()),
+})
+```
+
+## Adapter Examples
+
+### Express
+```typescript
+import { validator } from '@getvision/adapter-express'
+import { z } from 'zod'
+
+const app = express()
+
+app.post('/users',
+  validator('body', z.object({
+    name: z.string(),
+    email: z.string().email(),
+  })),
+  (req, res) => {
+    // req.body is fully typed and validated
+    res.json(req.body)
+  }
+)
+```
+
+### Fastify
+```typescript
+import { validator } from '@getvision/adapter-fastify'
+import { v } from 'valibot'
+
+const app = fastify()
+
+app.post('/users', {
+  preHandler: validator('body', v.object({
+    name: v.string(),
+    email: v.pipe(v.string(), v.email()),
+  }))
+}, (request, reply) => {
+  // request.body is validated
+  return reply.send(request.body)
+})
+```
+
+### Hono
+```typescript
+import { validator } from '@getvision/adapter-hono'
+import { z } from 'zod'
+
+const app = hono()
+
+app.post('/users', 
+  validator('json', z.object({
+    name: z.string(),
+    email: z.string().email(),
+  })),
+  (c) => {
+    // c.req.valid('json') is typed
+    return c.json(c.req.valid('json'))
+  }
+)
+```
+
+## Best Practices
+
+1. **Use descriptions** - Add `.describe()` to Zod or `v.description()` to Valibot for better documentation
+2. **Consistent error messages** - Provide custom error messages for better UX
+3. **Type safety** - Let TypeScript infer types from your schemas
+4. **Reuse schemas** - Define schemas once and reuse across endpoints
+
+## Error Handling
+
+All validation errors are automatically captured and displayed in the Vision Dashboard with:
+- Clear error messages
+- Field-level error indicators
+- Proper path normalization for nested objects
+- Stack traces for debugging
