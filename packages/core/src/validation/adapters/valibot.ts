@@ -1,11 +1,15 @@
 // Valibot adapter - only available if valibot is installed
 // This file will be ignored if valibot is not a dependency
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+let v: any
 
 try {
-  var v = require('valibot')
-} catch (e) {
+  v = require('valibot')
+} catch {
   // Valibot not installed, module will be undefined
-  var v = undefined
+  v = undefined
 }
 
 import type { StandardSchemaV1 } from '../standard-schema'
@@ -32,10 +36,18 @@ export function toStandardSchema<TInput = unknown, TOutput = TInput>(
         }
         
         return {
-          issues: result.issues.map((issue: any) => ({
-            path: v.getIssuePath(issue),
-            message: issue.message,
-          })),
+          issues: result.issues.map((issue: any) => {
+            const rawPath = Array.isArray(issue?.path)
+              ? issue.path
+              : v.getIssuePath?.(issue) ?? []
+            return {
+              path: rawPath.map((p: any) => {
+                if (typeof p === "string" || typeof p === "number") return p
+                return p?.key ?? p?.path ?? String(p)
+              }),
+              message: issue.message,
+            }
+          }),
         }
       },
     },
@@ -46,5 +58,11 @@ export function toStandardSchema<TInput = unknown, TOutput = TInput>(
  * Check if a schema is a Valibot schema
  */
 export function isValibotSchema(obj: any): obj is any {
-  return obj && typeof obj === "object" && "type" in obj && "parse" in obj
+  return (
+    obj &&
+    typeof obj === "object" &&
+    "type" in obj &&
+    ("~standard" in obj || "~run" in obj) &&
+    !("_def" in obj)
+  )
 }

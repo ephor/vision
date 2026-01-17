@@ -148,10 +148,10 @@ function generateJsonTemplate(fields: SchemaField[], indent = 0): string {
   
   fields.forEach((field, index) => {
     const isLast = index === fields.length - 1
-    const description = field.description || field.name
     
-    // Add comment
-    lines.push(`${spacing}  // ${description}`)
+    if (field.description) {
+      lines.push(`${spacing}  // ${field.description}`)
+    }
     
     // Add field
     let value: string

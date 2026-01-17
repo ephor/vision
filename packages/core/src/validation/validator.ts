@@ -13,19 +13,19 @@ export class UniversalValidator {
    * Convert any supported schema to Standard Schema format
    */
   static toStandardSchema<T = unknown>(schema: ValidationSchema): StandardSchemaV1<T> {
+    // Try Zod first (most specific check with _def)
+    if (isZodSchema(schema)) {
+      return zodToStandard(schema) as unknown as StandardSchemaV1<T>
+    }
+
+    // Try Valibot (has type and ~run/~standard but not _def)
+    if (isValibotSchema(schema)) {
+      return valibotToStandard(schema) as unknown as StandardSchemaV1<T>
+    }
+
     // If it's already a Standard Schema, return as-is
     if (isStandardSchema(schema)) {
       return schema as StandardSchemaV1<T>
-    }
-
-    // Try Zod
-    if (isZodSchema(schema)) {
-      return zodToStandard(schema) as StandardSchemaV1<T>
-    }
-
-    // Try Valibot
-    if (isValibotSchema(schema)) {
-      return valibotToStandard(schema) as StandardSchemaV1<T>
     }
 
     // If we can't identify the library, try to use it as Standard Schema directly

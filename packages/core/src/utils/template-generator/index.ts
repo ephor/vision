@@ -1,18 +1,14 @@
 import type { RequestBodySchema } from '../../types'
 import type { StandardSchemaV1 } from '../../validation'
-import { isStandardSchema, isZodSchema } from '../../validation'
+import { isStandardSchema, isZodSchema, isValibotSchema } from '../../validation'
 import { generateZodTemplate as _generateZodTemplate } from '../zod-utils'
+import { generateValibotTemplate as _generateValibotTemplate } from '../valibot-utils'
 
 /**
  * Universal template generator that works with any validation library
  */
 export function generateTemplate(schema: any): RequestBodySchema | undefined {
   if (!schema) return undefined
-
-  // Try Standard Schema first
-  if (isStandardSchema(schema)) {
-    return generateStandardSchemaTemplate(schema)
-  }
 
   // Try Zod
   if (isZodSchema(schema)) {
@@ -21,7 +17,12 @@ export function generateTemplate(schema: any): RequestBodySchema | undefined {
 
   // Try Valibot
   if (isValibotSchema(schema)) {
-    return generateValibotTemplate(schema)
+    return _generateValibotTemplate(schema)
+  }
+
+  // Try Standard Schema as a fallback
+  if (isStandardSchema(schema)) {
+    return generateStandardSchemaTemplate(schema)
   }
 
   // Unknown schema type
@@ -35,6 +36,11 @@ export function generateTemplate(schema: any): RequestBodySchema | undefined {
 export const generateZodTemplate = _generateZodTemplate
 
 /**
+ * Generate template for Valibot schema (re-export for backward compatibility)
+ */
+export const generateValibotTemplate = _generateValibotTemplate
+
+/**
  * Generate template for Standard Schema (limited introspection)
  */
 function generateStandardSchemaTemplate(schema: StandardSchemaV1): RequestBodySchema | undefined {
@@ -44,25 +50,6 @@ function generateStandardSchemaTemplate(schema: StandardSchemaV1): RequestBodySc
     template: '{\n  // Schema structure not available for Standard Schema\n}',
     fields: []
   }
-}
-
-/**
- * Generate template for Valibot schema
- */
-function generateValibotTemplate(schema: any): RequestBodySchema | undefined {
-  // For now, return generic template
-  // TODO: Implement Valibot introspection if needed
-  return {
-    template: '{\n  // Valibot template generation not yet implemented\n}',
-    fields: []
-  }
-}
-
-/**
- * Check if schema is Valibot
- */
-function isValibotSchema(obj: any): boolean {
-  return obj && typeof obj === "object" && "type" in obj && "parse" in obj
 }
 
 /**
@@ -89,4 +76,4 @@ export function getTemplateGenerator(vendor: string) {
 
 // Initialize with built-in generators
 registerTemplateGenerator('zod', generateZodTemplate)
-registerTemplateGenerator('valibot', generateValibotTemplate)
+registerTemplateGenerator('valibot', _generateValibotTemplate)
