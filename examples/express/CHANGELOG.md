@@ -1,5 +1,12 @@
 # express-basic-example
 
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [6e5c887]
+  - @getvision/adapter-express@0.1.0
+
 ## 0.0.12
 
 ### Patch Changes

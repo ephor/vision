@@ -1,22 +1,20 @@
 {
-  "mode": "snapshot",
+  "mode": "stable",
   "initialVersions": {
     "docs": "0.0.1",
     "web": "0.0.8",
-    "express-basic-example": "0.0.12",
-    "fastify-basic-example": "0.0.12",
-    "hono-basic-example": "0.0.12",
-    "vision-basic-example": "0.0.18",
-    "@getvision/adapter-express": "0.0.11",
-    "@getvision/adapter-fastify": "0.0.11",
-    "@getvision/adapter-hono": "0.0.11",
+    "express-basic-example": "0.0.13",
+    "fastify-basic-example": "0.0.13",
+    "hono-basic-example": "0.0.13",
+    "vision-basic-example": "0.0.19",
+    "@getvision/adapter-express": "0.1.0",
+    "@getvision/adapter-fastify": "0.1.0",
+    "@getvision/adapter-hono": "0.1.0",
     "@getvision/core": "0.1.0",
     "@repo/eslint-config": "0.0.1",
-    "@getvision/server": "0.3.6",
+    "@getvision/server": "0.4.0",
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": [
-    "khaki-moles-report"
-  ]
+  "changesets": []
 }
