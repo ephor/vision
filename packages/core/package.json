@@ -64,6 +64,7 @@
     "@types/mime-types": "^2.1.4",
     "@types/node": "^20.14.9",
     "@types/ws": "^8.5.12",
+    "@types/bun": "latest",
     "valibot": "^1.2.0",
     "typescript": "5.9.3"
   },
