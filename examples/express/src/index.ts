@@ -1,7 +1,7 @@
 import express from 'express'
 import analyticsRouter from './routers/analytics'
-import { visionMiddleware, enableAutoDiscovery, useVisionSpan, zValidator } from '@getvision/adapter-express'
-import { z } from 'zod'
+import { visionMiddleware, enableAutoDiscovery, useVisionSpan, validator } from '@getvision/adapter-express'
+import * as v from 'valibot'
 
 const app = express()
 
@@ -9,16 +9,20 @@ const app = express()
 app.use(express.json())
 
 // Zod schemas for validation
-const createUserSchema = z.object({
-  name: z.string().min(1).describe('User full name'),
-  email: z.string().email().describe('User email address'),
-  age: z.number().int().positive().optional().describe('User age (optional)'),
+const createUserSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.description('User full name')),
+  email: v.pipe(v.string(), v.email(), v.description('User email address')),
+  age: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('User age (optional)'))),
 })
 
-const updateUserSchema = z.object({
-  name: z.string().min(1).optional().describe('User full name (optional)'),
-  email: z.string().email().optional().describe('User email address (optional)'),
-  age: z.number().int().positive().optional().describe('User age (optional)'),
+const updateUserSchema = v.object({
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.description('User full name (optional)'))),
+  email: v.optional(v.pipe(v.string(), v.email(), v.description('User email address (optional)'))),
+  age: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('User age (optional)'))),
+})
+
+const getUserSchema = v.object({
+  id: v.pipe(v.number(), v.integer(), v.minValue(1)),
 })
 
 // Add Vision Dashboard (development only)
@@ -26,6 +30,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(visionMiddleware({
     port: 9500,
     enabled: true,
+    apiUrl: 'http://localhost:3000',
     service: {
       name: 'Express API',
       version: '1.0.0',
@@ -42,7 +47,7 @@ app.get('/', (req, res) => {
   })
 })
 
-app.get('/users', async (req, res) => {
+app.get('/users', validator('query', getUserSchema), async (req, res) => {
   const withSpan = useVisionSpan()
   
   // Simulate database query with span
@@ -106,7 +111,7 @@ app.get('/users/:id', async (req, res) => {
   res.json(user)
 })
 
-app.post('/users', zValidator('body', createUserSchema), async (req, res) => {
+app.post('/users', validator('body', createUserSchema), async (req, res) => {
   const { name, email, age } = req.body
   const withSpan = useVisionSpan()
   
@@ -126,7 +131,7 @@ app.post('/users', zValidator('body', createUserSchema), async (req, res) => {
   res.status(201).json(newUser)
 })
 
-app.put('/users/:id', zValidator('body', updateUserSchema), async (req, res) => {
+app.put('/users/:id', validator('body', updateUserSchema), async (req, res) => {
   const id = parseInt(req.params.id)
   const { name, email, age } = req.body
   const withSpan = useVisionSpan()

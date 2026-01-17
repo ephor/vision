@@ -22,6 +22,7 @@ export function getAllRouteSchemas(): Map<string, { method: string; path: string
 type ValidateTarget = 'body' | 'query' | 'params'
 
 /**
+ * @deprecated Use validator instead
  * Zod validator middleware for Express
  * Similar to @hono/zod-validator but stores schema for Vision introspection
  * 

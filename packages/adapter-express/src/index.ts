@@ -4,10 +4,10 @@ import {
   autoDetectPackageInfo,
   autoDetectIntegrations,
   runInTraceContext,
+  generateTemplate,
 } from '@getvision/core'
 import type { RouteMetadata, VisionExpressOptions, ServiceDefinition } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
-import { generateZodTemplate } from './zod-utils'
 
 // Context storage for vision, traceId, and rootSpanId
 interface VisionContext {
@@ -483,8 +483,7 @@ export function enableAutoDiscovery(app: Application, options?: { services?: Ser
           
           if (schema) {
             route.schema = schema
-            // Generate template from Zod schema
-            const requestBody = generateZodTemplate(schema)
+            const requestBody = generateTemplate(schema)
             if (requestBody) {
               route.requestBody = requestBody
             }
@@ -532,3 +531,5 @@ export function getVisionInstance(): VisionCore | null {
 
 // Export Zod validator for schema-based validation
 export { zValidator, getRouteSchema, getAllRouteSchemas } from './zod-validator'
+
+export { validator } from './validator'
