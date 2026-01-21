@@ -203,6 +203,22 @@ When `cors` is enabled (default), the plugin sets:
 If you proxy the Dashboard or run on a different origin, keep these headers to allow the API Explorer to call your API.
 </Callout>
 
+## Response Headers
+
+Vision automatically adds the `X-Vision-Trace-Id` header to every response. This header contains the unique trace identifier for correlating client-side metrics with server traces.
+
+<Callout type="warning">
+**CORS Required**: To read this header in the browser, you must expose it in your CORS configuration. Vision's built-in CORS handles this automatically, but if you use custom CORS:
+
+```typescript
+app.register(cors, {
+  origin: '*',
+  exposedHeaders: ['X-Vision-Trace-Id'],
+})
+```
+</Callout>
+```
+
 ## Fastify vs Express
 
 | Feature | Fastify | Express |

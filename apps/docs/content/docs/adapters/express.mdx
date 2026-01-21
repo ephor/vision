@@ -167,6 +167,24 @@ app.get('/users/:id', (req, res) => {
 
 ## CORS
 
+## Response Headers
+
+Vision automatically adds the `X-Vision-Trace-Id` header to every response. This header contains the unique trace identifier for correlating client-side metrics with server traces.
+
+<Callout type="warning">
+**CORS Required**: To read this header in the browser, you must expose it in your CORS configuration. Vision's built-in CORS handles this automatically, but if you use custom CORS:
+
+```typescript
+app.use(cors({
+  origin: '*',
+  exposedHeaders: ['X-Vision-Trace-Id'], // Note: exposedHeaders for express-cors
+}))
+```
+</Callout>
+```
+
+## Request Context
+
 When `cors` is enabled (default), the middleware sets:
 
 - `Access-Control-Allow-Origin: *`

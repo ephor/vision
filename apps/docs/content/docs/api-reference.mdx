@@ -209,15 +209,20 @@ app.post('/users', zValidator('json', schema), handler)
 
 Same API as `@hono/zod-validator`, but stores schema for auto-documentation.
 
-### `launchDrizzleStudio(db, port?)`
+### Drizzle Configuration
 
-Launch Drizzle Studio from Vision:
+Configure automatic Drizzle Studio launch in the vision adapter:
 
 ```typescript
-import { launchDrizzleStudio } from '@getvision/adapter-hono'
-
-launchDrizzleStudio(db, 4983)
+app.use('*', visionAdapter({
+  drizzle: {
+    autoStart: true,  // Auto-start Drizzle Studio
+    port: 4983,       // Port for Drizzle Studio (optional, default: 4983)
+  },
+}))
 ```
+
+When Drizzle is detected in your project, Vision will display a Drizzle Studio button in the dashboard and automatically start it if configured.
 
 ---
 

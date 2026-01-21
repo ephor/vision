@@ -125,6 +125,22 @@ app.get('/users', async (c) => {
 })
 ```
 
+## Response Headers
+
+Vision automatically adds the `X-Vision-Trace-Id` header to every response. This header contains the unique trace identifier for correlating client-side metrics with server traces.
+
+<Callout type="warning">
+**CORS Required**: To read this header in the browser, you must expose it in your CORS configuration:
+
+```typescript
+app.use('*', cors({
+  origin: '*',
+  exposeHeaders: ['X-Vision-Trace-Id'],
+}))
+```
+</Callout>
+```
+
 ## Context Access
 
 Get Vision instance and trace ID in your handlers:
@@ -194,17 +210,21 @@ export default analytics
 
 ## Drizzle Studio Integration
 
-Launch Drizzle Studio directly from Vision dashboard:
+Vision can automatically launch Drizzle Studio when configured:
 
 ```typescript
-import { launchDrizzleStudio } from '@getvision/adapter-hono'
-import { db } from './db'
-
-// Optionally launch on startup
-if (process.env.NODE_ENV === 'development') {
-  launchDrizzleStudio(db)
-}
+app.use('*', visionAdapter({
+  drizzle: {
+    autoStart: true,  // Auto-start Drizzle Studio
+    port: 4983,
+  },
+}))
 ```
+
+When Drizzle is detected in your project, Vision will:
+- Display a Drizzle Studio button in the dashboard
+- Auto-start the studio if `autoStart: true` is set
+- Use the specified port (default: 4983)
 
 ## Complete Example
 
