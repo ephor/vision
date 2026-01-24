@@ -1,6 +1,6 @@
 {
   "name": "@getvision/core",
-  "version": "0.1.0",
+  "version": "0.1.1-b47357d-develop",
   "type": "module",
   "types": "dist/index.d.ts",
   "module": "dist/index.js",
