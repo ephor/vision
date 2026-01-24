@@ -161,7 +161,6 @@ export class Vision<
   private eventBus: EventBus
   private config: VisionConfig
   private serviceBuilders: ServiceBuilder<any, E>[] = []
-  private fileBasedRoutes: RouteMetadata[] = []
   private bunServer?: any
   private signalHandler?: () => Promise<void>
 
@@ -557,31 +556,6 @@ export class Vision<
     // Build all services (this populates allServices via builder.build)
     for (const builder of this.serviceBuilders) {
       builder.build(this as any, allServices)
-    }
-    
-    // Group file-based routes by path prefix (e.g., /products, /analytics)
-    if (this.fileBasedRoutes.length > 0) {
-      const groupedRoutes = new Map<string, RouteMetadata[]>()
-      
-      for (const route of this.fileBasedRoutes) {
-        // Extract first path segment as service name
-        const segments = route.path.split('/').filter(s => s && !s.startsWith(':'))
-        const serviceName = segments[0] || 'root'
-        
-        if (!groupedRoutes.has(serviceName)) {
-          groupedRoutes.set(serviceName, [])
-        }
-        groupedRoutes.get(serviceName)!.push(route)
-      }
-      
-      // Add each group as a service
-      for (const [name, routes] of groupedRoutes.entries()) {
-        const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1)
-        allServices.push({
-          name: capitalizedName,
-          routes
-        })
-      }
     }
     
     // Don't register to VisionCore here - let start() handle it after sub-apps are loaded
