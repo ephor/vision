@@ -71,6 +71,25 @@ export class VisionWebSocketServer {
       return
     }
 
+    // HTTP API for routes metadata (for React Query client)
+    if (req.url === '/api/routes-metadata' && req.method === 'GET') {
+      try {
+        // Call internal routes/export-metadata method
+        const result = await this.rpc.handle(JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'routes/export-metadata',
+          id: 1
+        }))
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(result)
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Failed to fetch routes metadata' }))
+      }
+      return
+    }
+
     // Try to serve static files from built UI
     const uiPath = getUIPath()
     const served = await serveStatic(req, res, uiPath, this.options.apiUrl)

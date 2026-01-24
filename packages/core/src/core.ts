@@ -122,6 +122,30 @@ export class VisionCore {
       return this.routes
     })
 
+    // Export routes metadata for React Query client generation
+    this.server.registerMethod('routes/export-metadata', async () => {
+      return this.routes.map((route) => {
+        // Convert path to procedure path: /users/list → ['users', 'list']
+        const procedure = route.path
+          .split('/')
+          .filter(Boolean)
+          .filter(segment => !segment.startsWith(':')) // Skip params like :id
+
+        // Determine query vs mutation based on HTTP method
+        const type = route.method === 'GET' ? 'query' : 'mutation'
+
+        return {
+          method: route.method,
+          path: route.path,
+          procedure,
+          type,
+          schema: route.schema,
+          requestBody: route.requestBody,
+          responseBody: route.responseBody,
+        }
+      })
+    })
+
     // Get services (grouped routes)
     this.server.registerMethod('services/list', async () => {
       return this.services
