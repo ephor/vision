@@ -145,20 +145,42 @@ export class ServiceBuilder<
   public getRoutesMetadata(): Array<{
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
     path: string
+    queryParams?: any
     requestBody?: any
     responseBody?: any
   }> {
     const routes: Array<{
       method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
       path: string
+      queryParams?: any
       requestBody?: any
       responseBody?: any
     }> = []
     this.endpoints.forEach((ep) => {
       let requestBody = undefined
-      if (ep.schema.input && ['POST', 'PUT', 'PATCH'].includes(ep.method)) {
-        requestBody = generateTemplate(ep.schema.input)
+      let queryParams = undefined
+      
+      if (ep.schema.input) {
+        if (['POST', 'PUT', 'PATCH'].includes(ep.method)) {
+          requestBody = generateTemplate(ep.schema.input)
+        } else if (ep.method === 'GET' || ep.method === 'DELETE') {
+          // Exclude path params from query params
+          const pathParamNames = (ep.path.match(/:([^/]+)/g) || []).map((p: string) => p.slice(1))
+          const fullTemplate = generateTemplate(ep.schema.input)
+          
+          if (fullTemplate && pathParamNames.length > 0) {
+            const queryFields = fullTemplate.fields.filter(
+              (f: { name: string }) => !pathParamNames.includes(f.name)
+            )
+            if (queryFields.length > 0) {
+              queryParams = { ...fullTemplate, fields: queryFields }
+            }
+          } else {
+            queryParams = fullTemplate
+          }
+        }
       }
+      
       let responseBody = undefined
       if (ep.schema.output) {
         responseBody = generateTemplate(ep.schema.output)
@@ -166,6 +188,7 @@ export class ServiceBuilder<
       routes.push({
         method: ep.method,
         path: ep.path,
+        queryParams,
         requestBody,
         responseBody,
       })
@@ -384,13 +407,34 @@ export class ServiceBuilder<
   build(app: Hono, servicesAccumulator?: Array<{ name: string; routes: any[] }>) {
     // Prepare routes with Zod schemas
     const routes = Array.from(this.endpoints.values()).map(ep => {
-      // Generate requestBody schema (input)
+      // Generate requestBody schema (input) for POST/PUT/PATCH
       let requestBody = undefined
-      if (ep.schema.input && ['POST', 'PUT', 'PATCH'].includes(ep.method)) {
-        requestBody = generateTemplate(ep.schema.input)
+      let queryParams = undefined
+      
+      if (ep.schema.input) {
+        if (['POST', 'PUT', 'PATCH'].includes(ep.method)) {
+          requestBody = generateTemplate(ep.schema.input)
+        } else if (ep.method === 'GET' || ep.method === 'DELETE') {
+          // For GET/DELETE, input schema represents query parameters
+          // BUT we need to exclude path params from query params
+          const pathParamNames = (ep.path.match(/:([^/]+)/g) || []).map((p: string) => p.slice(1))
+          const fullTemplate = generateTemplate(ep.schema.input)
+          
+          if (fullTemplate && pathParamNames.length > 0) {
+            // Filter out path params from query params
+            const queryFields = fullTemplate.fields.filter(
+              (f: { name: string }) => !pathParamNames.includes(f.name)
+            )
+            if (queryFields.length > 0) {
+              queryParams = { ...fullTemplate, fields: queryFields }
+            }
+          } else {
+            queryParams = fullTemplate
+          }
+        }
       }
       
-      // Generate responseBody schema (output) - NEW!
+      // Generate responseBody schema (output)
       let responseBody = undefined
       if (ep.schema.output) {
         responseBody = generateTemplate(ep.schema.output)
@@ -401,6 +445,7 @@ export class ServiceBuilder<
         path: ep.path,
         handler: this.name,
         middleware: [],
+        queryParams,
         requestBody,
         responseBody,
       }
@@ -525,8 +570,12 @@ export class ServiceBuilder<
           // Validate input with UniversalValidator (supports Zod, Valibot, etc.)
           const validated = UniversalValidator.parse(ep.schema.input, input)
           
+          // Merge back path params that are not in the schema
+          // This ensures path params like :id are always available to the handler
+          const finalInput = { ...params, ...(validated || {}) }
+          
           // Execute handler
-          const result = await ep.handler(validated, c as any)
+          const result = await ep.handler(finalInput, c as any)
 
           // If an output schema exists, validate and return JSON
           if (ep.schema.output) {

@@ -107,14 +107,22 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
     const original = app[method]
     if (original) {
       app[method] = function(path: string, ...handlers: any[]) {
-        // Try to extract Zod schema from zValidator middleware
+        // Try to extract schemas from validator middleware
         let requestBodySchema = undefined
+        let queryParamsSchema = undefined
         
         for (const handler of handlers) {
           const schema = extractSchema(handler)
           if (schema) {
-            requestBodySchema = generateTemplate(schema)
-            break
+            // Check if this is a query validator or body validator
+            // Query validators are typically used with 'query' target
+            const validatorTarget = (handler as any).__visionValidatorTarget
+            if (validatorTarget === 'query') {
+              queryParamsSchema = generateTemplate(schema)
+            } else {
+              // Default to request body for json/form validators
+              requestBodySchema = generateTemplate(schema)
+            }
           }
         }
         
@@ -124,6 +132,7 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
           path,
           handler: handlers[handlers.length - 1]?.name || 'anonymous',
           middleware: [],
+          queryParams: queryParamsSchema,
           requestBody: requestBodySchema,
         })
         

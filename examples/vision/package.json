@@ -18,6 +18,9 @@
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "@getvision/server": "workspace:*",
+    "bullmq": "^5.62.0",
+    "hono-rate-limiter": "^0.4.2",
+    "ioredis": "^5.8.2",
     "dotenv": "^16.4.5",
     "hono": "^4.10.4",
     "better-sqlite3": "^12.4.1",

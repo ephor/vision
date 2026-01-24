@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { Clock, Zap, ArrowLeft, Trash2, Download, RefreshCcw } from 'lucide-react'
+import { Clock, Zap, ArrowLeft, Trash2, Download, RefreshCcw, Info, Layers, BookOpen } from 'lucide-react'
 import { useTraces, useClearTraces, useExportTraces, useAddClientMetrics } from '../hooks/useVision'
 import { Link, Outlet, useNavigate, useParams } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { SectionCard } from './ui/section-card'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
@@ -97,7 +97,7 @@ export function TracesPage() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ contentVisibility: 'auto' }}>
           {traces.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-6 text-muted-foreground">
               <Zap className="w-12 h-12 mb-4 opacity-30" />
@@ -299,65 +299,65 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
 
       <div className="space-y-4">
         {/* Overview Card */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold">Request Overview</CardTitle>
-            <Button onClick={handleReplay} variant="ghost" className="text-sm font-medium">
+        <SectionCard
+          title="Request Overview"
+          icon={Info}
+          headerRight={
+            <Button onClick={handleReplay} variant="ghost" size="sm" className="h-7 cursor-pointer">
               <RefreshCcw className="w-4 h-4" />
             </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Method</p>
-                <p className="font-mono text-sm font-medium">{trace.method}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-xs text-muted-foreground mb-1">Path</p>
-                <p className="font-mono text-sm font-medium truncate">{trace.path}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Status</p>
-                <Badge className={`text-xs font-mono ${getStatusBadgeClass(trace.statusCode)}`}>
-                  {trace.statusCode || 'Pending'}
-                </Badge>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Duration</p>
-                {(trace.metadata as any)?.clientDuration ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Server:</span>
-                      <span className="font-mono text-sm">{formatDuration(trace.duration)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Total:</span>
-                      <span className="font-mono text-sm font-medium">{formatDuration((trace.metadata as any).clientDuration)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Network:</span>
-                      <span className="font-mono text-sm text-blue-600 dark:text-blue-400">
-                        {formatDuration((trace.metadata as any).clientDuration - (trace.duration || 0))}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className={`font-mono text-sm font-medium ${trace.duration && trace.duration > 1000 ? 'text-orange-600 dark:text-orange-400' : ''}`}>
-                    {formatDuration(trace.duration)}
-                  </p>
-                )}
-              </div>
-              <div className="col-span-2">
-                <p className="text-xs text-muted-foreground mb-1">Timestamp</p>
-                <p className="font-mono text-sm">{formatTime(trace.timestamp)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Trace ID</p>
-                <p className="font-mono text-xs text-muted-foreground">{trace.id}</p>
-              </div>
+          }
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Method</p>
+              <p className="font-mono text-sm font-medium">{trace.method}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="col-span-2">
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Path</p>
+              <p className="font-mono text-sm font-medium truncate">{trace.path}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Status</p>
+              <Badge className={`text-xs font-mono ${getStatusBadgeClass(trace.statusCode)}`}>
+                {trace.statusCode || 'Pending'}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Duration</p>
+              {(trace.metadata as any)?.clientDuration ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Server:</span>
+                    <span className="font-mono text-sm">{formatDuration(trace.duration)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Total:</span>
+                    <span className="font-mono text-sm font-medium">{formatDuration((trace.metadata as any).clientDuration)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Network:</span>
+                    <span className="font-mono text-sm text-blue-600 dark:text-blue-400">
+                      {formatDuration((trace.metadata as any).clientDuration - (trace.duration || 0))}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className={`font-mono text-sm font-medium ${trace.duration && trace.duration > 1000 ? 'text-orange-600 dark:text-orange-400' : ''}`}>
+                  {formatDuration(trace.duration)}
+                </p>
+              )}
+            </div>
+            <div className="col-span-2">
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Timestamp</p>
+              <p className="font-mono text-sm">{formatTime(trace.timestamp)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Trace ID</p>
+              <p className="font-mono text-xs text-muted-foreground">{trace.id}</p>
+            </div>
+          </div>
+        </SectionCard>
 
         {/* Context Card */}
         {(() => {
@@ -367,26 +367,21 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
           if (contextKeys.length === 0) return null
 
           return (
-            <Card>
-              <CardHeader className="py-4">
-                <CardTitle className="text-base font-semibold">Context</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {contextKeys.map(key => (
-                    <div key={key}>
-                      <p className="text-xs text-muted-foreground mb-1">{key}</p>
-                      <div className="font-mono text-sm bg-muted/50 rounded px-2 py-1 inline-block break-all">
-                        {typeof (trace.metadata as any)[key] === 'object' 
-                          ? JSON.stringify((trace.metadata as any)[key])
-                          : String((trace.metadata as any)[key])
-                        }
-                      </div>
+            <SectionCard title="Context" icon={BookOpen}>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {contextKeys.map(key => (
+                  <div key={key}>
+                    <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">{key}</p>
+                    <div className="font-mono text-sm bg-muted/50 rounded px-2 py-1 inline-block break-all">
+                      {typeof (trace.metadata as any)[key] === 'object' 
+                        ? JSON.stringify((trace.metadata as any)[key])
+                        : String((trace.metadata as any)[key])
+                      }
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
           )
         })()}
 
@@ -400,14 +395,17 @@ export function TraceDetail({ trace, onBack }: { trace: Trace; onBack?: () => vo
 
         {/* Spans Card */}
         {trace.spans.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Spans Timeline ({trace.spans.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SpansWaterfall spans={trace.spans} formatDuration={formatDuration} />
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="Spans Timeline"
+            icon={Layers}
+            headerExtra={
+              <span className="text-xs text-muted-foreground font-mono ml-2">
+                {trace.spans.length} {trace.spans.length === 1 ? 'span' : 'spans'}
+              </span>
+            }
+          >
+            <SpansWaterfall spans={trace.spans} formatDuration={formatDuration} />
+          </SectionCard>
         )}
       </div>
     </div>

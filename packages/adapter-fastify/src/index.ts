@@ -199,13 +199,21 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
     const methods = Array.isArray(routeOpts.method) ? routeOpts.method : [routeOpts.method]
     
     // Extract schema from preHandler validator if present
-    let visionSchema: any = undefined
+    let bodySchema: any = undefined
+    let querySchema: any = undefined
+    
     if (routeOpts.preHandler) {
       const handlers = Array.isArray(routeOpts.preHandler) ? routeOpts.preHandler : [routeOpts.preHandler]
       for (const handler of handlers) {
         if ((handler as any).__visionSchema) {
-          visionSchema = (handler as any).__visionSchema
-          break
+          const visionSchema = (handler as any).__visionSchema
+          const visionTarget = (handler as any).__visionTarget
+          
+          if (visionTarget === 'querystring') {
+            querySchema = visionSchema
+          } else if (visionTarget === 'body' || !visionTarget) {
+            bodySchema = visionSchema
+          }
         }
       }
     }
@@ -215,8 +223,11 @@ const visionPluginImpl: FastifyPluginAsync<VisionFastifyOptions> = async (fastif
       if (!method || method === 'HEAD' || method === 'OPTIONS') continue
       
       const schema: any = routeOpts.schema ? { ...routeOpts.schema } : {}
-      if (visionSchema) {
-        schema.__visionSchema = visionSchema
+      if (bodySchema) {
+        schema.__visionSchema = bodySchema
+      }
+      if (querySchema) {
+        schema.__visionQuerySchema = querySchema
       }
       
       captured.push({
@@ -378,7 +389,7 @@ export function enableAutoDiscovery(
         handler: route.handlerName || 'anonymous',
       }
 
-      // Try to get schema from route
+      // Try to get body schema from route
       if (route.schema?.__visionSchema) {
         try {
           routeMeta.requestBody = generateTemplate(route.schema.__visionSchema)
@@ -388,6 +399,21 @@ export function enableAutoDiscovery(
       } else if (route.schema?.body) {
         try {
           routeMeta.requestBody = jsonSchemaToTemplate(route.schema.body)
+        } catch (e) {
+          // Ignore schema conversion errors
+        }
+      }
+      
+      // Try to get query schema from route
+      if (route.schema?.__visionQuerySchema) {
+        try {
+          routeMeta.queryParams = generateTemplate(route.schema.__visionQuerySchema)
+        } catch (e) {
+          console.error(`[Vision] Query template generation error for ${route.method} ${route.url}:`, e)
+        }
+      } else if (route.schema?.querystring) {
+        try {
+          routeMeta.queryParams = jsonSchemaToTemplate(route.schema.querystring)
         } catch (e) {
           // Ignore schema conversion errors
         }

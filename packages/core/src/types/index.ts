@@ -96,8 +96,9 @@ export interface RouteMetadata {
   handler: string
   middleware?: string[]
   params?: RouteParam[]
+  queryParams?: RequestBodySchema  // Query parameters schema (for GET requests)
   requestBody?: RequestBodySchema
-  responseBody?: RequestBodySchema  // NEW: Response schema
+  responseBody?: RequestBodySchema  // Response schema
   response?: RouteResponse
   schema?: {
     input?: ValidationSchema
