@@ -8,6 +8,10 @@
 export { createVisionClient } from './client'
 export type { VisionClientConfig } from './client'
 
+// Typed routes (for compile-time type safety)
+export { defineTypedRoutes } from './typed-routes'
+export type { InferInput, InferOutput } from './typed-routes'
+
 // Contract (for adapters)
 export { defineVisionContract, query, mutation } from './contract'
 

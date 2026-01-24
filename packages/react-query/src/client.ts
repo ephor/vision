@@ -144,23 +144,15 @@ export function createVisionClient<TAppOrContract>(
     return routesMap?.get(path) || null
   }
 
-  // Create recursive proxy for service.procedure.method() pattern
-  const client = createRecursiveProxy(async ({ path, args }) => {
-    const procedure = path
-    const method = args.length > 0 && typeof args[0] === 'string' ? args[0] : null
-
-    // Get route metadata
-    const routeMetadata = await findRouteMetadata(procedure)
-    const url = buildUrl(procedure)
-    const httpMethod = routeMetadata?.method || 'POST'
-
-    // Input is first argument (or second if first is method name)
-    const input = method ? args[1] : args[0]
-
-    // Method-specific logic
-    if (!method || method === 'call') {
-      // Direct call: api.users.list({ limit: 10 })
+  // Create procedure client (callable + methods)
+  const createProcedureClient = (procedure: string[]) => {
+    // Direct call function
+    const directCall = async (input?: any) => {
+      const routeMetadata = await findRouteMetadata(procedure)
+      const url = buildUrl(procedure)
+      const httpMethod = routeMetadata?.method || 'POST'
       const headers = await getHeaders()
+
       const response = await fetcher(url, {
         method: httpMethod,
         headers: {
@@ -177,64 +169,68 @@ export function createVisionClient<TAppOrContract>(
       return response.json()
     }
 
-    // queryOptions: api.users.list.queryOptions({ limit: 10 })
-    if (method === 'queryOptions') {
-      const options = args[1] || {}
-      return {
-        queryKey: [...procedure, input],
-        queryFn: async () => {
-          const headers = await getHeaders()
-          const response = await fetcher(url, {
-            method: httpMethod,
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers,
-            },
-            body: httpMethod !== 'GET' ? JSON.stringify(input) : undefined,
-          })
+    // Add methods to direct call function
+    directCall.queryOptions = (input?: any, options?: any) => ({
+      queryKey: [...procedure, input],
+      queryFn: async () => {
+        const routeMetadata = await findRouteMetadata(procedure)
+        const url = buildUrl(procedure)
+        const httpMethod = routeMetadata?.method || 'POST'
+        const headers = await getHeaders()
 
-          if (!response.ok) {
-            throw new Error(`Vision API Error: ${response.statusText}`)
-          }
+        const response = await fetcher(url, {
+          method: httpMethod,
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers,
+          },
+          body: httpMethod !== 'GET' ? JSON.stringify(input) : undefined,
+        })
 
-          return response.json()
-        },
-        ...options,
-      }
-    }
+        if (!response.ok) {
+          throw new Error(`Vision API Error: ${response.statusText}`)
+        }
 
-    // mutationOptions: api.users.create.mutationOptions()
-    if (method === 'mutationOptions') {
-      const options = args[0] || {}
-      return {
-        mutationFn: async (mutationInput: any) => {
-          const headers = await getHeaders()
-          const response = await fetcher(url, {
-            method: httpMethod,
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers,
-            },
-            body: JSON.stringify(mutationInput),
-          })
+        return response.json()
+      },
+      ...options,
+    })
 
-          if (!response.ok) {
-            throw new Error(`Vision API Error: ${response.statusText}`)
-          }
+    directCall.mutationOptions = (options?: any) => ({
+      mutationFn: async (mutationInput: any) => {
+        const routeMetadata = await findRouteMetadata(procedure)
+        const url = buildUrl(procedure)
+        const httpMethod = routeMetadata?.method || 'POST'
+        const headers = await getHeaders()
 
-          return response.json()
-        },
-        ...options,
-      }
-    }
+        const response = await fetcher(url, {
+          method: httpMethod,
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers,
+          },
+          body: JSON.stringify(mutationInput),
+        })
 
-    // prefetch: await api.users.list.prefetch({ limit: 10 })
-    if (method === 'prefetch') {
+        if (!response.ok) {
+          throw new Error(`Vision API Error: ${response.statusText}`)
+        }
+
+        return response.json()
+      },
+      ...options,
+    })
+
+    directCall.prefetch = async (input?: any) => {
       const queryKey = [...procedure, input]
       return queryClient.prefetchQuery({
         queryKey,
         queryFn: async () => {
+          const routeMetadata = await findRouteMetadata(procedure)
+          const url = buildUrl(procedure)
+          const httpMethod = routeMetadata?.method || 'POST'
           const headers = await getHeaders()
+
           const response = await fetcher(url, {
             method: httpMethod,
             headers: {
@@ -253,14 +249,51 @@ export function createVisionClient<TAppOrContract>(
       })
     }
 
-    throw new Error(`Unknown method: ${method}`)
-  }) as any
+    return directCall
+  }
+
+  // Create recursive proxy
+  const createProxy = (path: string[] = []): any => {
+    // Create base proxy
+    const proxy = new Proxy(() => {}, {
+      get(_target, key) {
+        if (typeof key !== 'string') return undefined
+        if (key === 'then') return undefined // Prevent Promise detection
+        if (key === 'queryClient') return queryClient
+
+        // Special methods - return bound functions
+        if (key === 'queryOptions') {
+          return (input?: any, options?: any) =>
+            createProcedureClient(path).queryOptions(input, options)
+        }
+        if (key === 'mutationOptions') {
+          return (options?: any) => createProcedureClient(path).mutationOptions(options)
+        }
+        if (key === 'prefetch') {
+          return (input?: any) => createProcedureClient(path).prefetch(input)
+        }
+
+        // Continue nesting
+        return createProxy([...path, key])
+      },
+
+      apply(_target, _thisArg, args) {
+        // Direct call
+        return createProcedureClient(path)(args[0])
+      },
+    })
+
+    return proxy
+  }
+
+  const client = createProxy() as any
 
   // Attach queryClient to root
   Object.defineProperty(client, 'queryClient', {
     value: queryClient,
     enumerable: false,
     writable: false,
+    configurable: false,
   })
 
   // Add init method for eager loading
@@ -270,33 +303,8 @@ export function createVisionClient<TAppOrContract>(
     },
     enumerable: false,
     writable: false,
+    configurable: false,
   })
 
   return client
-}
-
-/**
- * Create recursive proxy for service.procedure.method() pattern
- * Inspired by tRPC implementation
- */
-function createRecursiveProxy(
-  callback: (opts: { path: string[]; args: unknown[] }) => unknown
-): any {
-  const proxy = new Proxy(() => {}, {
-    get(_target, key) {
-      if (typeof key !== 'string') return undefined
-      if (key === 'then') return undefined // Prevent Promise detection
-
-      // Return nested proxy
-      return createRecursiveProxy(({ path, args }) => {
-        return callback({ path: [key, ...path], args })
-      })
-    },
-
-    apply(_target, _thisArg, args) {
-      return callback({ path: [], args })
-    },
-  })
-
-  return proxy
 }
