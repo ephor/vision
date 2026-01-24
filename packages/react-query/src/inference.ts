@@ -19,14 +19,20 @@ export type VisionProcedure = {
 }
 
 /**
- * Extract router type from Vision Server or Contract
+ * Extract router type from Vision Server, Contract, or Typed Routes
  */
 export type InferVisionRouter<TAppOrContract> =
-  TAppOrContract extends VisionContract
-    ? InferContract<TAppOrContract>
-    : TAppOrContract extends { _def: { services: infer TServices } }
-      ? InferServices<TServices>
-      : never
+  // Typed routes (defineTypedRoutes)
+  TAppOrContract extends Record<string, Record<string, { method: string; path: string }>>
+    ? TAppOrContract
+    : // Contract (defineVisionContract)
+      TAppOrContract extends VisionContract
+      ? InferContract<TAppOrContract>
+      : // Vision Server
+        TAppOrContract extends { _def: { services: infer TServices } }
+        ? InferServices<TServices>
+        : // Fallback: treat as-is
+          TAppOrContract
 
 /**
  * Infer from contract (adapters)
