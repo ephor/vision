@@ -1,5 +1,5 @@
 import { Terminal } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { SectionCard } from './ui/section-card'
 import type { LogEntry } from '@getvision/core'
 
 interface TraceLogsProps {
@@ -59,20 +59,17 @@ export function TraceLogs({ logs, title = 'Terminal Output' }: TraceLogsProps) {
   }
 
   return (
-    <Card className="border-border bg-card/50">
-      <CardHeader className="py-3 px-4 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-muted-foreground" />
-          <CardTitle className="text-sm font-medium font-mono text-muted-foreground uppercase tracking-wider">
-            {title}
-          </CardTitle>
-          <span className="ml-auto text-xs text-muted-foreground font-mono">
-            {logs.length} entries
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="font-mono text-[11px] md:text-xs overflow-x-auto max-h-[500px] overflow-y-auto p-4 space-y-0.5">
+    <SectionCard
+      title={title}
+      icon={Terminal}
+      contentClassName="p-0"
+      headerExtra={
+        <span className="ml-auto text-xs text-muted-foreground font-mono">
+          {logs.length} entries
+        </span>
+      }
+    >
+      <div className="font-mono text-[11px] md:text-xs overflow-x-auto max-h-[500px] overflow-y-auto p-4 space-y-0.5">
           {logs.map((log) => {
             const isSystemLog = log.message.includes('starting request') || log.message.includes('request completed') || log.message.includes('request failed')
             const { cleanMessage, properties: msgProperties } = isSystemLog ? parseLogMessage(log.message) : { cleanMessage: log.message, properties: null }
@@ -143,7 +140,6 @@ export function TraceLogs({ logs, title = 'Terminal Output' }: TraceLogsProps) {
             )
           })}
         </div>
-      </CardContent>
-    </Card>
+    </SectionCard>
   )
 }

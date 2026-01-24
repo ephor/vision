@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import Editor from '@monaco-editor/react'
-import { Play, Copy, Clock } from 'lucide-react'
+import { Copy, Play, Plus, X, Clock, Send, Plug } from 'lucide-react'
 import { Button } from './ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { SectionCard } from './ui/section-card'
 import { Badge } from './ui/badge'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { Checkbox } from './ui/checkbox'
 import { useRoutes, useAddClientMetrics } from '../hooks/useVision'
 import { TracesPanel } from './TracesPanel'
+import { JsonEditor } from './JsonEditor'
 import { JsonViewer } from './JsonViewer'
 import { TraceLogs } from './TraceLogs'
 import { useToast } from '../contexts/ToastContext'
 import { getBackendUrl } from '../lib/config'
+import { parseJson5 } from '../lib/parseJson5'
 import type { RouteMetadata } from '@getvision/core'
 
 type ExplorerTab = {
@@ -20,6 +22,9 @@ type ExplorerTab = {
   sessionId: string
   route: RouteMetadata | null
   urlParams: Record<string, string>
+  queryParams: Record<string, string>
+  // Custom query params added by user (not from schema)
+  customQueryParams: Array<{ key: string; value: string; enabled: boolean }>
   requestBody: string
   response: any
   requestTime: number | null
@@ -40,6 +45,8 @@ export function ApiExplorer() {
     sessionId: genId(),
     route: null,
     urlParams: {},
+    queryParams: {},
+    customQueryParams: [],
     requestBody: '',
     response: null,
     requestTime: null,
@@ -88,7 +95,7 @@ export function ApiExplorer() {
     const requestBody = route.requestBody?.template || ''
     
     setTabs(tabs => tabs.map(t => t.id === activeTabId
-      ? { ...t, route, title: route.path, response: null, requestTime: null, executedAt: null, urlParams: {}, requestBody }
+      ? { ...t, route, title: route.path, response: null, requestTime: null, executedAt: null, urlParams: {}, queryParams: {}, customQueryParams: t.customQueryParams || [], requestBody }
       : t
     ))
   }
@@ -109,7 +116,18 @@ export function ApiExplorer() {
         url = url.replace(`:${key}`, value)
       })
       
-      const fullUrl = `${getBackendUrl()}${url}`
+      // Build query string from schema query parameters and custom params
+      const schemaQueryEntries = Object.entries(tab.queryParams).filter(([, value]) => value !== '')
+      const customQueryEntries = (tab.customQueryParams || [])
+        .filter(p => p.enabled && p.key && p.value)
+        .map(p => [p.key, p.value] as [string, string])
+      
+      const allQueryEntries = [...schemaQueryEntries, ...customQueryEntries]
+      const queryString = allQueryEntries.length > 0
+        ? '?' + allQueryEntries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')
+        : ''
+      
+      const fullUrl = `${getBackendUrl()}${url}${queryString}`
       
       // Prepare request options
       const options: RequestInit = {
@@ -123,16 +141,12 @@ export function ApiExplorer() {
       // Add body for POST/PUT/PATCH
       if (['POST', 'PUT', 'PATCH'].includes(tab.route.method) && tab.requestBody) {
         try {
-          // Remove comments from JSON template before parsing
-          const cleanedBody = tab.requestBody
-            .split('\n')
-            .map(line => line.replace(/\/\/.*$/, '').trim())
-            .filter(line => line.length > 0)
-            .join('\n')
-          options.body = JSON.stringify(JSON.parse(cleanedBody))
-        } catch (e) {
-          // If parsing fails, try to send as-is
-          options.body = tab.requestBody
+          const parsedBody = parseJson5(tab.requestBody)
+          options.body = JSON.stringify(parsedBody)
+        } catch (err) {
+          addToast(err instanceof Error ? err.message : 'Invalid JSON5 body', 'error')
+          setLoading(false)
+          return
         }
       }
       
@@ -178,8 +192,37 @@ export function ApiExplorer() {
     } : t))
   }
 
+  const setQueryParam = (key: string, value: string) => {
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t, queryParams: { ...t.queryParams, [key]: value }
+    } : t))
+  }
+
   const setRequestBodyForTab = (value: string) => {
     setTabs(tabs => tabs.map(t => t.id === activeTabId ? { ...t, requestBody: value } : t))
+  }
+
+  const addCustomQueryParam = () => {
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      customQueryParams: [...(t.customQueryParams || []), { key: '', value: '', enabled: true }]
+    } : t))
+  }
+
+  const updateCustomQueryParam = (index: number, field: 'key' | 'value' | 'enabled', value: string | boolean) => {
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      customQueryParams: t.customQueryParams.map((p, i) => 
+        i === index ? { ...p, [field]: value } : p
+      )
+    } : t))
+  }
+
+  const removeCustomQueryParam = (index: number) => {
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      customQueryParams: t.customQueryParams.filter((_, i) => i !== index)
+    } : t))
   }
 
   const addTab = () => {
@@ -189,6 +232,8 @@ export function ApiExplorer() {
       sessionId: genId(),
       route: null,
       urlParams: {},
+      queryParams: {},
+      customQueryParams: [],
       requestBody: '',
       response: null,
       requestTime: null,
@@ -226,6 +271,7 @@ export function ApiExplorer() {
                     ? 'bg-primary text-primary-foreground' 
                     : 'hover:bg-accent text-foreground'
                   }`}
+                title={route.path}
               >
                 <div className="flex items-center gap-2">
                   <Badge 
@@ -295,11 +341,7 @@ export function ApiExplorer() {
           {activeTab.route ? (
             <div className="space-y-4">
               {/* API Caller Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold">API Caller</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <SectionCard title="API Caller" icon={Plug} contentClassName="space-y-4">
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Endpoint</Label>
                     <div className="flex gap-2">
@@ -316,12 +358,12 @@ export function ApiExplorer() {
                         {loading ? (
                           <span className="flex items-center gap-2">
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm font-medium">Calling...</span>
+                            <span className="text-sm font-medium">Sending...</span>
                           </span>
                         ) : (
                           <span className="flex items-center gap-2">
                             <Play className="w-4 h-4" />
-                            <span className="text-sm font-medium">Call API</span>
+                            <span className="text-sm font-medium">Send</span>
                           </span>
                         )}
                       </Button>
@@ -353,81 +395,156 @@ export function ApiExplorer() {
                     </div>
                   )}
 
-                  {/* Request Body */}
-                  {['POST', 'PUT', 'PATCH'].includes(activeTab.route.method) && (
+                  {/* Query Parameters */}
+                  {(activeTab.route.queryParams && activeTab.route.queryParams.fields.length > 0) || activeTab.customQueryParams.length > 0 ? (
                     <div>
-                      <Label className="text-sm font-medium mb-2 block">Request Body (JSON)</Label>
-                      <div className="border rounded-md overflow-hidden">
-                        <Editor
-                          height="200px"
-                          language="json"
-                          value={activeTab.requestBody}
-                          onChange={(value) => setRequestBodyForTab(value || '')}
-                          theme="vs-dark"
-                          options={{
-                            readOnly: false,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            automaticLayout: true,
-                            formatOnPaste: true,
-                            formatOnType: true,
-                            fontSize: 14,
-                            glyphMargin: false,
-                            folding: true,
-                            lineDecorationsWidth: 0,
-                            lineNumbersMinChars: 3,
-                            renderLineHighlight: 'all',
-                            tabSize: 2,
-                            insertSpaces: true,
-                            scrollbar: {
-                              vertical: 'auto',
-                              horizontal: 'auto',
-                              verticalScrollbarSize: 8,
-                              horizontalScrollbarSize: 8,
-                            },
-                          }}
-                        />
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-sm font-medium">Query Parameters</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addCustomQueryParam()}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      
+                      {/* Schema-defined query parameters */}
+                      {activeTab.route.queryParams && activeTab.route.queryParams.fields.length > 0 && (
+                        <div className="space-y-3 mb-3">
+                          {activeTab.route.queryParams.fields.map((field) => (
+                            <div key={field.name} className="grid grid-cols-4 gap-3 items-center">
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor={`query-${field.name}`} className="text-sm text-muted-foreground font-mono">{field.name}</Label>
+                                {field.required && (
+                                  <Badge variant="destructive" className="text-[10px] px-1 py-0">required</Badge>
+                                )}
+                              </div>
+                              <Input
+                                id={`query-${field.name}`}
+                                type="text"
+                                value={activeTab.queryParams[field.name] || ''}
+                                onChange={(e) => setQueryParam(field.name, e.target.value)}
+                                placeholder={field.description || `Enter ${field.name} (${field.type})`}
+                                className="col-span-3 text-sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Custom query parameters */}
+                      {activeTab.customQueryParams.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Custom Parameters</Label>
+                          {activeTab.customQueryParams.map((param, index) => (
+                            <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                              <div className="col-span-1 flex items-center justify-center">
+                                <Checkbox
+                                  checked={param.enabled}
+                                  onCheckedChange={(checked: boolean) => updateCustomQueryParam(index, 'enabled', checked)}
+                                />
+                              </div>
+                              <Input
+                                type="text"
+                                value={param.key}
+                                onChange={(e) => updateCustomQueryParam(index, 'key', e.target.value)}
+                                placeholder="Key"
+                                className="col-span-4 text-sm"
+                              />
+                              <Input
+                                type="text"
+                                value={param.value}
+                                onChange={(e) => updateCustomQueryParam(index, 'value', e.target.value)}
+                                placeholder="Value"
+                                className="col-span-6 text-sm"
+                              />
+                              <div className="col-span-1 flex justify-center">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeCustomQueryParam(index)}
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-sm font-medium">Query Parameters</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addCustomQueryParam()}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      <div className="p-4 bg-muted rounded-lg border">
+                        <p className="text-sm text-muted-foreground">No query parameters defined. Click "Add" to add custom parameters.</p>
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+
+                  {/* Request Body */}
+                  {['POST', 'PUT', 'PATCH'].includes(activeTab.route.method) && (
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Request Body</Label>
+                      <JsonEditor value={activeTab.requestBody} onChange={(value) => setRequestBodyForTab(value)} />
+                    </div>
+                  )}
+              </SectionCard>
 
               {/* Response Section */}
               {activeTab.response && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <CardTitle className="text-base font-semibold">Response</CardTitle>
-                        <Badge 
-                          className={`text-xs font-mono
-                            ${activeTab.response.status >= 200 && activeTab.response.status < 300 ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900' : ''}
-                            ${activeTab.response.status >= 400 ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900' : ''}
-                          `}
-                        >
-                          {activeTab.response.status || 'ERROR'}
-                        </Badge>
-                        {activeTab.requestTime && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="w-3 h-3" />
-                            {activeTab.requestTime}ms
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(JSON.stringify(activeTab.response.data, null, 2))}
+                <SectionCard
+                  title="Response"
+                  icon={Send}
+                  contentClassName="p-0"
+                  headerExtra={
+                    <>
+                      <Badge 
+                        className={`text-xs font-mono ml-2
+                          ${activeTab.response.status >= 200 && activeTab.response.status < 300 ? 'bg-green-500/20 text-green-400 hover:bg-green-500/20' : ''}
+                          ${activeTab.response.status >= 400 ? 'bg-red-500/20 text-red-400 hover:bg-red-500/20' : ''}
+                        `}
                       >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <JsonViewer data={activeTab.response.data || activeTab.response.error} />
-                  </CardContent>
-                </Card>
+                        {activeTab.response.status || 'ERROR'}
+                      </Badge>
+                      {activeTab.requestTime && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                          <Clock className="w-3 h-3" />
+                          {activeTab.requestTime}ms
+                        </span>
+                      )}
+                    </>
+                  }
+                  headerRight={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 cursor-pointer"
+                      onClick={() => navigator.clipboard.writeText(JSON.stringify(activeTab.response.data, null, 2))}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  }
+                >
+                  <JsonViewer data={activeTab.response.data || activeTab.response.error} showHeader={false} />
+                </SectionCard>
               )}
 
               {/* Request Logs Section */}

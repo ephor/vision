@@ -1,4 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
+import { SectionCard } from './ui/section-card'
 import { Badge } from './ui/badge'
 import { JsonViewer } from './JsonViewer'
 import type { Trace } from '@getvision/core'
@@ -23,60 +24,61 @@ export function TraceRequestResponse({ trace, formatDuration }: TraceRequestResp
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Request */}
-      <Card>
-        <CardHeader className="bg-muted">
-          <CardTitle className="text-base font-semibold">Request</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="space-y-3">
-            <div className="text-sm">
-              <Badge className="font-mono text-xs mr-2">{trace.method}</Badge>
-              <span className="font-mono text-sm break-all">{reqMeta?.url || trace.path}</span>
+      <SectionCard
+        title="Request"
+        icon={ArrowUpFromLine}
+        headerExtra={
+          <>
+            <Badge className="font-mono text-xs ml-2">{trace.method}</Badge>
+            <span className="font-mono text-xs text-muted-foreground ml-2">{formatDuration(trace.duration)}</span>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="font-mono text-sm break-all text-muted-foreground">{reqMeta?.url || trace.path}</div>
+          {reqMeta?.headers && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Headers</p>
+              <JsonViewer data={reqMeta.headers} showHeader={false} />
             </div>
-            {reqMeta?.headers && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Headers</p>
-                <JsonViewer data={reqMeta.headers} />
-              </div>
-            )}
-            {reqMeta?.body !== undefined && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Body</p>
-                <JsonViewer data={reqMeta.body} />
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          )}
+          {reqMeta?.body !== undefined && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Body</p>
+              <JsonViewer data={reqMeta.body} showHeader={false} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
 
       {/* Response */}
-      <Card>
-        <CardHeader className="bg-muted">
-          <CardTitle className="text-base font-semibold">Response</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Badge className={`font-mono text-xs ${getStatusBadgeClass(trace.statusCode)}`}>
-                {trace.statusCode || resMeta?.status || '-'}
-              </Badge>
-              <span className="text-xs text-muted-foreground">{formatDuration(trace.duration)}</span>
+      <SectionCard
+        title="Response"
+        icon={ArrowDownToLine}
+        headerExtra={
+          <>
+            <Badge className={`font-mono text-xs ml-2 ${getStatusBadgeClass(trace.statusCode)}`}>
+              {trace.statusCode || resMeta?.status || '-'}
+            </Badge>
+            <span className="text-xs text-muted-foreground font-mono ml-2">{formatDuration(trace.duration)}</span>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {resMeta?.headers && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Headers</p>
+              <JsonViewer data={resMeta.headers} showHeader={false} />
             </div>
-            {resMeta?.headers && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Headers</p>
-                <JsonViewer data={resMeta.headers} />
-              </div>
-            )}
-            {resMeta?.body !== undefined && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Body</p>
-                <JsonViewer data={resMeta.body} />
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          )}
+          {resMeta?.body !== undefined && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Body</p>
+              <JsonViewer data={resMeta.body} showHeader={false} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
     </div>
   )
 }

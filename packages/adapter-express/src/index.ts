@@ -459,13 +459,20 @@ export function enableAutoDiscovery(app: Application, options?: { services?: Ser
           
           // Try to get handler name and schema from stack
           let handlerName = 'anonymous'
-          let schema: any = undefined
+          let bodySchema: any = undefined
+          let querySchema: any = undefined
           
           if (layer.route.stack && layer.route.stack.length > 0) {
-            // Look for zValidator middleware with schema
             for (const stackItem of layer.route.stack) {
               if (stackItem.handle && (stackItem.handle as any).__visionSchema) {
-                schema = (stackItem.handle as any).__visionSchema
+                const visionSchema = (stackItem.handle as any).__visionSchema
+                const visionTarget = (stackItem.handle as any).__visionTarget
+                
+                if (visionTarget === 'query') {
+                  querySchema = visionSchema
+                } else if (visionTarget === 'body' || !visionTarget) {
+                  bodySchema = visionSchema
+                }
               }
               
               // Find the actual handler (last non-middleware function)
@@ -481,11 +488,18 @@ export function enableAutoDiscovery(app: Application, options?: { services?: Ser
             handler: handlerName,
           }
           
-          if (schema) {
-            route.schema = schema
-            const requestBody = generateTemplate(schema)
+          if (bodySchema) {
+            route.schema = bodySchema
+            const requestBody = generateTemplate(bodySchema)
             if (requestBody) {
               route.requestBody = requestBody
+            }
+          }
+          
+          if (querySchema) {
+            const queryParams = generateTemplate(querySchema)
+            if (queryParams) {
+              route.queryParams = queryParams
             }
           }
           

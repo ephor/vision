@@ -98,7 +98,7 @@ app.service<{ Variables: Variables; }>('users')
     '/users/:id',
     {
       input: z.object({
-        id: z.string()
+        isActive: z.string()
       }),
       output: z.object({
         id: z.string(),
@@ -110,11 +110,13 @@ app.service<{ Variables: Variables; }>('users')
         }))
       })
     },
-    async ({ id }, c) => {
+    async ({ isActive }, c) => {
+      const { id } = c.req.param()
       // Example: Add context using built-in c.addContext()
       c.addContext({
         'user.id': id,
-        'request.type': 'user_details'
+        'request.type': 'user_details',
+        'user.isActive': isActive
       })
 
       const sleep = (ms: number) => {
@@ -127,11 +129,10 @@ app.service<{ Variables: Variables; }>('users')
       // First span - fetch user (c.span is built-in!)
       const user = c.span('db.select', {
         'db.system': 'postgresql',
-        'db.table': 'users',
-        'user.id': id
+        'db.table': 'users'
       }, () => {
         sleep(50)
-        return { id, name: 'Alice', email: 'alice@example.com' }
+        return { id: id, name: 'Alice', email: 'alice@example.com' }
       })
 
       console.log("------------user---------------");
@@ -141,8 +142,7 @@ app.service<{ Variables: Variables; }>('users')
       // Second span - fetch articles
       const articles = c.span('db.select', {
         'db.system': 'postgresql',
-        'db.table': 'articles',
-        'article.user_id': id
+        'db.table': 'articles'
       }, () => {
         sleep(80)
         return [

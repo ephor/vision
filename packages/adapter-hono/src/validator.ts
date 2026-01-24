@@ -1,5 +1,5 @@
 import { zValidator as originalZValidator } from '@hono/zod-validator'
-import type { ZodType, ZodTypeAny } from 'zod'
+import type { ZodTypeAny } from 'zod'
 import type { MiddlewareHandler } from 'hono'
 import type { StandardSchemaV1, ValidationSchema } from '@getvision/core'
 import {
@@ -92,7 +92,25 @@ export function validator<Target extends ValidationTargetKey>(
     }
   }
 
-  (middleware as any).__visionSchema = schema
+  // Attach schema and target for Vision introspection
+  // Use Object.defineProperty to avoid potential setter issues
+  try {
+    Object.defineProperty(middleware, '__visionSchema', {
+      value: schema,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+    Object.defineProperty(middleware, '__visionValidatorTarget', {
+      value: target,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  } catch (e) {
+    console.error('Failed to attach schema to middleware:', e)
+    console.log('Schema type:', typeof schema)
+  }
 
   return middleware
 }

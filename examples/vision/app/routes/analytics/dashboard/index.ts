@@ -9,7 +9,10 @@ app.service('analytics')
     'GET',
     '/',
     {
-      input: z.object({}),
+      input: z.object({
+        dateFrom: z.string(),
+        dateTo: z.string(),
+      }),
       output: z.object({
         totalUsers: z.number(),
         totalOrders: z.number(),

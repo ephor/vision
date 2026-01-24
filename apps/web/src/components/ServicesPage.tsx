@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppStatus, useServices } from '../hooks/useVision'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { useAppStatus, useServices } from '@/hooks/useVision'
+import { SectionCard } from './ui/section-card'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { ScrollArea } from './ui/scroll-area'
-import { Database, Server, Activity, ExternalLink, ChevronRight, ChevronDown } from 'lucide-react'
+import { Database, Server, Activity, ExternalLink, ChevronRight, ChevronDown, Link2 } from 'lucide-react'
 
 export function ServicesPage() {
   const { data: status } = useAppStatus()
@@ -93,7 +93,7 @@ export function ServicesPage() {
             <Badge variant="secondary" className="text-xs">{services.length}</Badge>
           </div>
         </div>
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1" style={{ contentVisibility: 'auto' }}>
           <div className="p-3">
             {services.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-12">
@@ -155,94 +155,84 @@ export function ServicesPage() {
         <h1 className="text-lg font-semibold mb-6">Service Catalog</h1>
 
         {/* Service Overview Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <Activity className="w-5 h-5" />
-              {status?.name || 'Unknown Service'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Version</p>
-                <p className="text-sm font-medium">{status?.version || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Framework</p>
-                <p className="text-sm font-medium">{status?.metadata?.framework || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Status</p>
-                <Badge variant={status?.running ? "default" : "secondary"} className={status?.running ? "bg-green-600" : ""}>
-                  {status?.running ? 'Running' : 'Stopped'}
-                </Badge>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Endpoints</p>
-                <p className="text-sm font-medium">{totalEndpoints}</p>
-              </div>
+        <SectionCard
+          title={status?.name || 'Unknown Service'}
+          icon={Activity}
+          className="mb-6"
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Version</p>
+              <p className="text-sm font-medium">{status?.version || 'N/A'}</p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Framework</p>
+              <p className="text-sm font-medium">{status?.metadata?.framework || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Status</p>
+              <Badge variant={status?.running ? "default" : "secondary"} className={status?.running ? "bg-green-600" : ""}>
+                {status?.running ? 'Running' : 'Stopped'}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Endpoints</p>
+              <p className="text-sm font-medium">{totalEndpoints}</p>
+            </div>
+          </div>
 
-            {status?.description && (
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-xs text-muted-foreground mb-1">Description</p>
-                <p className="text-sm">{status.description}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          {status?.description && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Description</p>
+              <p className="text-sm">{status.description}</p>
+            </div>
+          )}
+        </SectionCard>
 
         {/* Integrations Card */}
         {integrations && Object.keys(integrations).length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Integrations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(integrations).map(([key, value]) => (
-                  <div key={key} className="flex items-start gap-3 p-3 bg-muted rounded-lg border">
-                    <div className="mt-0.5">{getIntegrationIcon(key)}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium capitalize">{key}</p>
-                      <p className="text-xs text-muted-foreground font-mono truncate" title={value}>
-                        {maskConnectionString(value)}
-                      </p>
-                    </div>
+          <SectionCard title="Integrations" icon={Link2} className="mb-6">
+            <div className="space-y-3">
+              {Object.entries(integrations).map(([key, value]) => (
+                <div key={key} className="flex items-start gap-3 p-3 bg-muted rounded-lg border">
+                  <div className="mt-0.5">{getIntegrationIcon(key)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium capitalize">{key}</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate" title={value}>
+                      {maskConnectionString(value)}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
         )}
 
         {/* Selected Endpoint Details */}
         {selectedEndpoint && (
-          <Card>
-            <CardHeader className="border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Badge className={`text-xs font-mono ${getMethodBadgeClass(selectedEndpoint.method)}`}>
-                    {selectedEndpoint.method}
-                  </Badge>
-                  <div>
-                    <div className="font-mono text-md font-semibold">{selectedEndpoint.path}</div>
-                    <div className="text-sm text-muted-foreground mt-0.5">{selectedEndpoint.service} service</div>
-                  </div>
-                </div>
-                <Button 
-                  onClick={handleCallAPI}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                  size="sm"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Test in API Explorer
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6">
+          <SectionCard
+            title={selectedEndpoint.path}
+            icon={Server}
+            headerExtra={
+              <>
+                <Badge className={`text-xs font-mono ml-2 ${getMethodBadgeClass(selectedEndpoint.method)}`}>
+                  {selectedEndpoint.method}
+                </Badge>
+                <span className="text-xs text-muted-foreground font-mono ml-2">{selectedEndpoint.service}</span>
+              </>
+            }
+            headerRight={
+              <Button 
+                onClick={handleCallAPI}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs cursor-pointer"
+                size="sm"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Test in API Explorer
+              </Button>
+            }
+          >
+            <div className="space-y-6">
                 {/* Path Parameters */}
                 {pathParams.length > 0 ? (
                   <div>
@@ -258,15 +248,38 @@ export function ServicesPage() {
                   </div>
                 ) : null}
 
-                {/* Query Parameters (for GET requests) */}
-                {selectedEndpoint.method === 'GET' && (
+                {/* Query Parameters */}
+                {selectedRoute?.queryParams && selectedRoute.queryParams.fields.length > 0 ? (
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3">Query Parameters</h3>
+                    <div className="space-y-2">
+                      {selectedRoute.queryParams.fields.map((field) => (
+                        <div key={field.name} className="flex items-start gap-3 p-3 bg-muted rounded-lg border">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <code className="text-sm font-mono font-semibold">{field.name}</code>
+                              <Badge variant="outline" className="text-xs">{field.type}</Badge>
+                              {field.required && (
+                                <Badge variant="destructive" className="text-xs">required</Badge>
+                              )}
+                            </div>
+                            {field.description && (
+                              <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Auto-generated from Zod schema</p>
+                  </div>
+                ) : selectedEndpoint.method === 'GET' ? (
                   <div>
                     <h3 className="text-sm font-semibold mb-3">Query Parameters</h3>
                     <div className="p-4 bg-muted rounded-lg border">
-                      <p className="text-sm text-muted-foreground">Optional query parameters can be added in API Explorer</p>
+                      <p className="text-sm text-muted-foreground">No query schema defined. Add query parameters in API Explorer</p>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 {/* Request Body (for POST/PUT/PATCH) */}
                 {['POST', 'PUT', 'PATCH'].includes(selectedEndpoint.method) && (
@@ -341,9 +354,8 @@ export function ServicesPage() {
                     </code>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </SectionCard>
         )}
         </div>
       </ScrollArea>

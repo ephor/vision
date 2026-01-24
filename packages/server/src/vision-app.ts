@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Env, Schema, Input, MiddlewareHandler } from 'hono'
+import type { Env, Schema } from 'hono'
 import { VisionCore, runInTraceContext } from '@getvision/core'
 import type { RouteMetadata } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
@@ -163,7 +163,6 @@ export class Vision<
   private serviceBuilders: ServiceBuilder<any, E>[] = []
   private fileBasedRoutes: RouteMetadata[] = []
   private bunServer?: any
-  private _cleanupPromise?: Promise<void>
   private signalHandler?: () => Promise<void>
 
   constructor(config?: VisionConfig) {
@@ -540,6 +539,7 @@ export class Vision<
         method: r.method,
         path: r.path,
         handler: name,
+        queryParams: r.queryParams,
         requestBody: r.requestBody,
         responseBody: r.responseBody,
       }))

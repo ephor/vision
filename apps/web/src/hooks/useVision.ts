@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getVisionClient } from '../lib/websocket'
+import { getVisionClient } from '@/lib/websocket'
 import type { Trace, AppStatus, RouteMetadata } from '@getvision/core'
 
 /**
@@ -48,25 +48,29 @@ export function useTraces(filters?: {
   limit?: number
 }) {
   const queryClient = useQueryClient()
+  const stableFilters = useMemo(
+    () => (filters ? { ...filters } : undefined),
+    [filters?.method, filters?.statusCode, filters?.limit]
+  )
 
   // Subscribe to new traces
   useEffect(() => {
     const client = getVisionClient()
     const unsubscribe = client.on('trace.new', (trace: Trace) => {
       // Update cache with the same key as the query
-      queryClient.setQueryData<Trace[]>(['traces', filters], (old = []) => {
-        return [trace, ...old].slice(0, filters?.limit ?? 100)
+      queryClient.setQueryData<Trace[]>(['traces', stableFilters], (old = []) => {
+        return [trace, ...old].slice(0, stableFilters?.limit ?? 100)
       })
     })
 
     return unsubscribe
-  }, [queryClient, filters])
+  }, [queryClient, stableFilters])
 
   return useQuery({
-    queryKey: ['traces', filters],
+    queryKey: ['traces', stableFilters],
     queryFn: async () => {
       const client = getVisionClient()
-      return await client.call<Trace[]>('traces/list', filters)
+      return await client.call<Trace[]>('traces/list', stableFilters)
     },
   })
 }
@@ -148,15 +152,9 @@ export function useLogs(params?: { level?: string; search?: string; limit?: numb
       setLogs((prev) => [entry, ...prev].slice(0, params?.limit || 100))
     }
 
-    client.on('log.entry', handleLogEntry)
+    const unsubscribe = client.on('log.entry', handleLogEntry)
 
-    return () => {
-      // Cleanup - remove listener
-      const listeners = (client as any).eventHandlers?.get('log.entry')
-      if (listeners) {
-        listeners.delete(handleLogEntry)
-      }
-    }
+    return unsubscribe
   }, [params?.limit])
 
   // Fetch initial logs

@@ -205,21 +205,6 @@ export function SpansWaterfall({ spans, formatDuration }: SpansWaterfallProps) {
   const tEnd = Math.max(...spans.map(s => s.endTime || s.startTime))
   const totalDuration = tEnd - t0 || 1
   const tree = buildSpanTree(spans)
-  
-  // Debug: log tree structure
-  console.log('[SpansWaterfall] Tree:', tree.map(s => ({
-    name: s.name,
-    id: s.id.slice(0, 8),
-    parentId: s.parentId?.slice(0, 8),
-    duration: s.duration
-  })))
-  
-  console.log('[SpansWaterfall] All spans:', spans.map(s => ({
-    name: s.name,
-    id: s.id.slice(0, 8),
-    parentId: s.parentId?.slice(0, 8),
-    duration: s.duration
-  })))
 
   return (
     <div className="space-y-3">
