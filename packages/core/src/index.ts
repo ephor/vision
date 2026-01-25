@@ -11,4 +11,6 @@ export {
   stopDrizzleStudio,
 } from './utils/service-detection'
 export type { PackageInfo, IntegrationConfig, DrizzleInfo } from './utils/service-detection'
+export { generateClient, writeGeneratedClient } from './codegen/client-generator'
+export type { ClientGeneratorOptions } from './codegen/client-generator'
 export type * from './types/index'

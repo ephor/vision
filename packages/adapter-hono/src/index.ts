@@ -8,8 +8,9 @@ import {
   startDrizzleStudio,
   stopDrizzleStudio,
   runInTraceContext,
+  writeGeneratedClient,
 } from '@getvision/core'
-import type { RouteMetadata, VisionHonoOptions, ServiceDefinition } from '@getvision/core'
+import type { RouteMetadata, VisionHonoOptions, ServiceDefinition, ClientCodegenConfig } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { extractSchema } from "./validator";
 
@@ -82,6 +83,7 @@ export function useVisionSpan() {
 let visionInstance: VisionCore | null = null
 const discoveredRoutes: RouteMetadata[] = []
 let registerTimer: NodeJS.Timeout | null = null
+let clientConfig: ClientCodegenConfig | null = null
 
 function scheduleRegistration(options?: { services?: ServiceDefinition[] }) {
   if (!visionInstance) return
@@ -93,6 +95,20 @@ function scheduleRegistration(options?: { services?: ServiceDefinition[] }) {
     const services = Object.values(grouped)
     visionInstance.registerServices(services)
     console.log(`📋 Auto-discovered ${discoveredRoutes.length} routes (${services.length} services)`)
+
+    // Auto-generate client if configured
+    if (clientConfig && discoveredRoutes.length > 0) {
+      try {
+        writeGeneratedClient(discoveredRoutes, {
+          output: clientConfig.output,
+          baseUrl: clientConfig.baseUrl,
+          includeValidation: clientConfig.includeValidation,
+          framework: clientConfig.framework,
+        })
+      } catch (error) {
+        console.error('❌ Failed to generate Vision client:', error instanceof Error ? error.message : error)
+      }
+    }
   }, 100)
 }
 
@@ -211,6 +227,11 @@ export function visionAdapter(options: VisionHonoOptions = {}): MiddlewareHandle
 
   if (!enabled) {
     return async (c, next) => await next()
+  }
+
+  // Store client config for auto-generation
+  if (options.client) {
+    clientConfig = options.client
   }
 
   // Initialize Vision Core once

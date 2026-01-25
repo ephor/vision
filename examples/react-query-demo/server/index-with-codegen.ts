@@ -1,32 +1,48 @@
 /**
- * Vision React Query Demo Server
- * Shows how to use Vision with tRPC-like client
+ * Vision React Query Demo Server with AUTO-CODEGEN
+ * Client is auto-generated on server start!
  */
 
 import { Hono } from 'hono'
 import { visionAdapter, enableAutoDiscovery, validator } from '@getvision/adapter-hono'
-import { routes, type User } from '../shared/routes'
+import { z } from 'zod'
 
 const app = new Hono()
 
-// Add Vision adapter with auto-codegen
+// Add Vision adapter with AUTO-CODEGEN! 🔥
 app.use('*', visionAdapter({
   port: 9500,
   service: { name: 'React Query Demo API' },
-  // 🔥 Auto-generate type-safe client!
+
+  // 🚀 AUTO-GENERATE CLIENT ON STARTUP!
   client: {
-    output: './client/generated.ts',
+    output: './client/generated.ts',  // Auto-generated file
+    watch: true,  // Regenerate on route changes (dev mode)
     baseUrl: 'http://localhost:3000',
-    watch: true,
-    includeValidation: true
+    includeValidation: true  // Include Zod schemas in generated code
   }
 }))
 
-// IMPORTANT: Enable auto-discovery BEFORE defining routes
-enableAutoDiscovery(app)
+// Types
+const userSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  createdAt: z.string().datetime()
+})
+
+const createUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email()
+})
+
+const paginationSchema = z.object({
+  page: z.coerce.number().default(1),
+  limit: z.coerce.number().default(10)
+})
 
 // In-memory database
-const users: User[] = [
+const users: z.infer<typeof userSchema>[] = [
   {
     id: 1,
     name: 'John Doe',
@@ -41,8 +57,8 @@ const users: User[] = [
   }
 ]
 
-// Routes - use shared schemas from routes contract
-app.get('/users/list', validator('query', routes.users.list.input), (c) => {
+// Routes - standard REST endpoints (НЕ ЗМІНИЛОСЬ!)
+app.get('/users/list', validator('query', paginationSchema), (c) => {
   const { page, limit } = c.req.valid('query')
   const start = (page - 1) * limit
   const end = start + limit
@@ -66,7 +82,7 @@ app.get('/users/:id', (c) => {
   return c.json(user)
 })
 
-app.post('/users/create', validator('json', routes.users.create.input), (c) => {
+app.post('/users/create', validator('json', createUserSchema), (c) => {
   const input = c.req.valid('json')
 
   const newUser = {
@@ -82,7 +98,7 @@ app.post('/users/create', validator('json', routes.users.create.input), (c) => {
   return c.json(newUser, 201)
 })
 
-app.put('/users/:id/update', validator('json', routes.users.update.input), (c) => {
+app.put('/users/:id/update', validator('json', createUserSchema.partial()), (c) => {
   const id = parseInt(c.req.param('id'))
   const input = c.req.valid('json')
 
@@ -113,14 +129,16 @@ app.delete('/users/:id/delete', (c) => {
   return c.json({ success: true, user: deletedUser })
 })
 
+// Enable auto-discovery
+// Vision будає генерує client/generated.ts автоматично! ✨
+enableAutoDiscovery(app)
+
 const port = 3000
 console.log(`🚀 Server running at http://localhost:${port}`)
 console.log(`📊 Vision Dashboard at http://localhost:9500`)
+console.log(`✨ Client auto-generated at: ./client/generated.ts`)
 
 export default {
   port,
   fetch: app.fetch,
 }
-
-// Export type for client
-export type AppRouter = typeof app

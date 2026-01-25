@@ -30,6 +30,37 @@ export interface DrizzleConfig {
 }
 
 /**
+ * Client code generation configuration
+ */
+export interface ClientCodegenConfig {
+  /**
+   * Output file path for generated client
+   * @example './src/api/generated.ts'
+   */
+  output: string
+
+  /**
+   * Base URL for API (optional, can be set at runtime)
+   */
+  baseUrl?: string
+
+  /**
+   * Watch mode - regenerate on route changes (default: true in dev)
+   */
+  watch?: boolean
+
+  /**
+   * Include runtime validation with Zod (default: true)
+   */
+  includeValidation?: boolean
+
+  /**
+   * Framework for generated code (default: 'react-query')
+   */
+  framework?: 'react-query' | 'vanilla'
+}
+
+/**
  * Service definition for manual grouping
  */
 export interface ServiceDefinition {
@@ -50,6 +81,20 @@ export interface BaseAdapterOptions {
   service?: ServiceConfig
   services?: ServiceDefinition[]
   drizzle?: DrizzleConfig
+
+  /**
+   * Auto-generate type-safe client (experimental)
+   * @example
+   * ```typescript
+   * visionAdapter({
+   *   client: {
+   *     output: './client/generated.ts',
+   *     watch: true
+   *   }
+   * })
+   * ```
+   */
+  client?: ClientCodegenConfig
 }
 
 /**
