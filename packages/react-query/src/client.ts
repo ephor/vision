@@ -67,20 +67,28 @@ type RouteMetadataExport = {
  * Auto-discovers routes from your API and generates type-safe client
  *
  * @example
- * // With Hono/Express/Fastify adapter
- * import type { AppRouter } from './server' // Type only!
- *
- * const api = createVisionClient<AppRouter>({
- *   baseUrl: 'http://localhost:3000',        // Your API
- *   dashboardUrl: 'http://localhost:9500'    // Vision Dashboard (optional)
+ * // With shared routes (best for monorepo)
+ * import { routes } from './shared/routes'
+ * const api = createVisionClient(routes, {
+ *   baseUrl: 'http://localhost:3000'
  * })
  *
- * // Usage - like tRPC!
- * const { data } = useQuery(api.chats.paginated.queryOptions({ pageId, limit: 50 }))
+ * @example
+ * // With type-only import (auto-discovery)
+ * import type { AppRouter } from './server'
+ * const api = createVisionClient<AppRouter>({
+ *   baseUrl: 'http://localhost:3000',
+ *   dashboardUrl: 'http://localhost:9500'
+ * })
  */
-export function createVisionClient<TAppOrContract>(
-  config: VisionClientConfig
+export function createVisionClient<TAppOrContract = any>(
+  routesOrConfig: TAppOrContract | VisionClientConfig,
+  maybeConfig?: VisionClientConfig
 ): VisionClient<InferVisionRouter<TAppOrContract>> {
+  // Determine if first arg is routes or config
+  const isRoutesFirst = maybeConfig !== undefined
+  const routes = isRoutesFirst ? routesOrConfig : undefined
+  const config = isRoutesFirst ? maybeConfig! : (routesOrConfig as VisionClientConfig)
   const queryClient = config.queryClient || new QueryClient()
   const fetcher = config.fetch || (globalThis.fetch as typeof fetch)
   const dashboardUrl = config.dashboardUrl || 'http://localhost:9500'
@@ -89,9 +97,45 @@ export function createVisionClient<TAppOrContract>(
   let routesMetadata: RouteMetadataExport[] | null = null
   let routesMap: Map<string, RouteMetadataExport> | null = null
 
-  // Fetch routes metadata from Vision Dashboard
+  // Convert shared routes to metadata format
+  const convertRoutesToMetadata = (routesObj: any): RouteMetadataExport[] => {
+    const metadata: RouteMetadataExport[] = []
+
+    for (const [serviceName, procedures] of Object.entries(routesObj)) {
+      for (const [procedureName, route] of Object.entries(procedures as any)) {
+        metadata.push({
+          method: route.method,
+          path: route.path,
+          procedure: [serviceName, procedureName],
+          type: route.method === 'GET' ? 'query' : 'mutation',
+          schema: {
+            input: route.input,
+            output: route.output
+          }
+        })
+      }
+    }
+
+    return metadata
+  }
+
+  // Fetch routes metadata from Vision Dashboard or use provided routes
   const fetchRoutesMetadata = async (): Promise<RouteMetadataExport[]> => {
     if (routesMetadata) return routesMetadata
+
+    // If routes provided directly, use them
+    if (routes) {
+      routesMetadata = convertRoutesToMetadata(routes)
+
+      // Build map for quick lookup
+      routesMap = new Map()
+      for (const route of routesMetadata) {
+        routesMap.set(route.path, route)
+      }
+
+      console.log(`✅ Vision: Loaded ${routesMetadata.length} routes from shared schemas`)
+      return routesMetadata
+    }
 
     try {
       // Fetch routes metadata via simple HTTP GET

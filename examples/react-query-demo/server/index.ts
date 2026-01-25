@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono'
 import { visionAdapter, enableAutoDiscovery, validator } from '@getvision/adapter-hono'
-import { z } from 'zod'
+import { routes, type User } from '../shared/routes'
 
 const app = new Hono()
 
@@ -15,26 +15,8 @@ app.use('*', visionAdapter({
   service: { name: 'React Query Demo API' }
 }))
 
-// Types
-const userSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string().email(),
-  createdAt: z.string().datetime()
-})
-
-const createUserSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email()
-})
-
-const paginationSchema = z.object({
-  page: z.coerce.number().default(1),
-  limit: z.coerce.number().default(10)
-})
-
 // In-memory database
-const users: Array<z.infer<typeof userSchema>> = [
+const users: User[] = [
   {
     id: 1,
     name: 'John Doe',
@@ -49,8 +31,8 @@ const users: Array<z.infer<typeof userSchema>> = [
   }
 ]
 
-// Routes - standard REST endpoints
-app.get('/users/list', validator('query', paginationSchema), (c) => {
+// Routes - use shared schemas from routes contract
+app.get('/users/list', validator('query', routes.users.list.input), (c) => {
   const { page, limit } = c.req.valid('query')
   const start = (page - 1) * limit
   const end = start + limit
@@ -74,7 +56,7 @@ app.get('/users/:id', (c) => {
   return c.json(user)
 })
 
-app.post('/users/create', validator('json', createUserSchema), (c) => {
+app.post('/users/create', validator('json', routes.users.create.input), (c) => {
   const input = c.req.valid('json')
 
   const newUser = {
@@ -90,7 +72,7 @@ app.post('/users/create', validator('json', createUserSchema), (c) => {
   return c.json(newUser, 201)
 })
 
-app.put('/users/:id/update', validator('json', createUserSchema.partial()), (c) => {
+app.put('/users/:id/update', validator('json', routes.users.update.input), (c) => {
   const id = parseInt(c.req.param('id'))
   const input = c.req.valid('json')
 

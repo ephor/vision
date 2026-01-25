@@ -29,32 +29,49 @@ app.post('/users/create', validator('json', schema), handler)
 enableAutoDiscovery(app)
 ```
 
-### 2. Client Setup with Type Safety
+### 2. Shared Schemas (Single Source of Truth)
 
 ```typescript
-// client/api.ts
-import { createVisionClient, defineTypedRoutes } from '@getvision/react-query'
-
-export const routes = defineTypedRoutes({
+// shared/routes.ts - Used by both server and client
+export const routes = {
   users: {
     list: {
-      method: 'GET',
+      method: 'GET' as const,
       path: '/users/list',
-      input: paginationSchema,
-      output: usersResponseSchema
+      input: z.object({ page: z.number(), limit: z.number() }),
+      output: z.object({ users: z.array(userSchema), ... })
     },
     create: {
-      method: 'POST',
+      method: 'POST' as const,
       path: '/users/create',
       input: createUserSchema,
       output: userSchema
     }
   }
-})
+} as const
+```
 
-export const api = createVisionClient<typeof routes>({
-  baseUrl: 'http://localhost:3000',
-  dashboardUrl: 'http://localhost:9500'
+### 3. Server Uses Shared Schemas
+
+```typescript
+// server/index.ts
+import { routes } from '../shared/routes'
+
+// Use schemas from routes contract
+app.get('/users/list', validator('query', routes.users.list.input), handler)
+app.post('/users/create', validator('json', routes.users.create.input), handler)
+```
+
+### 4. Client Uses Shared Schemas
+
+```typescript
+// client/api.ts
+import { createVisionClient } from '@getvision/react-query'
+import { routes } from '../shared/routes'
+
+// ✅ Runtime + Types - no duplication!
+export const api = createVisionClient(routes, {
+  baseUrl: 'http://localhost:3000'
 })
 ```
 

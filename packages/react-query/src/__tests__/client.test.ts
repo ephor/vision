@@ -57,6 +57,39 @@ describe('createVisionClient', () => {
     mockFetch.mockClear()
   })
 
+  test('should create client with shared routes (no dashboard needed)', async () => {
+    const sharedRoutes = {
+      users: {
+        list: {
+          method: 'GET' as const,
+          path: '/users/list',
+          input: {} as { limit: number },
+          output: [] as Array<{ id: number; name: string }>
+        }
+      }
+    }
+
+    const api = createVisionClient(sharedRoutes, {
+      baseUrl: 'http://localhost:3000',
+      fetch: mockFetch as any,
+      queryClient: new QueryClient()
+    })
+
+    expect(api).toBeDefined()
+    expect(api.queryClient).toBeDefined()
+
+    // Should work without dashboard
+    const options = api.users.list.queryOptions({ limit: 10 })
+    expect(options.queryKey).toEqual(['users', 'list', { limit: 10 }])
+
+    // Call API
+    const data = await options.queryFn()
+    expect(data).toEqual([
+      { id: 1, name: 'John' },
+      { id: 2, name: 'Jane' }
+    ])
+  })
+
   test('should create client with typed routes', () => {
     const routes = defineTypedRoutes({
       users: {
