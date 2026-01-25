@@ -6,6 +6,8 @@
 import type { RouteMetadata } from '../types'
 import { writeFileSync, existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
+import { isZodSchema } from '../validation/adapters/zod'
+import { isValibotSchema } from '../validation/adapters/valibot'
 
 export interface ClientGeneratorOptions {
   /**
@@ -73,8 +75,8 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
       let inputSchema = 'z.void()'
 
       if (route.schema?.input) {
-        // Use the actual Zod schema
-        const serialized = serializeZodSchema(route.schema.input)
+        // Use the actual schema (Zod, Valibot, or other)
+        const serialized = serializeSchema(route.schema.input)
         if (serialized !== 'z.unknown()') {
           inputSchema = serialized
         } else {
@@ -167,6 +169,68 @@ ${generateTypeExports(serviceMap)}
 }
 
 /**
+ * Serialize any validation schema to Zod TypeScript code
+ * Supports Zod (v3/v4), Valibot, and Standard Schema
+ */
+function serializeSchema(schema: any): string {
+  // Detect schema library
+  if (isZodSchema(schema)) {
+    return serializeZodSchema(schema)
+  }
+
+  if (isValibotSchema(schema)) {
+    return serializeValibotSchema(schema)
+  }
+
+  // Fallback to unknown
+  return 'z.unknown()'
+}
+
+/**
+ * Serialize Valibot schema to Zod TypeScript code
+ * Converts Valibot schemas to equivalent Zod syntax
+ */
+function serializeValibotSchema(schema: any): string {
+  if (!schema || typeof schema !== 'object') {
+    return 'z.unknown()'
+  }
+
+  const type = schema.type
+
+  switch (type) {
+    case 'object': {
+      const entries = schema.entries || {}
+      const fields = Object.entries(entries).map(([key, value]: [string, any]) => {
+        return `  ${key}: ${serializeSchema(value)}`
+      })
+      return `z.object({\n${fields.join(',\n')}\n})`
+    }
+    case 'string':
+      return 'z.string()'
+    case 'number':
+      return 'z.coerce.number()'
+    case 'boolean':
+      return 'z.boolean()'
+    case 'array':
+      return `z.array(${serializeSchema(schema.item)})`
+    case 'optional':
+      return `${serializeSchema(schema.wrapped)}.optional()`
+    case 'nullable':
+      return `${serializeSchema(schema.wrapped)}.nullable()`
+    case 'union':
+      return `z.union([${schema.options?.map(serializeSchema).join(', ')}])`
+    case 'literal':
+      return `z.literal(${JSON.stringify(schema.literal)})`
+    case 'picklist':
+      // Valibot's picklist is like Zod's enum
+      return `z.enum([${schema.options?.map((v: string) => `'${v}'`).join(', ')}])`
+    default:
+      console.warn(`Unknown Valibot type: ${type}`)
+      return 'z.unknown()'
+  }
+}
+
+/**
  * Serialize Zod schema to TypeScript code
  * Supports both Zod v3 (_def.typeName) and Zod v4 (def.type)
  */
@@ -184,7 +248,7 @@ function serializeZodSchema(schema: any): string {
       case 'object': {
         const shape = def.shape || {}
         const fields = Object.entries(shape).map(([key, value]: [string, any]) => {
-          return `  ${key}: ${serializeZodSchema(value)}`
+          return `  ${key}: ${serializeSchema(value)}`
         })
         return `z.object({\n${fields.join(',\n')}\n})`
       }
@@ -197,25 +261,25 @@ function serializeZodSchema(schema: any): string {
       case 'boolean':
         return 'z.boolean()'
       case 'array':
-        return `z.array(${serializeZodSchema(def.element)})`
+        return `z.array(${serializeSchema(def.element)})`
       case 'optional':
-        return `${serializeZodSchema(def.value)}.optional()`
+        return `${serializeSchema(def.value)}.optional()`
       case 'nullable':
-        return `${serializeZodSchema(def.value)}.nullable()`
+        return `${serializeSchema(def.value)}.nullable()`
       case 'default':
         const defaultValue = typeof def.value === 'function' ? def.value() : def.value
-        return `${serializeZodSchema(def.schema)}.default(${JSON.stringify(defaultValue)})`
+        return `${serializeSchema(def.schema)}.default(${JSON.stringify(defaultValue)})`
       case 'enum':
         return `z.enum([${def.values?.map((v: string) => `'${v}'`).join(', ')}])`
       case 'literal':
         return `z.literal(${JSON.stringify(def.value)})`
       case 'union':
-        return `z.union([${def.options?.map(serializeZodSchema).join(', ')}])`
+        return `z.union([${def.options?.map(serializeSchema).join(', ')}])`
       case 'record':
-        return `z.record(${serializeZodSchema(def.valueType)})`
+        return `z.record(${serializeSchema(def.valueType)})`
       case 'transform':
       case 'refine':
-        return serializeZodSchema(def.schema)
+        return serializeSchema(def.schema)
       default:
         console.warn(`Unknown Zod v4 type: ${type}`)
         return 'z.unknown()'
@@ -231,7 +295,7 @@ function serializeZodSchema(schema: any): string {
       case 'ZodObject': {
         const shape = schema.shape || schema._def.shape()
         const fields = Object.entries(shape).map(([key, value]: [string, any]) => {
-          return `  ${key}: ${serializeZodSchema(value)}`
+          return `  ${key}: ${serializeSchema(value)}`
         })
         return `z.object({\n${fields.join(',\n')}\n})`
       }
@@ -242,25 +306,25 @@ function serializeZodSchema(schema: any): string {
       case 'ZodBoolean':
         return 'z.boolean()'
       case 'ZodArray':
-        return `z.array(${serializeZodSchema(def.type)})`
+        return `z.array(${serializeSchema(def.type)})`
       case 'ZodOptional':
-        return `${serializeZodSchema(def.innerType)}.optional()`
+        return `${serializeSchema(def.innerType)}.optional()`
       case 'ZodNullable':
-        return `${serializeZodSchema(def.innerType)}.nullable()`
+        return `${serializeSchema(def.innerType)}.nullable()`
       case 'ZodDefault': {
         const defaultValue = typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue
-        return `${serializeZodSchema(def.innerType)}.default(${JSON.stringify(defaultValue)})`
+        return `${serializeSchema(def.innerType)}.default(${JSON.stringify(defaultValue)})`
       }
       case 'ZodEnum':
         return `z.enum([${def.values.map((v: string) => `'${v}'`).join(', ')}])`
       case 'ZodLiteral':
         return `z.literal(${JSON.stringify(def.value)})`
       case 'ZodUnion':
-        return `z.union([${def.options.map(serializeZodSchema).join(', ')}])`
+        return `z.union([${def.options.map(serializeSchema).join(', ')}])`
       case 'ZodRecord':
-        return `z.record(${serializeZodSchema(def.valueType)})`
+        return `z.record(${serializeSchema(def.valueType)})`
       case 'ZodEffects':
-        return serializeZodSchema(def.schema)
+        return serializeSchema(def.schema)
       default:
         console.warn(`Unknown Zod v3 type: ${typeName}`)
         return 'z.unknown()'
