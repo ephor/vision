@@ -8,8 +8,8 @@ import { createVisionClient } from '@getvision/react-query'
 import { z } from 'zod'
 
 const users_list_input = z.object({
-  page: z.unknown().default(undefined),
-  limit: z.unknown().default(undefined)
+  page: z.coerce.number().default(1),
+  limit: z.coerce.number().default(10)
 })
 const users_list_output = z.unknown()
 const users__id_input = z.void()
@@ -67,7 +67,7 @@ const routes = {
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-01-25T16:02:47.249Z
+ * Generated at: 2026-01-25T16:26:34.145Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate

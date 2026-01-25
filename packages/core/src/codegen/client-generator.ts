@@ -255,8 +255,8 @@ function serializeZodSchema(schema: any): string {
       case 'string':
         return 'z.string()'
       case 'number':
-        // Check for coerce in checks
-        const hasCoerce = def.checks?.some((c: any) => c.kind === 'coerce' || c.kind === 'transform')
+        // Check for coerce flag (Zod v4 has explicit coerce field)
+        const hasCoerce = def.coerce === true || def.checks?.some((c: any) => c.kind === 'coerce' || c.kind === 'transform')
         return hasCoerce ? 'z.coerce.number()' : 'z.number()'
       case 'boolean':
         return 'z.boolean()'
@@ -266,9 +266,13 @@ function serializeZodSchema(schema: any): string {
         return `${serializeSchema(def.value)}.optional()`
       case 'nullable':
         return `${serializeSchema(def.value)}.nullable()`
-      case 'default':
-        const defaultValue = typeof def.value === 'function' ? def.value() : def.value
-        return `${serializeSchema(def.schema)}.default(${JSON.stringify(defaultValue)})`
+      case 'default': {
+        // Zod v4 uses defaultValue field
+        const defaultValue = typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue
+        // Zod v4 uses innerType for wrapped schema
+        const innerSchema = def.innerType ? serializeSchema(def.innerType) : 'z.unknown()'
+        return `${innerSchema}.default(${JSON.stringify(defaultValue)})`
+      }
       case 'enum':
         return `z.enum([${def.values?.map((v: string) => `'${v}'`).join(', ')}])`
       case 'literal':
