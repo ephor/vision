@@ -69,9 +69,34 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
       const procedureName = pathSegments[pathSegments.length - 1].replace(/[:-]/g, '_')
 
       // Extract schemas from route metadata
-      const inputSchema = route.requestBody?.fields
-        ? generateZodSchemaFromFields(route.requestBody.fields)
-        : 'z.void()'
+      // Prefer raw schema if available, otherwise reconstruct from fields
+      let inputSchema = 'z.void()'
+
+      if (route.schema?.input) {
+        // Use the actual Zod schema
+        const serialized = serializeZodSchema(route.schema.input)
+        if (serialized !== 'z.unknown()') {
+          inputSchema = serialized
+        } else {
+          // Serialization failed, try fields fallback
+          const inputFields = route.method === 'GET'
+            ? route.queryParams?.fields
+            : route.requestBody?.fields
+
+          if (inputFields) {
+            inputSchema = generateZodSchemaFromFields(inputFields)
+          }
+        }
+      } else {
+        // Fall back to reconstructing from fields
+        const inputFields = route.method === 'GET'
+          ? route.queryParams?.fields
+          : route.requestBody?.fields
+
+        if (inputFields) {
+          inputSchema = generateZodSchemaFromFields(inputFields)
+        }
+      }
 
       const outputSchema = route.responseBody?.fields
         ? generateZodSchemaFromFields(route.responseBody.fields)
@@ -142,7 +167,111 @@ ${generateTypeExports(serviceMap)}
 }
 
 /**
- * Generate Zod schema from field metadata
+ * Serialize Zod schema to TypeScript code
+ * Supports both Zod v3 (_def.typeName) and Zod v4 (def.type)
+ */
+function serializeZodSchema(schema: any): string {
+  if (!schema || typeof schema !== 'object') {
+    return 'z.unknown()'
+  }
+
+  // Zod v4 uses 'def' with 'type' property
+  if ('def' in schema && schema.def?.type) {
+    const def = schema.def
+    const type = def.type
+
+    switch (type) {
+      case 'object': {
+        const shape = def.shape || {}
+        const fields = Object.entries(shape).map(([key, value]: [string, any]) => {
+          return `  ${key}: ${serializeZodSchema(value)}`
+        })
+        return `z.object({\n${fields.join(',\n')}\n})`
+      }
+      case 'string':
+        return 'z.string()'
+      case 'number':
+        // Check for coerce in checks
+        const hasCoerce = def.checks?.some((c: any) => c.kind === 'coerce' || c.kind === 'transform')
+        return hasCoerce ? 'z.coerce.number()' : 'z.number()'
+      case 'boolean':
+        return 'z.boolean()'
+      case 'array':
+        return `z.array(${serializeZodSchema(def.element)})`
+      case 'optional':
+        return `${serializeZodSchema(def.value)}.optional()`
+      case 'nullable':
+        return `${serializeZodSchema(def.value)}.nullable()`
+      case 'default':
+        const defaultValue = typeof def.value === 'function' ? def.value() : def.value
+        return `${serializeZodSchema(def.schema)}.default(${JSON.stringify(defaultValue)})`
+      case 'enum':
+        return `z.enum([${def.values?.map((v: string) => `'${v}'`).join(', ')}])`
+      case 'literal':
+        return `z.literal(${JSON.stringify(def.value)})`
+      case 'union':
+        return `z.union([${def.options?.map(serializeZodSchema).join(', ')}])`
+      case 'record':
+        return `z.record(${serializeZodSchema(def.valueType)})`
+      case 'transform':
+      case 'refine':
+        return serializeZodSchema(def.schema)
+      default:
+        console.warn(`Unknown Zod v4 type: ${type}`)
+        return 'z.unknown()'
+    }
+  }
+
+  // Zod v3 uses '_def' with 'typeName' property
+  if ('_def' in schema) {
+    const def = schema._def
+    const typeName = def.typeName
+
+    switch (typeName) {
+      case 'ZodObject': {
+        const shape = schema.shape || schema._def.shape()
+        const fields = Object.entries(shape).map(([key, value]: [string, any]) => {
+          return `  ${key}: ${serializeZodSchema(value)}`
+        })
+        return `z.object({\n${fields.join(',\n')}\n})`
+      }
+      case 'ZodString':
+        return 'z.string()'
+      case 'ZodNumber':
+        return 'z.coerce.number()'
+      case 'ZodBoolean':
+        return 'z.boolean()'
+      case 'ZodArray':
+        return `z.array(${serializeZodSchema(def.type)})`
+      case 'ZodOptional':
+        return `${serializeZodSchema(def.innerType)}.optional()`
+      case 'ZodNullable':
+        return `${serializeZodSchema(def.innerType)}.nullable()`
+      case 'ZodDefault': {
+        const defaultValue = typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue
+        return `${serializeZodSchema(def.innerType)}.default(${JSON.stringify(defaultValue)})`
+      }
+      case 'ZodEnum':
+        return `z.enum([${def.values.map((v: string) => `'${v}'`).join(', ')}])`
+      case 'ZodLiteral':
+        return `z.literal(${JSON.stringify(def.value)})`
+      case 'ZodUnion':
+        return `z.union([${def.options.map(serializeZodSchema).join(', ')}])`
+      case 'ZodRecord':
+        return `z.record(${serializeZodSchema(def.valueType)})`
+      case 'ZodEffects':
+        return serializeZodSchema(def.schema)
+      default:
+        console.warn(`Unknown Zod v3 type: ${typeName}`)
+        return 'z.unknown()'
+    }
+  }
+
+  return 'z.unknown()'
+}
+
+/**
+ * Generate Zod schema from field metadata (fallback)
  */
 function generateZodSchemaFromFields(fields: any[]): string {
   const fieldSchemas = fields.map(field => {

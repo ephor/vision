@@ -126,7 +126,8 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
         // Try to extract schemas from validator middleware
         let requestBodySchema = undefined
         let queryParamsSchema = undefined
-        
+        let inputSchema = undefined
+
         for (const handler of handlers) {
           const schema = extractSchema(handler)
           if (schema) {
@@ -135,13 +136,15 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
             const validatorTarget = (handler as any).__visionValidatorTarget
             if (validatorTarget === 'query') {
               queryParamsSchema = generateTemplate(schema)
+              inputSchema = schema // Store raw schema for codegen
             } else {
               // Default to request body for json/form validators
               requestBodySchema = generateTemplate(schema)
+              inputSchema = schema // Store raw schema for codegen
             }
           }
         }
-        
+
         // Register route with Vision
         discoveredRoutes.push({
           method: method.toUpperCase(),
@@ -150,6 +153,7 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
           middleware: [],
           queryParams: queryParamsSchema,
           requestBody: requestBodySchema,
+          schema: inputSchema ? { input: inputSchema } : undefined,
         })
         
         // Call original method
