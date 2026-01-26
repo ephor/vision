@@ -135,8 +135,53 @@ export const zValidator = new Proxy(originalZValidator, {
 })
 
 /**
+ * Declare response schema for Vision auto-codegen
+ * Does not validate response (validation is optional, can be added in dev mode)
+ *
+ * @example
+ * app.get('/users',
+ *   validator('query', inputSchema),
+ *   responseSchema(outputSchema),  // ← Declares output schema
+ *   (c) => c.json({ users: [...] })
+ * )
+ */
+export function responseSchema<S extends ValidationSchema>(
+  schema: S
+): MiddlewareHandler {
+  const middleware: MiddlewareHandler = async (c, next) => {
+    await next()
+    // TODO: Optional response validation in dev mode
+    // if (process.env.NODE_ENV === 'development') {
+    //   const response = await c.res.clone().json()
+    //   UniversalValidator.parse(schema, response)
+    // }
+  }
+
+  // Attach schema for Vision introspection
+  try {
+    Object.defineProperty(middleware, '__visionResponseSchema', {
+      value: schema,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  } catch (e) {
+    console.error('Failed to attach response schema to middleware:', e)
+  }
+
+  return middleware
+}
+
+/**
  * Extract schema from validator middleware
  */
 export function extractSchema(validator: any): ValidationSchema | undefined {
   return validator?.__visionSchema
+}
+
+/**
+ * Extract response schema from middleware
+ */
+export function extractResponseSchema(middleware: any): ValidationSchema | undefined {
+  return middleware?.__visionResponseSchema
 }

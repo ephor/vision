@@ -70,8 +70,7 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
       const pathSegments = route.path.split('/').filter(Boolean)
       const procedureName = pathSegments[pathSegments.length - 1].replace(/[:-]/g, '_')
 
-      // Extract schemas from route metadata
-      // Prefer raw schema if available, otherwise reconstruct from fields
+      // Extract input schema
       let inputSchema = 'z.void()'
 
       if (route.schema?.input) {
@@ -100,9 +99,24 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
         }
       }
 
-      const outputSchema = route.responseBody?.fields
-        ? generateZodSchemaFromFields(route.responseBody.fields)
-        : 'z.unknown()'
+      // Extract output schema
+      let outputSchema = 'z.unknown()'
+
+      if (route.schema?.output) {
+        // Use the actual response schema (Zod, Valibot, or other)
+        const serialized = serializeSchema(route.schema.output)
+        if (serialized !== 'z.unknown()') {
+          outputSchema = serialized
+        } else {
+          // Serialization failed, try fields fallback
+          if (route.responseBody?.fields) {
+            outputSchema = generateZodSchemaFromFields(route.responseBody.fields)
+          }
+        }
+      } else if (route.responseBody?.fields) {
+        // Fall back to reconstructing from fields
+        outputSchema = generateZodSchemaFromFields(route.responseBody.fields)
+      }
 
       // Add schema definitions
       const inputSchemaName = `${serviceName}_${procedureName}_input`

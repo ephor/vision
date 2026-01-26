@@ -11,21 +11,54 @@ const users_list_input = z.object({
   page: z.coerce.number().default(1),
   limit: z.coerce.number().default(10)
 })
-const users_list_output = z.unknown()
+const users_list_output = z.object({
+  users: z.array(z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string()
+})),
+  page: z.number(),
+  limit: z.number(),
+  total: z.number()
+})
 const users__id_input = z.void()
-const users__id_output = z.unknown()
+const users__id_output = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string()
+})
 const users_create_input = z.object({
   name: z.string(),
   email: z.string()
 })
-const users_create_output = z.unknown()
+const users_create_output = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string()
+})
 const users_update_input = z.object({
   name: z.unknown().optional(),
   email: z.unknown().optional()
 })
-const users_update_output = z.unknown()
+const users_update_output = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string()
+})
 const users_delete_input = z.void()
-const users_delete_output = z.unknown()
+const users_delete_output = z.object({
+  success: z.boolean(),
+  user: z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string()
+})
+})
 
 
 const routes = {
@@ -67,7 +100,7 @@ const routes = {
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-01-25T16:26:34.145Z
+ * Generated at: 2026-01-26T09:12:53.483Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate

@@ -12,7 +12,7 @@ import {
 } from '@getvision/core'
 import type { RouteMetadata, VisionHonoOptions, ServiceDefinition, ClientCodegenConfig } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
-import { extractSchema } from "./validator";
+import { extractSchema, extractResponseSchema } from "./validator";
 
 // Context storage for vision and traceId
 interface VisionContext {
@@ -127,8 +127,11 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
         let requestBodySchema = undefined
         let queryParamsSchema = undefined
         let inputSchema = undefined
+        let outputSchema = undefined
+        let responseBodyTemplate = undefined
 
         for (const handler of handlers) {
+          // Extract input schema
           const schema = extractSchema(handler)
           if (schema) {
             // Check if this is a query validator or body validator
@@ -143,6 +146,13 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
               inputSchema = schema // Store raw schema for codegen
             }
           }
+
+          // Extract output/response schema
+          const responseSchema = extractResponseSchema(handler)
+          if (responseSchema) {
+            outputSchema = responseSchema
+            responseBodyTemplate = generateTemplate(responseSchema)
+          }
         }
 
         // Register route with Vision
@@ -153,7 +163,11 @@ function patchHonoApp(app: any, options?: { services?: ServiceDefinition[] }) {
           middleware: [],
           queryParams: queryParamsSchema,
           requestBody: requestBodySchema,
-          schema: inputSchema ? { input: inputSchema } : undefined,
+          responseBody: responseBodyTemplate,
+          schema: {
+            input: inputSchema,
+            output: outputSchema,
+          },
         })
         
         // Call original method
@@ -593,4 +607,4 @@ export function getVisionInstance(): VisionCore | null {
   return visionInstance
 }
 
-export { validator, zValidator } from './validator';
+export { validator, zValidator, responseSchema } from './validator';
