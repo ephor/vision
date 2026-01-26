@@ -9,6 +9,7 @@ import { ServiceBuilder } from './service'
 import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
 import type { serve as honoServe } from '@hono/node-server'
+import type { QueueEventsOptions, QueueOptions, WorkerOptions } from "bullmq";
 
 export interface VisionALSContext {
   vision: VisionCore
@@ -130,6 +131,9 @@ export interface VisionConfig {
      * Default BullMQ worker concurrency for all handlers (overridable per handler)
      */
     workerConcurrency?: number
+    queue?: Omit<QueueOptions, 'connection'>
+    worker?: Omit<WorkerOptions, 'connection'>
+    queueEvents?: Omit<QueueEventsOptions, 'connection'>
   }
 }
 
@@ -258,6 +262,9 @@ export class Vision<
       redis: this.config.pubsub?.redis,
       devMode: this.config.pubsub?.devMode,
       workerConcurrency: this.config.pubsub?.workerConcurrency,
+      queue: this.config.pubsub?.queue,
+      worker: this.config.pubsub?.worker,
+      queueEvents: this.config.pubsub?.queueEvents,
     })
     
     // Register JSON-RPC methods for events/cron

@@ -87,7 +87,7 @@ async (data, c) => {
 Zod validation for inputs and outputs:
 
 ```typescript
-.endpoint('POST', '/users', {
+app.endpoint('POST', '/users', {
   input: z.object({
     name: z.string().min(1),
     email: z.string().email()
@@ -107,11 +107,10 @@ BullMQ event bus is built-in:
 
 ```typescript
 // Subscribe to events
-.on('user/created', async (event) => {
+app.on('user/created', async (event) => {
   await sendWelcomeEmail(event.data.email)
 })
-
-// Schedule cron jobs
+ // Schedule cron jobs
 .cron('0 0 * * *', async () => {
   await cleanupInactiveUsers()
 })
@@ -205,7 +204,23 @@ const app = new Vision({
     logging: true       // Console logging
   },
   pubsub: {
-    devMode: true      // In-memory BullMQ for local dev
+    devMode: true,     // In-memory BullMQ for local dev
+    // BullMQ options
+    queue: {
+      defaultJobOptions: {
+        lockDuration: 300000, // 5 minutes
+        stalledInterval: 300000,
+        maxStalledCount: 1,
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      }
+    },
+    worker: {
+      lockDuration: 300000,
+    },
+    queueEvents: {
+      stalledInterval: 300000,
+    }
   }
 })
 ```

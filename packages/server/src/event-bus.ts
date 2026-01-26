@@ -1,5 +1,5 @@
 import { Queue, Worker, QueueEvents } from 'bullmq'
-import type { z, ZodError } from 'zod'
+import type { QueueEventsOptions, QueueOptions, WorkerOptions } from 'bullmq'
 import { eventRegistry } from './event-registry'
 
 /**
@@ -11,6 +11,9 @@ export interface EventBusConfig {
     port?: number
     password?: string
   }
+  queue?: Omit<QueueOptions, 'connection'>
+  worker?: Omit<WorkerOptions, 'connection'>
+  queueEvents?: Omit<QueueEventsOptions, 'connection'>
   /**
    * Default BullMQ worker concurrency (per event). Per-handler options override this.
    */
@@ -77,6 +80,9 @@ export class EventBus {
       devMode: resolvedDevMode,
       redis: mergedRedis,
       workerConcurrency: config.workerConcurrency,
+      queue: config.queue,
+      worker: config.worker,
+      queueEvents: config.queueEvents,
     }
   }
 
@@ -96,6 +102,7 @@ export class EventBus {
         port: 6379,
       }
       queue = new Queue(eventName, {
+        ...(this.config.queue || {}),
         connection,
       })
       this.queues.set(eventName, queue)
@@ -223,8 +230,13 @@ export class EventBus {
           }
         },
         {
+          ...(this.config.worker || {}),
           connection,
-          concurrency: options?.concurrency ?? this.config.workerConcurrency ?? 1,
+          concurrency:
+            options?.concurrency ??
+            this.config.workerConcurrency ??
+            this.config.worker?.concurrency ??
+            1,
         }
       )
 
@@ -237,6 +249,7 @@ export class EventBus {
           port: 6379,
         }
         const queueEvents = new QueueEvents(eventName, {
+          ...(this.config.queueEvents || {}),
           connection,
         })
 
@@ -301,7 +314,9 @@ export class EventBus {
           }
         },
         {
+          ...(this.config.worker || {}),
           connection,
+          concurrency: this.config.worker?.concurrency ?? 1,
         }
       )
 
@@ -310,6 +325,7 @@ export class EventBus {
       // Listen to cron job events
       if (!this.queueEvents.has(cronName)) {
         const queueEvents = new QueueEvents(cronName, {
+          ...(this.config.queueEvents || {}),
           connection,
         })
 
