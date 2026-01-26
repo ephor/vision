@@ -102,15 +102,16 @@ export function createVisionClient<TAppOrContract = any>(
     const metadata: RouteMetadataExport[] = []
 
     for (const [serviceName, procedures] of Object.entries(routesObj)) {
-      for (const [procedureName, route] of Object.entries(procedures as any)) {
+      for (const [procedureName, route] of Object.entries(procedures as Record<string, any>)) {
+        const routeData = route as any
         metadata.push({
-          method: route.method,
-          path: route.path,
+          method: routeData.method,
+          path: routeData.path,
           procedure: [serviceName, procedureName],
-          type: route.method === 'GET' ? 'query' : 'mutation',
+          type: routeData.method === 'GET' ? 'query' : 'mutation',
           schema: {
-            input: route.input,
-            output: route.output
+            input: routeData.input,
+            output: routeData.output
           }
         })
       }
@@ -145,17 +146,18 @@ export function createVisionClient<TAppOrContract = any>(
         throw new Error(`Failed to fetch routes metadata: ${response.statusText}`)
       }
 
-      const jsonRpcResponse = await response.json()
-      routesMetadata = jsonRpcResponse.result || []
+      const jsonRpcResponse = await response.json() as { result?: RouteMetadataExport[] }
+      const fetchedRoutes: RouteMetadataExport[] = jsonRpcResponse.result || []
+      routesMetadata = fetchedRoutes
 
       // Build map for quick lookup: /users/list → metadata
       routesMap = new Map()
-      for (const route of routesMetadata) {
+      for (const route of fetchedRoutes) {
         routesMap.set(route.path, route)
       }
 
-      console.log(`✅ Vision: Loaded ${routesMetadata.length} routes from dashboard`)
-      return routesMetadata
+      console.log(`✅ Vision: Loaded ${fetchedRoutes.length} routes from dashboard`)
+      return fetchedRoutes
     } catch (error) {
       console.warn('⚠️  Failed to fetch Vision routes metadata:', error)
       console.warn('   Using manual route mapping as fallback')

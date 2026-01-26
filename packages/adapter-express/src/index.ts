@@ -546,4 +546,4 @@ export function getVisionInstance(): VisionCore | null {
 // Export Zod validator for schema-based validation
 export { zValidator, getRouteSchema, getAllRouteSchemas } from './zod-validator'
 
-export { validator } from './validator'
+export { validator, responseSchema, extractSchema, extractResponseSchema } from './validator'

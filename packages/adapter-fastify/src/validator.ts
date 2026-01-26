@@ -170,8 +170,43 @@ export function validator(
 }
 
 /**
+ * Declare response schema for Vision auto-codegen
+ * Does not validate response (validation is optional, can be added in dev mode)
+ *
+ * @example
+ * fastify.get('/users', {
+ *   preHandler: [
+ *     validator('querystring', inputSchema),
+ *     responseSchema(outputSchema)  // ← Declares output schema
+ *   ]
+ * }, async (request, reply) => {
+ *   return { users: [...] }
+ * })
+ */
+export function responseSchema<S extends ValidationSchema>(
+  schema: S
+) {
+  const handler = async (request: FastifyRequest, reply: FastifyReply) => {
+    // No-op handler, just for schema attachment
+    // TODO: Optional response validation in dev mode
+  }
+
+  // Attach schema for Vision introspection
+  ;(handler as any).__visionResponseSchema = schema
+
+  return handler
+}
+
+/**
  * Extract schema from route configuration
  */
 export function extractSchema(routeOptions: any): ValidationSchema | undefined {
   return routeOptions?.schema?.__visionSchema
+}
+
+/**
+ * Extract response schema from handler
+ */
+export function extractResponseSchema(handler: any): ValidationSchema | undefined {
+  return handler?.__visionResponseSchema
 }

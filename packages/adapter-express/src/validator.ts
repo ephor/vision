@@ -141,6 +141,52 @@ export function validator(
   // Attach schema to middleware for Vision introspection
   ;(middleware as any).__visionSchema = schema
   ;(middleware as any).__visionTarget = target
-  
+
   return middleware
+}
+
+/**
+ * Declare response schema for Vision auto-codegen
+ * Does not validate response (validation is optional, can be added in dev mode)
+ *
+ * @example
+ * app.get('/users',
+ *   validator('query', inputSchema),
+ *   responseSchema(outputSchema),  // ← Declares output schema
+ *   (req, res) => res.json({ users: [...] })
+ * )
+ */
+export function responseSchema<S extends ValidationSchema>(
+  schema: S
+): RequestHandler {
+  const middleware: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+    next()
+    // TODO: Optional response validation in dev mode
+    // if (process.env.NODE_ENV === 'development') {
+    //   const originalJson = res.json.bind(res)
+    //   res.json = function(body: any) {
+    //     UniversalValidator.parse(schema, body)
+    //     return originalJson(body)
+    //   }
+    // }
+  }
+
+  // Attach schema for Vision introspection
+  ;(middleware as any).__visionResponseSchema = schema
+
+  return middleware
+}
+
+/**
+ * Extract schema from validator middleware
+ */
+export function extractSchema(middleware: any): ValidationSchema | undefined {
+  return middleware?.__visionSchema
+}
+
+/**
+ * Extract response schema from middleware
+ */
+export function extractResponseSchema(middleware: any): ValidationSchema | undefined {
+  return middleware?.__visionResponseSchema
 }

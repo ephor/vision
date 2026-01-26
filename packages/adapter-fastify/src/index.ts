@@ -549,4 +549,4 @@ function matchPattern(path: string, pattern: string): boolean {
 
 export { generateZodTemplate } from '@getvision/core'
 
-export { validator, toFastifySchema } from './validator'
+export { validator, toFastifySchema, responseSchema, extractSchema, extractResponseSchema } from './validator'
