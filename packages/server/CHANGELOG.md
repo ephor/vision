@@ -1,5 +1,12 @@
 # @getvision/server
 
+## 0.4.2
+
+### Patch Changes
+
+- 3b8f782: Add configurable BullMQ options for queue, worker, and queue events
+- 107ad21: bump package versions in bun.lock
+
 ## 0.4.1
 
 ### Patch Changes

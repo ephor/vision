@@ -1,5 +1,11 @@
 # @getvision/adapter-fastify
 
+## 0.1.2
+
+### Patch Changes
+
+- 107ad21: bump package versions in bun.lock
+
 ## 0.1.1
 
 ### Patch Changes
