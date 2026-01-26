@@ -121,8 +121,50 @@ export type VisionMutationProcedure<TInput, TOutput> = {
 /**
  * Vision client type
  */
+/**
+ * Procedure client with React Query methods
+ */
+export type ProcedureClient<TInput = any, TOutput = any> = {
+  /**
+   * Get query options for use with useQuery
+   */
+  queryOptions: (input?: TInput, options?: any) => any
+
+  /**
+   * Get mutation options for use with useMutation
+   */
+  mutationOptions: (options?: any) => any
+
+  /**
+   * Prefetch query data
+   */
+  prefetch: (input?: TInput) => Promise<void>
+
+  /**
+   * Direct call (for imperative usage)
+   */
+  (input?: TInput): Promise<TOutput>
+}
+
+/**
+ * Convert route definition to procedure client
+ */
+export type RouteToProcedure<TRoute> = TRoute extends { method: string; input?: infer I; output?: infer O }
+  ? ProcedureClient<I, O>
+  : never
+
+/**
+ * Convert service (collection of routes) to client
+ */
+export type ServiceToClient<TService> = {
+  [TKey in keyof TService]: RouteToProcedure<TService[TKey]>
+}
+
+/**
+ * Vision client type
+ */
 export type VisionClient<TRouter> = {
-  [TService in keyof TRouter]: TRouter[TService]
+  [TService in keyof TRouter]: ServiceToClient<TRouter[TService]>
 } & {
   /**
    * Access to query client (for SSR, cache invalidation, etc.)

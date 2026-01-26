@@ -1,16 +1,15 @@
 /**
- * Example React component using AUTO-GENERATED Vision client
- * Client is auto-generated from server routes - NO MANUAL WORK! 🔥
+ * Example React component using auto-generated Vision client
+ * Client is automatically generated from server routes
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-// ✨ Import from AUTO-GENERATED file!
 import { api, type User } from './generated'
 
 export function UserList() {
   const queryClient = useQueryClient()
 
-  // Query - EXACTLY like tRPC, but client is AUTO-GENERATED! 🔥
+  // Query with auto-generated types
   const { data, isLoading, error } = useQuery(
     api.users.list.queryOptions(
       { page: 1, limit: 10 },
@@ -20,14 +19,12 @@ export function UserList() {
       }
     )
   )
-  // data is FULLY TYPED from auto-generated schemas! ✨
 
-  // Mutation - AUTO-GENERATED from server routes!
+  // Mutation with type-safe options
   const createUserMutation = useMutation(
     api.users.create.mutationOptions({
       onSuccess: (newUser) => {
         console.log('Created user:', newUser)
-        // newUser is FULLY TYPED! ✨
         queryClient.invalidateQueries({ queryKey: ['users', 'list'] })
       },
     })

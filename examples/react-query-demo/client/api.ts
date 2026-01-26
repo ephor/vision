@@ -6,7 +6,6 @@
 import { createVisionClient } from '@getvision/react-query'
 import { routes, type User, type CreateUserInput } from '../shared/routes'
 
-// ✅ ПРАЦЮЄ! Використовуємо shared schemas - runtime + types!
 export const api = createVisionClient(routes, {
   baseUrl: 'http://localhost:3000',
   dashboardUrl: 'http://localhost:9500',

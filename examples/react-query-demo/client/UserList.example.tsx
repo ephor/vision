@@ -9,7 +9,7 @@ import { api, type User, type CreateUserInput } from './api'
 export function UserList() {
   const queryClient = useQueryClient()
 
-  // Query - EXACTLY like tRPC! 🔥
+  // Query with type-safe options
   const { data, isLoading, error } = useQuery(
     api.users.list.queryOptions(
       { page: 1, limit: 10 },
@@ -20,7 +20,7 @@ export function UserList() {
     )
   )
 
-  // Mutation - EXACTLY like tRPC! 🔥
+  // Mutation with automatic cache invalidation
   const createUserMutation = useMutation(
     api.users.create.mutationOptions({
       onSuccess: (newUser) => {
