@@ -1,5 +1,16 @@
 # @getvision/server
 
+## 0.4.1
+
+### Patch Changes
+
+- 5b7cb0a: feat(web): add query parameters support, custom query params, and polished UI
+
+  Introduced support for API query parameters in the API Explorer, including the ability to add and manage custom query parameters. Refactored UI components to use a new `Checkbox` component and replaced `Card` with `SectionCard` for better consistency. Enhanced request body handling with JSON5 parsing.
+
+- Updated dependencies [5b7cb0a]
+  - @getvision/core@0.1.1
+
 ## 0.4.0
 
 ### Minor Changes
