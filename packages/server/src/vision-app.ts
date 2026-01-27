@@ -124,6 +124,26 @@ export interface VisionConfig {
       host?: string
       port?: number
       password?: string
+      /**
+       * Enable keepalive to prevent connection timeouts (default: 30000ms)
+       */
+      keepAlive?: number
+      /**
+       * Max retry attempts for failed commands (default: 20)
+       */
+      maxRetriesPerRequest?: number
+      /**
+       * Enable ready check before executing commands (default: true)
+       */
+      enableReadyCheck?: boolean
+      /**
+       * Connection timeout in ms (default: 10000)
+       */
+      connectTimeout?: number
+      /**
+       * Enable offline queue (default: true)
+       */
+      enableOfflineQueue?: boolean
     }
     devMode?: boolean  // Use in-memory event bus (no Redis required)
     eventBus?: EventBus  // Share EventBus instance across apps (for sub-apps)

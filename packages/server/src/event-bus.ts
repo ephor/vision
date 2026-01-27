@@ -10,6 +10,26 @@ export interface EventBusConfig {
     host?: string
     port?: number
     password?: string
+    /**
+     * Enable keepalive to prevent connection timeouts (default: true in production)
+     */
+    keepAlive?: number
+    /**
+     * Max retry attempts for failed commands (default: 20)
+     */
+    maxRetriesPerRequest?: number
+    /**
+     * Enable ready check before executing commands (default: true)
+     */
+    enableReadyCheck?: boolean
+    /**
+     * Connection timeout in ms (default: 10000)
+     */
+    connectTimeout?: number
+    /**
+     * Enable offline queue (default: true)
+     */
+    enableOfflineQueue?: boolean
   }
   queue?: Omit<QueueOptions, 'connection'>
   worker?: Omit<WorkerOptions, 'connection'>
@@ -87,6 +107,38 @@ export class EventBus {
   }
 
   /**
+   * Get Redis connection configuration
+   * Includes keepalive, retry strategy, and connection pooling
+   */
+  private getRedisConnection() {
+    const baseConfig = this.config.redis || {
+      host: 'localhost',
+      port: 6379,
+    }
+
+    return {
+      host: baseConfig.host,
+      port: baseConfig.port,
+      password: baseConfig.password,
+      keepAlive: baseConfig.keepAlive ?? 30000, // 30 seconds keepalive
+      maxRetriesPerRequest: baseConfig.maxRetriesPerRequest ?? 20,
+      enableReadyCheck: baseConfig.enableReadyCheck ?? true,
+      connectTimeout: baseConfig.connectTimeout ?? 10000,
+      enableOfflineQueue: baseConfig.enableOfflineQueue ?? true,
+      // Retry strategy for automatic reconnection
+      retryStrategy: (times: number) => {
+        if (times > 10) {
+          console.error('❌ Redis connection failed after 10 retries')
+          return null // Stop retrying
+        }
+        const delay = Math.min(times * 200, 3000)
+        console.log(`🔄 Redis reconnecting... attempt ${times}, delay ${delay}ms`)
+        return delay
+      },
+    }
+  }
+
+  /**
    * Get or create a queue for an event
    */
   private getQueue(eventName: string): Queue {
@@ -97,13 +149,9 @@ export class EventBus {
 
     let queue = this.queues.get(eventName)
     if (!queue) {
-      const connection = this.config.redis || {
-        host: 'localhost',
-        port: 6379,
-      }
       queue = new Queue(eventName, {
         ...(this.config.queue || {}),
-        connection,
+        connection: this.getRedisConnection(),
       })
       this.queues.set(eventName, queue)
     }
@@ -206,10 +254,6 @@ export class EventBus {
       this.devModeHandlers.set(eventName, handlers)
     } else {
       // Production mode - create BullMQ worker
-      const connection = this.config.redis || {
-        host: 'localhost',
-        port: 6379,
-      }
       const workerKey = `${eventName}-handler`
       
       // Close existing worker if it exists
@@ -231,7 +275,7 @@ export class EventBus {
         },
         {
           ...(this.config.worker || {}),
-          connection,
+          connection: this.getRedisConnection(),
           concurrency:
             options?.concurrency ??
             this.config.workerConcurrency ??
@@ -244,13 +288,9 @@ export class EventBus {
 
       // Listen to queue events
       if (!this.queueEvents.has(eventName)) {
-        const connection = this.config.redis || {
-          host: 'localhost',
-          port: 6379,
-        }
         const queueEvents = new QueueEvents(eventName, {
           ...(this.config.queueEvents || {}),
-          connection,
+          connection: this.getRedisConnection(),
         })
 
         queueEvents.on('completed', ({ jobId }) => {
@@ -284,10 +324,6 @@ export class EventBus {
       this.devModeHandlers.set(cronName, handlers)
     } else {
       // Production mode - create BullMQ worker for cron jobs
-      const connection = this.config.redis || {
-        host: 'localhost',
-        port: 6379,
-      }
       const cronWorkerKey = `${cronName}-handler`
       
       // Close existing cron worker if it exists
@@ -315,7 +351,7 @@ export class EventBus {
         },
         {
           ...(this.config.worker || {}),
-          connection,
+          connection: this.getRedisConnection(),
           concurrency: this.config.worker?.concurrency ?? 1,
         }
       )
@@ -326,7 +362,7 @@ export class EventBus {
       if (!this.queueEvents.has(cronName)) {
         const queueEvents = new QueueEvents(cronName, {
           ...(this.config.queueEvents || {}),
-          connection,
+          connection: this.getRedisConnection(),
         })
 
         queueEvents.on('completed', ({ jobId }) => {

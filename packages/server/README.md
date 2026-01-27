@@ -205,6 +205,17 @@ const app = new Vision({
   },
   pubsub: {
     devMode: true,     // In-memory BullMQ for local dev
+    redis: {
+      host: 'localhost',
+      port: 6379,
+      password: 'your-password',
+      // Connection settings to prevent timeouts
+      keepAlive: 30000,              // Keep connection alive (30s)
+      maxRetriesPerRequest: 20,      // Retry failed commands
+      enableReadyCheck: true,        // Check Redis is ready
+      connectTimeout: 10000,         // Connection timeout (10s)
+      enableOfflineQueue: true       // Queue commands when offline
+    },
     // BullMQ options
     queue: {
       defaultJobOptions: {
@@ -360,6 +371,75 @@ app.service('users')
     
     return user
   })
+```
+
+## Redis Connection Configuration
+
+### Preventing Connection Drops
+
+Redis connections can close due to timeouts or network issues, causing workers to fail with "Connection is closed" errors. Vision Server includes sensible defaults to help prevent this:
+
+```typescript
+const app = new Vision({
+  service: { name: 'My API' },
+  pubsub: {
+    devMode: false,  // Use Redis in production
+    redis: {
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+      // Connection settings (these are the defaults)
+      keepAlive: 30000,              // Keep connection alive (30s)
+      maxRetriesPerRequest: 20,      // Retry failed commands
+      enableReadyCheck: true,        // Check Redis is ready before commands
+      connectTimeout: 10000,         // Connection timeout (10s)
+      enableOfflineQueue: true       // Queue commands when offline
+    }
+  }
+})
+```
+
+**What this helps with:**
+- ✅ **keepAlive (30s)**: Helps prevent idle connection timeouts
+- ✅ **Automatic reconnection**: Retries up to 10 times with exponential backoff
+- ✅ **Connection settings**: Each Queue/Worker/QueueEvents uses these connection settings
+- ✅ **Offline queue**: Commands are queued when Redis is temporarily unavailable
+
+### Environment Variables
+
+You can also configure Redis via environment variables:
+
+```bash
+# Option 1: Redis URL (recommended)
+REDIS_URL=redis://:password@hostname:6379
+
+# Option 2: Individual variables
+REDIS_HOST=hostname
+REDIS_PORT=6379
+REDIS_PASSWORD=password
+```
+
+### Troubleshooting
+
+**"Connection is closed" errors:**
+- Vision Server now includes automatic reconnection with exponential backoff
+- Check logs for `🔄 Redis reconnecting...` messages
+- If reconnection fails after 10 attempts, check your Redis server health
+
+**"Could not renew lock for job" errors:**
+- This happens when workers lose connection during job processing
+- The new keepAlive setting (30s) prevents this
+- Increase `keepAlive` if you have very long-running jobs
+
+**Custom retry strategy:**
+```typescript
+pubsub: {
+  redis: {
+    // ... other settings
+    keepAlive: 60000,  // 60s for long-running jobs
+    maxRetriesPerRequest: 30  // More retries for unstable networks
+  }
+}
 ```
 
 ## Hono Compatibility
