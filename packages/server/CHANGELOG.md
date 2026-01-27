@@ -1,5 +1,13 @@
 # @getvision/server
 
+## 0.4.3
+
+### Patch Changes
+
+- d4c761e: Enhance Redis connection handling and documentation
+
+  Added robust Redis connection handling with configurable options including `keepAlive`, `maxRetriesPerRequest`, `enableReadyCheck`, `connectTimeout`, and `enableOfflineQueue`. Updated documentation with improved troubleshooting guides, environment variable support, and connection customization examples for stability in production environments.
+
 ## 0.4.2
 
 ### Patch Changes
