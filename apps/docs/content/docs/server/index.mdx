@@ -155,12 +155,15 @@ Zod validation for inputs and outputs:
 
 ### 📊 Built-in Pub/Sub & Cron
 
-Powered by BullMQ (automatic):
+Powered by BullMQ (in-memory during development, Redis in production):
 
 ```typescript
 app.service('notifications')
-  .on('user/created', async (event) => {
-    console.log('Send welcome email to:', event.data.email)
+  .on('user/created', {
+    schema: z.object({ userId: z.string(), email: z.string() }),
+    handler: async (data) => {
+      console.log('Send welcome email to:', data.email)
+    }
   })
   .cron('0 9 * * *', async () => {
     console.log('Send daily digest')
@@ -169,8 +172,7 @@ app.service('notifications')
 
 **No extra setup!** Event bus is auto-initialized.
 
-> Note: Declare `service.on('event', { schema, handler })` BEFORE any endpoint that calls
-> `c.emit('event', ...)` so TypeScript can infer the event type for `c.emit`.
+> **Note:** Define `.on()` handlers BEFORE endpoints that call `c.emit()` so TypeScript can infer the event type.
 
 ### 🎯 Hono Compatible
 
@@ -219,12 +221,8 @@ const app = new Vision({
     logging: true       // Console logging
   },
   pubsub: {
-    id: 'my-app',      // App ID for event bus
-    schemas: {         // Event schemas
-      'user/created': {
-        data: z.object({ userId: z.string(), email: z.string() })
-      }
-    }
+    devMode: true,      // Use in-memory queue (no Redis)
+    // redis: { host: 'localhost', port: 6379 }  // For production
   }
 })
 ```

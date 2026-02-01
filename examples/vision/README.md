@@ -157,12 +157,18 @@ Input and output are validated and typed:
 
 ### 4. Event Handlers (BullMQ)
 
-Handle events with type safety:
+Handle events with type safety - schema is defined inline:
 
 ```typescript
-.on('user/created', async (event) => {
-  // event.data is typed based on schema
-  console.log('Welcome email to:', event.data.email)
+.on('user/created', {
+  schema: z.object({
+    userId: z.string(),
+    email: z.string()
+  }),
+  handler: async (data) => {
+    // data is typed based on schema above
+    console.log('Welcome email to:', data.email)
+  }
 })
 ```
 
@@ -178,39 +184,35 @@ Schedule recurring tasks:
 
 ## Event System
 
-Vision Server uses BullMQ for events (in-memory during development):
+Vision Server uses BullMQ for events (in-memory during development, Redis in production):
 
 ```typescript
-// Define event schemas
-pubsub: {
-  schemas: {
-    'user/created': {
-      data: z.object({
-        userId: z.string(),
-        email: z.string().email()
-      })
+app.service('users')
+  // Define event handler FIRST with schema
+  .on('user/created', {
+    schema: z.object({
+      userId: z.string(),
+      email: z.string().email()
+    }),
+    handler: async (data) => {
+      await sendWelcomeEmail(data.email)
     }
-  }
-}
-
-// Send events from handler
-.endpoint('POST', '/users', schema, async (data, c) => {
-  const user = await createUser(data)
-
-  // Emit event (type-safe!)
-  await c.emit('user/created', {
-    userId: user.id,
-    email: user.email
   })
+  // Then define endpoints that emit events
+  .endpoint('POST', '/users', schema, async (data, c) => {
+    const user = await createUser(data)
 
-  return user
-})
+    // Emit event (type-safe based on .on() schema!)
+    await c.emit('user/created', {
+      userId: user.id,
+      email: user.email
+    })
 
-// Handle events
-.on('user/created', async (event) => {
-  await sendWelcomeEmail(event.data.email)
-})
+    return user
+  })
 ```
+
+> **Note:** Define `.on()` handlers BEFORE endpoints so TypeScript knows the event schema for `c.emit()`.
 
 ## File-Based Routing
 
