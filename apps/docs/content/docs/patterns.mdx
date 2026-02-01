@@ -1,0 +1,577 @@
+---
+title: Common Patterns
+description: Best practices and patterns for effective observability with Vision
+---
+
+# Common Patterns
+
+Best practices for getting the most out of Vision.
+
+## Span Naming Conventions
+
+Good span names make debugging faster.
+
+### Do: Use descriptive, hierarchical names
+
+```typescript
+// Database operations
+'db.select.users'
+'db.insert.orders'
+'db.update.inventory'
+'db.delete.sessions'
+
+// External APIs
+'external.stripe.createCharge'
+'external.sendgrid.sendEmail'
+'external.s3.uploadFile'
+
+// Business logic
+'process.order.validate'
+'process.order.calculateTotal'
+'process.order.applyDiscount'
+
+// Cache operations
+'cache.redis.get'
+'cache.redis.set'
+'cache.memory.lookup'
+```
+
+### Don't: Use generic names
+
+```typescript
+// Bad - too generic
+'query'
+'fetch'
+'process'
+'handle'
+'do_thing'
+
+// Bad - too verbose
+'this_is_the_database_query_for_getting_users_by_id'
+```
+
+### Pattern: `{category}.{system}.{operation}`
+
+```typescript
+// Format: category.system.operation
+'db.postgres.select'       // database, postgres, select
+'external.stripe.charge'   // external api, stripe, charge
+'cache.redis.get'         // cache, redis, get
+'queue.bullmq.enqueue'    // queue, bullmq, enqueue
+'file.s3.upload'          // file, s3, upload
+```
+
+---
+
+## Attribute Conventions
+
+Add the right attributes for useful debugging.
+
+### Database Spans
+
+```typescript
+withSpan('db.select.users', {
+  // Required
+  'db.system': 'postgresql',   // or 'mysql', 'sqlite', 'mongodb'
+  'db.operation': 'SELECT',     // or 'INSERT', 'UPDATE', 'DELETE'
+
+  // Recommended
+  'db.table': 'users',
+  'db.name': 'myapp_production',
+
+  // Optional - helps debugging
+  'query.limit': 100,
+  'query.offset': 0,
+  'query.filter': 'role=admin',
+  'result.count': 42
+}, operation)
+```
+
+### External API Spans
+
+```typescript
+withSpan('external.stripe.createCharge', {
+  // Required
+  'http.method': 'POST',
+  'http.url': 'https://api.stripe.com/v1/charges',
+
+  // Recommended
+  'http.status_code': 200,
+
+  // Business context
+  'stripe.amount': 5000,
+  'stripe.currency': 'usd',
+  'stripe.customer': 'cus_xxx'
+}, operation)
+```
+
+### Cache Spans
+
+```typescript
+withSpan('cache.redis.get', {
+  'cache.system': 'redis',
+  'cache.key': 'user:123:profile',
+  'cache.hit': true,
+  'cache.ttl': 3600
+}, operation)
+```
+
+### Queue Spans
+
+```typescript
+withSpan('queue.bullmq.enqueue', {
+  'queue.system': 'bullmq',
+  'queue.name': 'emails',
+  'job.type': 'welcome-email',
+  'job.id': 'job_abc123'
+}, operation)
+```
+
+---
+
+## Error Handling Patterns
+
+### Pattern: Capture errors in spans
+
+```typescript
+app.post('/users', async (c) => {
+  const withSpan = useVisionSpan()
+
+  try {
+    const user = await withSpan('db.insert.users', {
+      'db.table': 'users'
+    }, async () => {
+      return await db.insert(users).values(data).returning()
+    })
+    return c.json(user)
+  } catch (error) {
+    // Error is automatically captured in span
+    // Vision adds error.message, error.stack to span attributes
+    throw error
+  }
+})
+```
+
+### Pattern: Add context before errors
+
+```typescript
+app.post('/checkout', async (c) => {
+  const { vision } = getVisionContext()
+
+  // Add context early - even if request fails, you'll see this
+  vision.addContext({
+    'cart.id': cart.id,
+    'cart.total': cart.total,
+    'user.id': user.id
+  })
+
+  // If this throws, you still have the context above
+  await processPayment(cart)
+})
+```
+
+### Pattern: Explicit error spans
+
+```typescript
+const result = await withSpan('external.payment.process', {
+  'payment.provider': 'stripe',
+  'payment.amount': amount
+}, async () => {
+  try {
+    return await stripe.charges.create({...})
+  } catch (error) {
+    // Add explicit error attributes
+    throw Object.assign(error, {
+      spanAttributes: {
+        'error.type': 'PaymentFailed',
+        'error.code': error.code,
+        'stripe.decline_code': error.decline_code
+      }
+    })
+  }
+})
+```
+
+---
+
+## Context Propagation Patterns
+
+### Pattern: Add user context early
+
+```typescript
+// In auth middleware
+const authMiddleware = async (c, next) => {
+  const { vision } = getVisionContext()
+  const user = await verifyToken(token)
+
+  // Add to every trace for this request
+  vision.addContext({
+    'user.id': user.id,
+    'user.email': user.email,
+    'user.plan': user.plan,
+    'user.role': user.role
+  })
+
+  c.set('user', user)
+  await next()
+}
+```
+
+### Pattern: Add request context
+
+```typescript
+// In request middleware
+const requestContextMiddleware = async (c, next) => {
+  const { vision } = getVisionContext()
+
+  vision.addContext({
+    'request.id': c.req.header('X-Request-ID') || nanoid(),
+    'client.ip': c.req.header('X-Forwarded-For'),
+    'client.userAgent': c.req.header('User-Agent')
+  })
+
+  await next()
+}
+```
+
+### Pattern: Add feature flags
+
+```typescript
+vision.addContext({
+  'feature.newCheckout': isEnabled('new-checkout'),
+  'feature.betaUI': isEnabled('beta-ui'),
+  'experiment.variant': getExperimentVariant(user)
+})
+```
+
+---
+
+## Performance Patterns
+
+### Pattern: Don't span everything
+
+```typescript
+// Bad - too many spans
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+
+  await withSpan('parse.request', () => parseRequest(c))
+  await withSpan('validate.query', () => validateQuery(query))
+  await withSpan('build.filter', () => buildFilter(query))
+  await withSpan('db.select', () => db.select().from(users))
+  await withSpan('transform.response', () => transform(users))
+  await withSpan('serialize.json', () => JSON.stringify(users))
+
+  return c.json(users)
+})
+
+// Good - span significant operations only
+app.get('/users', async (c) => {
+  const withSpan = useVisionSpan()
+  const query = parseAndValidateQuery(c)
+
+  const users = await withSpan('db.select.users', {
+    'query.limit': query.limit,
+    'query.filter': query.filter
+  }, () => db.select().from(users).where(...))
+
+  return c.json(users)
+})
+```
+
+### Pattern: Batch related operations
+
+```typescript
+// Bad - separate spans for related queries
+const user = await withSpan('db.select.user', () => getUser(id))
+const orders = await withSpan('db.select.orders', () => getOrders(id))
+const reviews = await withSpan('db.select.reviews', () => getReviews(id))
+
+// Good - one span for the batch
+const data = await withSpan('db.load.userProfile', {
+  'user.id': id
+}, async () => {
+  const [user, orders, reviews] = await Promise.all([
+    getUser(id),
+    getOrders(id),
+    getReviews(id)
+  ])
+  return { user, orders, reviews }
+})
+```
+
+### Pattern: Use span attributes, not logs
+
+```typescript
+// Bad - logging inside spans
+await withSpan('process.order', async () => {
+  console.log('Processing order:', orderId)
+  console.log('Items:', items.length)
+  console.log('Total:', total)
+  // ...
+})
+
+// Good - use attributes
+await withSpan('process.order', {
+  'order.id': orderId,
+  'order.items': items.length,
+  'order.total': total
+}, async () => {
+  // ...
+})
+```
+
+---
+
+## Service Organization Patterns
+
+### Pattern: Group by domain
+
+```typescript
+// Users service
+app.service('users')
+  .endpoint('GET', '/users', {...}, listUsers)
+  .endpoint('GET', '/users/:id', {...}, getUser)
+  .endpoint('POST', '/users', {...}, createUser)
+
+// Orders service
+app.service('orders')
+  .endpoint('GET', '/orders', {...}, listOrders)
+  .endpoint('POST', '/orders', {...}, createOrder)
+
+// Products service
+app.service('products')
+  .endpoint('GET', '/products', {...}, listProducts)
+```
+
+### Pattern: Use consistent path prefixes
+
+```typescript
+// Vision auto-groups by prefix
+// These all appear under "Users" service in the catalog
+
+GET  /users           → listUsers
+GET  /users/:id       → getUser
+POST /users           → createUser
+PUT  /users/:id       → updateUser
+DELETE /users/:id     → deleteUser
+GET  /users/:id/orders → getUserOrders
+```
+
+---
+
+## Schema Patterns
+
+### Pattern: Use descriptive schemas
+
+```typescript
+// Bad - minimal schema
+const input = z.object({
+  n: z.string(),
+  e: z.string()
+})
+
+// Good - descriptive schema
+const input = z.object({
+  name: z.string().min(1).max(100).describe('Full name'),
+  email: z.string().email().describe('Email address')
+})
+```
+
+### Pattern: Document with .describe()
+
+```typescript
+const CreateUserInput = z.object({
+  name: z.string()
+    .min(1)
+    .max(100)
+    .describe('User\'s full name'),
+
+  email: z.string()
+    .email()
+    .describe('Primary email address'),
+
+  role: z.enum(['user', 'admin', 'moderator'])
+    .default('user')
+    .describe('User role for permissions'),
+
+  metadata: z.record(z.string())
+    .optional()
+    .describe('Additional key-value data')
+})
+
+// Vision generates helpful templates:
+// {
+//   "name": "",      // User's full name (required)
+//   "email": "",     // Primary email address (required)
+//   "role": "user",  // User role for permissions
+//   "metadata": {}   // Additional key-value data (optional)
+// }
+```
+
+---
+
+## Testing Patterns
+
+### Pattern: Check traces in tests
+
+```typescript
+import { test, expect } from 'bun:test'
+
+test('creates user with correct traces', async () => {
+  const response = await app.request('/users', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'John', email: 'john@example.com' })
+  })
+
+  expect(response.status).toBe(201)
+
+  // Get the trace from Vision
+  const traces = vision.getTraceStore().list({ path: '/users' })
+  const trace = traces[0]
+
+  // Verify spans were created
+  expect(trace.spans).toContainEqual(
+    expect.objectContaining({
+      name: 'db.insert.users',
+      attributes: expect.objectContaining({
+        'db.table': 'users'
+      })
+    })
+  )
+})
+```
+
+### Pattern: Clear traces between tests
+
+```typescript
+import { beforeEach } from 'bun:test'
+
+beforeEach(() => {
+  vision.getTraceStore().clear()
+})
+```
+
+---
+
+## Production Patterns
+
+### Pattern: Disable in production (if needed)
+
+```typescript
+const app = new Vision({
+  service: { name: 'My API' },
+  vision: {
+    enabled: process.env.NODE_ENV !== 'production',
+    // Or enable but limit storage
+    maxTraces: process.env.NODE_ENV === 'production' ? 100 : 1000
+  }
+})
+```
+
+### Pattern: Sample in high-traffic
+
+```typescript
+// Future feature - not yet implemented
+const app = new Vision({
+  vision: {
+    sampling: {
+      rate: 0.1,  // 10% of requests
+      alwaysInclude: (req) => req.status >= 400  // Always include errors
+    }
+  }
+})
+```
+
+### Pattern: Sensitive data filtering
+
+```typescript
+// Don't include sensitive data in spans
+withSpan('auth.login', {
+  'user.email': email,
+  // Don't include password!
+  // 'user.password': password  ← NO!
+}, operation)
+
+// Don't include tokens in context
+vision.addContext({
+  'user.id': user.id,
+  // 'auth.token': token  ← NO!
+})
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+### ❌ Spans for synchronous operations
+
+```typescript
+// Bad - unnecessary overhead
+withSpan('parse.json', () => JSON.parse(body))
+withSpan('validate.email', () => isEmail(email))
+
+// Good - just do it
+const data = JSON.parse(body)
+const valid = isEmail(email)
+```
+
+### ❌ Sensitive data in attributes
+
+```typescript
+// Bad - exposes secrets
+withSpan('auth.verify', {
+  'token': token,           // NO!
+  'password': password,     // NO!
+  'api_key': apiKey        // NO!
+})
+
+// Good - only safe metadata
+withSpan('auth.verify', {
+  'user.id': userId,
+  'token.type': 'bearer',
+  'token.exp': tokenExp
+})
+```
+
+### ❌ Too many spans
+
+```typescript
+// Bad - every line is a span
+withSpan('step1', () => ...)
+withSpan('step2', () => ...)
+withSpan('step3', () => ...)
+withSpan('step4', () => ...)
+withSpan('step5', () => ...)
+
+// Good - meaningful groupings only
+withSpan('validate', () => {
+  // steps 1-2
+})
+withSpan('process', () => {
+  // steps 3-5
+})
+```
+
+### ❌ Ignoring errors
+
+```typescript
+// Bad - errors silently lost
+try {
+  await withSpan('risky.operation', doSomething)
+} catch (e) {
+  // Swallowed - trace shows success but wasn't
+}
+
+// Good - let errors propagate
+await withSpan('risky.operation', doSomething)
+// Error captured in span automatically
+```
+
+---
+
+## Next Steps
+
+- [**Debugging Workflows**](/docs/debugging) - Step-by-step debugging guides
+- [**API Reference**](/docs/api-reference) - Full API documentation
+- [**Deployment**](/docs/deployment) - Production considerations

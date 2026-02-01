@@ -1,60 +1,52 @@
-# Vision SDK - Basic Example
+# Vision Server Example
 
-Example app demonstrating `@getvision/sdk` - meta-framework with built-in observability.
-
-## Features Demonstrated
-
-- ✅ **Builder Pattern API** - Encore-style service definitions
-- ✅ **Built-in Vision Dashboard** - Automatic tracing & logging
-- ✅ **Type-safe Validation** - Zod schemas for inputs/outputs
-- ✅ **Custom Spans** - Database query tracking
-- ✅ **Event-Driven Architecture** - BullMQ event system
-- ✅ **Cron Jobs** - Scheduled tasks with BullMQ Repeatable
-- ✅ **Type-safe Events** - Zod validation for events
-- ✅ **Multiple Services** - Users and Orders services
+Build APIs with observability from the start. Vision Server is a meta-framework with tracing, events, and cron jobs built in.
 
 ## Quick Start
 
-### 1. Install dependencies
-
 ```bash
 bun install
+bun dev
 ```
 
-### 2. Run the example
+**Open:**
+- API: http://localhost:3000
+- Vision Dashboard: http://localhost:9500
+- Inngest Dev Server: http://localhost:8288 (if installed)
 
-```bash
-bun run dev
+No Redis, no external services. Everything runs locally.
+
+## Try This: See the Service Builder Pattern
+
+**Step 1:** Look at the code
+
+```typescript
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({ id: z.string(), name: z.string() })
+  }, async ({ id }, c) => {
+    // c.span() is built in - no imports needed
+    const user = c.span('db.select', { 'db.table': 'users' }, () => {
+      return db.select().from(users).where(eq(users.id, id))
+    })
+    return user
+  })
 ```
 
-This starts everything automatically:
-- 🚀 API Server on `http://localhost:3000`
-- 🔮 Vision Dashboard on `http://localhost:9500`
-- 📬 Event Bus (BullMQ) - in-memory dev mode, no Redis required!
-
-**That's it!** No external services needed. Everything runs locally.
-
-## Try It Out
-
-### 1. Visit the API
-
-```bash
-curl http://localhost:3000
-```
-
-### 2. Get all users
-
-```bash
-curl http://localhost:3000/users
-```
-
-### 3. Get user by ID (with nested spans!)
+**Step 2:** Make a request
 
 ```bash
 curl http://localhost:3000/users/1
 ```
 
-### 4. Create a user (triggers event!)
+**Step 3:** Open Vision Dashboard
+
+You'll see the trace with the `db.select` span already tracked. No extra setup.
+
+## Try This: See Events in Action
+
+**Step 1:** Create a user
 
 ```bash
 curl -X POST http://localhost:3000/users \
@@ -62,7 +54,20 @@ curl -X POST http://localhost:3000/users \
   -d '{"name":"Alice","email":"alice@example.com"}'
 ```
 
-### 5. Create an order
+**Step 2:** Check the console
+
+You'll see: `📧 Sending welcome email to: alice@example.com`
+
+**Step 3:** Open Vision Dashboard
+
+In the trace, you'll see:
+- The HTTP request
+- The database insert
+- The event being sent
+
+## Try This: Create an Order
+
+**Step 1:** Create an order
 
 ```bash
 curl -X POST http://localhost:3000/orders \
@@ -74,198 +79,209 @@ curl -X POST http://localhost:3000/orders \
   }'
 ```
 
-### 6. Open Vision Dashboard
+**Step 2:** Open Vision Dashboard
 
-Visit `http://localhost:9500` to see:
-- 📊 **Real-time traces** with waterfall visualization
-- 📝 **Live logs** from your app
-- 🏗️ **Service catalog** with auto-discovered endpoints
-- 🔍 **Request details** - headers, body, query params, spans
-- ⚡ **Events & Cron Jobs** - Monitor your event-driven architecture at `/events`
+You'll see the complete trace with all database operations and events.
 
-## What You'll See
+## When to Use Vision Server vs Adapters
 
-### Service Organization
+| Use Vision Server when: | Use Adapters when: |
+|------------------------|-------------------|
+| Starting a new project | Adding to existing app |
+| Want structured services | Want minimal changes |
+| Need events + cron jobs | Just need tracing |
+| Building from scratch | Have existing routes |
+
+Both give you the same dashboard. Vision Server just has more built in.
+
+## Service Organization
 
 ```
 Users Service
-  GET /users
-  GET /users/:id
-  POST /users
+  GET /users        - List all users
+  GET /users/:id    - Get user with related articles
+  POST /users       - Create user (triggers event)
 
 Orders Service
-  POST /orders
+  POST /orders      - Create order
 
 Root
-  GET /
-
-Inngest
-  POST /api/inngest
+  GET /             - API info
 ```
 
-### Trace Waterfall
-
-When you call `GET /users/:id`, you'll see:
-```
-http.request (130ms)
-  ├─ db.select - users (50ms)
-  └─ db.select - articles (80ms)
-```
-
-### Event Handling
-
-Creating a user triggers:
-1. HTTP request trace
-2. Database insert span
-3. `user/created` event sent to Inngest
-4. Console log: "📧 Sending welcome email to: user@example.com"
-
-### Cron Jobs
-
-The daily cleanup cron (`0 0 * * *`) is registered and visible in Inngest Dev Server.
-
-## Code Structure
-
-```
-src/
-└── index.ts        # Main app with service definitions
-```
-
-Everything in one file to keep it simple!
-
-## Key Concepts
+## How Vision Server Works
 
 ### 1. Service Builder Pattern
 
 ```typescript
-const userService = createService('users', inngest)
-  .use(middleware)           // Service-level middleware
-  .endpoint(...)             // HTTP endpoints
-  .on('event', handler)      // Event handlers
-  .cron('schedule', handler) // Cron jobs
+const userService = app.service('users')
+  .endpoint(method, path, { input, output }, handler)
+  .on('event-name', eventHandler)
+  .cron('schedule', cronHandler)
 ```
 
-### 2. Automatic Tracing
+### 2. Built-in Spans
 
-Vision middleware automatically:
-- Creates traces for all requests
-- Captures request/response metadata
-- Broadcasts to dashboard
-
-### 3. Custom Spans
+The handler context has `span()` built in:
 
 ```typescript
-const withSpan = useVisionSpan()
+async ({ id }, c) => {
+  // c.span() - no import needed
+  const user = c.span('db.select', { 'db.table': 'users' }, () => {
+    return db.select().from(users)
+  })
+  return user
+}
+```
 
-const data = withSpan('db.select', {
-  'db.table': 'users'
-}, () => {
-  // Your code - automatically tracked!
-  return fetchUsers()
+### 3. Type-safe Validation
+
+Input and output are validated and typed:
+
+```typescript
+.endpoint('POST', '/users', {
+  input: z.object({
+    name: z.string().min(1),
+    email: z.string().email()
+  }),
+  output: z.object({
+    id: z.string()
+  })
+}, async (data) => {
+  // data is typed as { name: string, email: string }
+  return { id: '123' }
 })
 ```
 
-### 4. Type-safe Validation
+### 4. Event Handlers
+
+Handle events with type safety:
 
 ```typescript
-.endpoint(
-  'POST',
-  '/users',
-  {
-    input: z.object({
-      name: z.string().min(1),
-      email: z.string().email()
-    }),
-    output: z.object({
-      id: z.string()
-    })
-  },
-  async (data) => {
-    // data is fully typed!
-    return { id: '123' }
+.on('user/created', async (event) => {
+  // event.data is typed based on schema
+  console.log('Welcome email to:', event.data.email)
+})
+```
+
+### 5. Cron Jobs
+
+Schedule recurring tasks:
+
+```typescript
+.cron('0 0 * * *', async () => {
+  console.log('Daily cleanup running...')
+})
+```
+
+## API Endpoints
+
+```bash
+# API info
+curl http://localhost:3000/
+
+# List users
+curl http://localhost:3000/users
+
+# Get user by ID (includes articles)
+curl http://localhost:3000/users/1
+
+# Create user (triggers welcome email event)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+# Create order
+curl -X POST http://localhost:3000/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"1","items":[{"productId":"p1","quantity":2}],"total":99.99}'
+```
+
+## Event System
+
+Vision Server uses Inngest for events:
+
+```typescript
+// Define event schemas
+pubsub: {
+  schemas: {
+    'user/created': {
+      data: z.object({
+        userId: z.string(),
+        email: z.string().email()
+      })
+    }
   }
-)
+}
+
+// Send events
+await app.getInngest().send({
+  name: 'user/created',
+  data: { userId: '123', email: 'alice@example.com' }
+})
+
+// Handle events
+.on('user/created', async (event) => {
+  await sendWelcomeEmail(event.data.email)
+})
+```
+
+## File-Based Routing
+
+Vision Server supports file-based routing like Next.js:
+
+```
+app/routes/
+├── products/
+│   └── index.ts     → /products
+├── users/
+│   └── [id]/
+│       └── index.ts → /users/:id
+└── analytics/
+    └── dashboard/
+        └── index.ts → /analytics/dashboard
+```
+
+Each file exports a Vision instance:
+
+```typescript
+// app/routes/products/index.ts
+import { Vision } from '@getvision/server'
+
+const app = new Vision()
+
+app.service('products')
+  .endpoint('GET', '/', {...}, listProducts)
+
+export default app
 ```
 
 ## Troubleshooting
 
-### Error: "Failed to start Inngest Dev Server"
+### Inngest not starting
 
-**Cause:** Inngest CLI is not installed.
-
-**Solution:**
+Install the CLI:
 ```bash
-# Install Inngest CLI
 brew install inngest/tap/inngest
-
-# Verify installation
-inngest version
 ```
 
-### Error: "fetch failed" when creating a user
-
-**Cause:** Inngest Dev Server didn't start or is not responding.
-
-**Solution:**
-1. Check that Inngest CLI is installed: `inngest version`
-2. Check the app logs for "Inngest Dev Server running"
-3. Verify `inngest.yaml` has `dev: true` enabled
-4. Check that `.env.development` has:
-   ```
-   INNGEST_DEV=1
-   INNGEST_BASE_URL=http://localhost:8288
-   ```
-
-### Error: "Cannot find module 'dotenv'"
-
-**Solution:**
-```bash
-bun install dotenv
+Or disable auto-start:
+```typescript
+const app = new Vision({
+  inngest: { autoStart: false }
+})
 ```
 
-### Events not appearing in Inngest UI
+### Events not appearing
 
-**Cause:** Inngest Dev Server UI is at a different URL.
-
-**Solution:**
-1. Open `http://localhost:8288` in your browser (not 8289)
-2. You should see the Inngest Dev Server dashboard
-3. Create a user with:
-   ```bash
-   curl -X POST http://localhost:3000/users \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Test","email":"test@example.com"}'
-   ```
-4. Check the dashboard for the `user/created` event
-
-### Manual Inngest Server Start
-
-If you prefer to run Inngest manually instead of auto-start:
-
-1. Disable auto-start in `src/index.ts`:
-   ```typescript
-   inngest: {
-     autoStart: false,  // Disable auto-start
-     port: 8288,
-     configPath: './inngest.yaml'
-   }
-   ```
-
-2. Start Inngest in a separate terminal:
-   ```bash
-   inngest dev --config inngest.yaml
-   ```
+1. Check Inngest Dev Server is running (localhost:8288)
+2. Check app logs for "Inngest Dev Server running"
+3. Verify INNGEST_DEV=1 in environment
 
 ## Next Steps
 
-1. Add authentication middleware
-2. Connect real database (Drizzle, Prisma)
-3. Add more event handlers
-4. Deploy to production
-
-## Learn More
-
-- [Vision Server Documentation](../../packages/server/README.md)
-- [Vision Core](../../packages/core/README.md)
-- [Hono Documentation](https://hono.dev)
-- [Inngest Documentation](https://www.inngest.com/docs)
+- Build your own service with `app.service('name')`
+- Add event handlers with `.on('event', handler)`
+- Schedule tasks with `.cron('schedule', handler)`
+- Check out the [Vision Server docs](https://getvision.dev/docs/server)
+- See [debugging workflows](https://getvision.dev/docs/debugging)

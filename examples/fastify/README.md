@@ -1,140 +1,234 @@
-# Fastify Basic Example
+# Fastify + Vision Example
 
-Example Fastify application using Vision Dashboard.
-
-## Features
-
-- ✅ **Vision Plugin** - Automatic request tracing via Fastify hooks
-- ✅ **Custom Spans** - Track database queries and operations
-- ✅ **Auto-discovery** - Routes automatically registered in Vision (services grouping)
-- ✅ **Zod validation** - Native Fastify schema support with Zod
-- ✅ **CORS ready** - headers for Vision Dashboard added automatically
-- ✅ **Error Tracking** - Errors captured in spans
+Add Vision to your Fastify app as a plugin. See exactly what happens inside every request.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 bun install
-
-# Run development server
 bun dev
 ```
 
-## URLs
+**Open:**
+- API: http://localhost:3000
+- Vision Dashboard: http://localhost:9500
 
-- **Fastify API**: http://localhost:3000
-- **Vision Dashboard**: http://localhost:9500
+## Try This: See Your First Trace
 
-## API Endpoints
-
-### GET /
-Get API info
-
-```bash
-curl http://localhost:3000/
-```
-
-### GET /users
-List all users (with DB span)
-
-```bash
-curl http://localhost:3000/users
-```
-
-### GET /users/:id
-Get user by ID (with multiple DB spans)
+**Step 1:** Make a request
 
 ```bash
 curl http://localhost:3000/users/1
 ```
 
-### POST /users
-Create new user (with Zod validation and DB span)
+**Step 2:** Open Vision Dashboard (localhost:9500)
+
+Click the trace for `GET /users/1`. You'll see:
+
+```
+GET /users/1 (42ms)
+├── http.request (42ms)
+│   ├── db.select.users (8ms)
+│   └── db.select.articles (15ms)
+```
+
+**You immediately see:** Two database queries, and `articles` takes longer than `users`.
+
+## Try This: Debug a Validation Error
+
+**Step 1:** Send an invalid request
 
 ```bash
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com","age":25}'
+  -d '{"name":"A","email":"not-valid","age":"young"}'
 ```
 
-### PUT /users/:id
-Update user (with Zod validation and DB span)
+**Step 2:** Find the 400 trace in Vision Dashboard
+
+You'll see:
+- **Request Body:** `{"name":"A","email":"not-valid","age":"young"}`
+- **Validation Errors:**
+  - `name`: String must contain at least 2 characters
+  - `email`: Invalid email
+  - `age`: Expected number, received string
+
+No console.log. No guessing. Just click and see.
+
+## Try This: Compare Traces
+
+Make two similar requests and compare them in the dashboard:
 
 ```bash
+# Fast request
+curl http://localhost:3000/users/1
+
+# Slow request (simulated)
+curl http://localhost:3000/users/1?slow=true
+```
+
+In Vision Dashboard, you can see both traces side by side and compare:
+- Which spans are different
+- Where time is spent
+- What changed
+
+## How to Add Vision to Your Fastify App
+
+**Step 1:** Install
+
+```bash
+npm install @getvision/adapter-fastify
+```
+
+**Step 2:** Register the plugin
+
+```typescript
+import fastify from 'fastify'
+import { visionPlugin, enableAutoDiscovery } from '@getvision/adapter-fastify'
+
+const app = fastify()
+
+// Register Vision plugin
+await app.register(visionPlugin)
+enableAutoDiscovery(app)
+
+// Your existing routes work as-is
+app.get('/users', async () => {
+  return [{ id: 1, name: 'Alice' }]
+})
+
+await app.listen({ port: 3000 })
+```
+
+**Step 3:** Open localhost:9500
+
+Your requests are now traced automatically.
+
+## API Endpoints
+
+```bash
+# Get API info
+curl http://localhost:3000/
+
+# List users
+curl http://localhost:3000/users
+
+# Get user by ID (multiple spans)
+curl http://localhost:3000/users/1
+
+# Create user (with validation)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Smith","email":"alice@example.com","age":25}'
+
+# Update user
 curl -X PUT http://localhost:3000/users/1 \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice Updated"}'
-```
 
-### DELETE /users/:id
-Delete user (with DB span)
-
-```bash
+# Delete user
 curl -X DELETE http://localhost:3000/users/1
 ```
 
-## Vision Features
+## Adding Custom Spans
 
-### Request Tracing
-Every request is automatically traced with:
-- HTTP method, path, query params
-- Request/response headers
-- Status code and duration
-- Custom spans
-
-### Custom Spans
-Track database operations:
+Track any operation with Fastify's request context:
 
 ```typescript
-const withSpan = useVisionSpan()
+import { useVisionSpan } from '@getvision/adapter-fastify'
 
-const users = withSpan('db.select', { 
-  'db.system': 'postgresql',
-  'db.table': 'users' 
-}, () => {
-  return db.select().from(users).all()
+app.get('/orders/:id', async (request, reply) => {
+  const withSpan = useVisionSpan(request)
+
+  // Track database query
+  const order = await withSpan('db.select', {
+    'db.table': 'orders',
+    'order.id': request.params.id
+  }, async () => {
+    return db.query('SELECT * FROM orders WHERE id = ?', [request.params.id])
+  })
+
+  // Track external API call
+  const tracking = await withSpan('external.shipping', {
+    'tracking.id': order.trackingId
+  }, async () => {
+    return fetch(`https://shipping.api/track/${order.trackingId}`)
+  })
+
+  return { order, tracking }
 })
 ```
 
-### Auto-Discovery
-Routes are automatically discovered and shown in Vision dashboard:
+## Adding Validation
+
+Fastify's schema validation works with Vision:
 
 ```typescript
-enableAutoDiscovery(app)
+import { z } from 'zod'
 
-// Optional manual services grouping
-// enableAutoDiscovery(app, { services: [
-//   { name: 'Users', routes: ['/users/*'] }
-// ]})
-```
-
-### Zod Validation
-Fastify's native schema support with Zod:
-
-```typescript
 const CreateUserSchema = z.object({
-  name: z.string().min(1).describe('Full name'),
-  email: z.string().email().describe('Email'),
+  name: z.string().min(2).describe('Full name'),
+  email: z.string().email().describe('Email address'),
+  age: z.number().min(0).optional().describe('Age in years')
 })
 
 app.post('/users', {
   schema: {
     body: CreateUserSchema
   }
-}, async (request, reply) => {
-  return request.body
+}, async (request) => {
+  // request.body is validated and typed
+  return { id: '123', ...request.body }
 })
 ```
 
-## Testing Vision
+Vision extracts the schema and:
+- Shows it in the API Explorer
+- Generates request templates
+- Displays validation errors in traces
 
-1. Start the app: `bun dev`
-2. Open Vision Dashboard: http://localhost:9500
-3. Make requests to the API
-4. See traces in the dashboard! Root span `http.request` will include child spans like `db.select`.
+## What Vision Captures
 
-## Learn More
+For every request:
+- HTTP method, path, status code
+- Request headers and body
+- Response headers and body
+- Custom spans with timing
+- Errors with stack traces
+- Fastify lifecycle hooks
 
-- [Vision Documentation](../../apps/docs)
-- [Fastify Adapter Documentation](../../packages/adapter-fastify)
+## Fastify-Specific Features
+
+### Automatic Hook Tracking
+
+Vision automatically tracks Fastify's lifecycle:
+- `onRequest` hooks
+- `preHandler` hooks
+- `onResponse` hooks
+
+### Request Context
+
+Use Fastify's request context for spans:
+
+```typescript
+const withSpan = useVisionSpan(request)
+```
+
+### Validation PreHandler
+
+Add validation as a preHandler:
+
+```typescript
+import { validator } from '@getvision/adapter-fastify'
+
+app.post('/users', {
+  preHandler: [validator('body', CreateUserSchema)]
+}, handler)
+```
+
+## Next Steps
+
+- Add Vision to your own Fastify app
+- Add custom spans for your database queries
+- Check out the [debugging workflows](https://getvision.dev/docs/debugging)
+- See [common patterns](https://getvision.dev/docs/patterns) for best practices

@@ -1,0 +1,486 @@
+---
+title: Debugging Workflows
+description: Step-by-step guides for debugging common API issues with Vision
+---
+
+# Debugging Workflows
+
+Practical, step-by-step guides for debugging real API issues with Vision.
+
+## Workflow 1: Debugging a Slow Endpoint
+
+**Symptom:** `GET /products` takes 3+ seconds
+
+### Step 1: Find the trace
+
+1. Open Vision Dashboard (`localhost:9500`)
+2. Go to **Traces** tab
+3. Filter by path: `/products`
+4. Look for traces with high duration (highlighted in yellow/red)
+
+### Step 2: Analyze the waterfall
+
+Click the slow trace. You'll see something like:
+
+```
+GET /products (3.2s)
+├── middleware.auth (5ms)
+├── middleware.cors (1ms)
+├── handler (3.1s) ← The handler is slow
+│   ├── db.select.products (50ms)
+│   ├── db.select.categories (45ms)
+│   ├── db.select.inventory (2.8s) ← This is the problem!
+│   └── transform (200ms)
+└── response (10ms)
+```
+
+### Step 3: Identify the problem
+
+The `db.select.inventory` span is 2.8s. Click it to see details:
+
+```json
+{
+  "name": "db.select.inventory",
+  "duration": 2800,
+  "attributes": {
+    "db.table": "inventory",
+    "db.operation": "SELECT",
+    "query.count": 150  // ← N+1 query! One query per product
+  }
+}
+```
+
+### Step 4: Fix it
+
+The problem is N+1 queries. Fix with a JOIN or batch query:
+
+```typescript
+// Before (N+1)
+for (const product of products) {
+  product.inventory = await db.select()
+    .from(inventory)
+    .where(eq(inventory.productId, product.id))
+}
+
+// After (1 query)
+const inventoryData = await db.select()
+  .from(inventory)
+  .where(inArray(inventory.productId, products.map(p => p.id)))
+```
+
+### Step 5: Verify
+
+Make the request again. Check the new trace:
+
+```
+GET /products (180ms) ← 17x faster!
+├── handler (170ms)
+│   ├── db.select.products (50ms)
+│   ├── db.select.categories (45ms)
+│   ├── db.select.inventory (55ms) ← Single query now
+│   └── transform (20ms)
+```
+
+---
+
+## Workflow 2: Debugging Validation Errors
+
+**Symptom:** `POST /users` returns 400 but you don't know why
+
+### Step 1: Find the failed trace
+
+1. Open **Traces** tab
+2. Filter by: Status `4xx`, Path `/users`
+3. Click the trace with status 400
+
+### Step 2: Check request data
+
+In the trace details, look at **Request**:
+
+```json
+{
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "name": "John Doe",
+    "email": "johndoe.com",  // Missing @ symbol
+    "age": "25"             // String instead of number
+  }
+}
+```
+
+### Step 3: Check validation error
+
+Look at **Response** or **Validation Errors**:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "details": [
+      { "path": ["email"], "message": "Invalid email format" },
+      { "path": ["age"], "message": "Expected number, received string" }
+    ]
+  }
+}
+```
+
+### Step 4: Fix the request
+
+Now you know exactly what's wrong:
+- `email`: "johndoe.com" → "john@doe.com"
+- `age`: "25" → 25
+
+### Step 5: Test in API Explorer
+
+1. Go to **API Explorer** tab
+2. Select `POST /users`
+3. Vision auto-generates a template from your Zod schema:
+   ```json
+   {
+     "name": "",      // string (required)
+     "email": "",     // string, email format (required)
+     "age": 0         // number (optional)
+   }
+   ```
+4. Fill in valid data and test
+
+---
+
+## Workflow 3: Debugging External API Failures
+
+**Symptom:** Payment processing fails randomly
+
+### Step 1: Find failed traces
+
+Filter traces by:
+- Status: `5xx`
+- Path: `/checkout` or `/payments`
+
+### Step 2: Look for external API spans
+
+In the trace waterfall:
+
+```
+POST /checkout (30.5s)
+├── handler (30.4s)
+│   ├── db.select.cart (15ms)
+│   ├── db.select.user (10ms)
+│   ├── external.stripe.charge (30s) ← TIMEOUT!
+│   │   └── attributes: {
+│   │         url: "https://api.stripe.com/v1/charges",
+│   │         error: "ETIMEDOUT",
+│   │         timeout: 30000
+│   │       }
+│   └── [never reached]
+```
+
+### Step 3: Diagnose
+
+The Stripe API call timed out. Possible causes:
+- Network issues between your server and Stripe
+- Stripe is having issues
+- Your timeout is too aggressive
+
+### Step 4: Add retry logic
+
+```typescript
+const createCharge = withSpan('external.stripe.charge', {
+  'stripe.amount': amount,
+  'stripe.customer': customerId
+}, async () => {
+  // Add retry with exponential backoff
+  return retry(() => stripe.charges.create({...}), {
+    retries: 3,
+    minTimeout: 1000
+  })
+})
+```
+
+### Step 5: Add timeout attributes
+
+Track timeouts explicitly:
+
+```typescript
+withSpan('external.stripe.charge', {
+  'http.url': 'https://api.stripe.com/v1/charges',
+  'timeout.ms': 10000,
+  'retry.attempt': attempt
+}, operation)
+```
+
+---
+
+## Workflow 4: Debugging "Works Locally, Fails Remotely"
+
+**Symptom:** API works on localhost but fails in staging
+
+### Step 1: Compare traces
+
+If you have Vision in both environments:
+1. Find the trace locally (successful)
+2. Find the trace in staging (failed)
+
+### Step 2: Check environment differences
+
+Look at span attributes:
+
+**Local (works):**
+```json
+{
+  "span": "db.select.users",
+  "attributes": {
+    "db.host": "localhost",
+    "db.name": "dev_db"
+  }
+}
+```
+
+**Staging (fails):**
+```json
+{
+  "span": "db.select.users",
+  "attributes": {
+    "db.host": "db.staging.internal",
+    "db.name": "staging_db",
+    "error": "ECONNREFUSED"
+  }
+}
+```
+
+### Step 3: Common causes
+
+**Database connection:**
+- Check `DATABASE_URL` env variable
+- Check network/firewall rules
+- Check credentials
+
+**External APIs:**
+- Check if URLs are environment-specific
+- Check if API keys are set for staging
+- Check if external services allow staging IPs
+
+**File paths:**
+- Absolute paths that only exist locally
+- Missing uploaded files
+
+### Step 4: Add environment context
+
+```typescript
+const app = new Vision({
+  service: {
+    name: 'My API',
+    metadata: {
+      environment: process.env.NODE_ENV,
+      region: process.env.AWS_REGION
+    }
+  }
+})
+```
+
+---
+
+## Workflow 5: Debugging Authentication Issues
+
+**Symptom:** Getting 401 Unauthorized unexpectedly
+
+### Step 1: Check the trace
+
+Find the 401 trace and look at:
+
+1. **Request headers:**
+   ```json
+   {
+     "authorization": "Bearer eyJhbG..."  // Is token present?
+   }
+   ```
+
+2. **Middleware execution:**
+   ```
+   GET /protected (401, 5ms)
+   ├── middleware.auth (4ms) ← Failed here
+   │   └── attributes: {
+   │         error: "Token expired",
+   │         token.exp: "2024-01-15T10:00:00Z",
+   │         current_time: "2024-01-15T12:00:00Z"
+   │       }
+   ├── [handler never reached]
+   ```
+
+### Step 2: Check token details
+
+Add token debugging to your auth middleware:
+
+```typescript
+const authMiddleware = async (c, next) => {
+  const withSpan = useVisionSpan()
+
+  await withSpan('middleware.auth', async () => {
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+
+    if (!token) {
+      // This will show in the trace
+      throw new UnauthorizedError('No token provided')
+    }
+
+    const decoded = jwt.decode(token)
+
+    // Add to span for debugging
+    vision.addContext({
+      'auth.token_exp': decoded.exp,
+      'auth.token_iat': decoded.iat,
+      'auth.user_id': decoded.sub
+    })
+
+    await verifyToken(token)
+  })
+
+  await next()
+}
+```
+
+---
+
+## Workflow 6: Debugging Missing Data
+
+**Symptom:** Endpoint returns empty array when it shouldn't
+
+### Step 1: Check the query span
+
+```
+GET /users?role=admin (200, 25ms)
+├── handler (20ms)
+│   └── db.select.users (15ms)
+│       └── attributes: {
+│             query: "SELECT * FROM users WHERE role = ?",
+│             params: ["admin"],
+│             result.count: 0  // ← No results
+│           }
+```
+
+### Step 2: Verify the data exists
+
+Look at the query and params. Common issues:
+
+**Case sensitivity:**
+```sql
+-- Query looking for 'admin'
+-- Database has 'Admin' or 'ADMIN'
+```
+
+**Type mismatch:**
+```typescript
+// Query param is string "1"
+// Database column is integer 1
+where(eq(users.id, "1"))  // Wrong!
+where(eq(users.id, parseInt(id)))  // Right
+```
+
+**Missing data:**
+```typescript
+// The data simply doesn't exist
+// Check with Drizzle Studio (localhost:4983)
+```
+
+### Step 3: Add more span details
+
+```typescript
+const users = withSpan('db.select.users', {
+  'db.table': 'users',
+  'query.role': role,
+  'query.limit': limit
+}, async () => {
+  const result = await db.select().from(users).where(eq(users.role, role))
+
+  // Add result info to span
+  vision.addContext({
+    'result.count': result.length,
+    'result.ids': result.map(u => u.id).slice(0, 5)  // First 5 IDs
+  })
+
+  return result
+})
+```
+
+---
+
+## Quick Debugging Checklist
+
+When something goes wrong:
+
+1. **Open Vision Dashboard** → `localhost:9500`
+2. **Find the trace** → Filter by path, status, time
+3. **Check the waterfall** → Which span failed or is slow?
+4. **Check request data** → Is the input what you expected?
+5. **Check response data** → What error was returned?
+6. **Check span attributes** → What context was captured?
+7. **Check related logs** → Any console.log output?
+
+---
+
+## Adding Debug Spans
+
+For complex operations, add explicit spans:
+
+```typescript
+import { useVisionSpan, getVisionContext } from '@getvision/adapter-hono'
+
+app.post('/complex-operation', async (c) => {
+  const withSpan = useVisionSpan()
+  const { vision } = getVisionContext()
+
+  // Step 1: Validate input
+  const input = await withSpan('validate.input', async () => {
+    return validateInput(await c.req.json())
+  })
+
+  // Step 2: Check permissions
+  await withSpan('check.permissions', {
+    'user.id': input.userId,
+    'resource.type': 'document'
+  }, async () => {
+    await checkPermissions(input.userId, 'document:write')
+  })
+
+  // Step 3: Process
+  const result = await withSpan('process.document', {
+    'document.size': input.content.length
+  }, async () => {
+    return processDocument(input)
+  })
+
+  // Step 4: Save
+  await withSpan('db.insert.documents', {
+    'db.table': 'documents'
+  }, async () => {
+    await db.insert(documents).values(result)
+  })
+
+  // Add context that appears in all related logs
+  vision.addContext({
+    'document.id': result.id,
+    'operation': 'create'
+  })
+
+  return c.json(result)
+})
+```
+
+Now the trace shows:
+```
+POST /complex-operation (250ms)
+├── validate.input (10ms)
+├── check.permissions (15ms)
+├── process.document (180ms) ← Clearly the slow part
+├── db.insert.documents (40ms)
+└── response (5ms)
+```
+
+---
+
+## Next Steps
+
+- [**Tracing Deep Dive**](/docs/features/tracing) - Understanding span attributes
+- [**Common Patterns**](/docs/patterns) - Best practices for observability
+- [**API Reference**](/docs/api-reference) - Full API documentation

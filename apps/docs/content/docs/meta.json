@@ -2,12 +2,15 @@
   "title": "Documentation",
   "pages": [
     "index",
+    "why-vision",
     "quickstart",
+    "debugging",
     "concepts",
     "validation",
     "server",
     "adapters",
     "features",
+    "patterns",
     "roadmap",
     "deployment",
     "api-reference"

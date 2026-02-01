@@ -1,0 +1,245 @@
+---
+title: Why Vision?
+description: Real debugging scenarios that show why Vision changes how you build APIs
+---
+
+# Why Vision?
+
+**TL;DR:** Vision shows you exactly what happened when something breaks. No more guessing, no more `console.log` archaeology.
+
+## The Problem Vision Solves
+
+You're building an API. A request fails. What do you do?
+
+**Without Vision:**
+```bash
+# Add console.log everywhere
+console.log('1. Got request', req.body)
+console.log('2. User found', user)
+console.log('3. About to query DB')
+console.log('4. DB result', result)
+# Run request again, scroll through terminal
+# Still confused? Add more logs
+# Repeat until you find the bug
+# Delete all the console.logs (or forget to)
+```
+
+**With Vision:**
+1. Open dashboard at `localhost:9500`
+2. Click the failed request
+3. See the waterfall: exactly which step failed and why
+4. Fix it
+
+That's it. No code changes, no restarts, no cleanup.
+
+---
+
+## Real Debugging Scenarios
+
+### Scenario 1: "Why is this endpoint slow?"
+
+Your `/users/:id` endpoint takes 2 seconds. Something's wrong.
+
+**Without Vision:** Add timing logs around every operation. Rebuild. Test. Analyze logs. Repeat.
+
+**With Vision:**
+
+```
+GET /users/123 (2.1s) ← You see this is slow
+├── middleware.auth (3ms) ← This is fast
+├── handler (2.09s) ← Problem is here
+│   ├── db.select.users (45ms) ← DB is fine
+│   ├── db.select.orders (1.8s) ← N+1 query! 50 separate queries
+│   └── cache.set (200ms) ← Redis slow too
+└── response (5ms)
+```
+
+**The answer is obvious:** You have N+1 queries in the orders lookup. Vision shows you the exact operation and its duration.
+
+### Scenario 2: "The request body is wrong somehow"
+
+Validation fails but you're not sure why.
+
+**With Vision:**
+
+Click the failed trace. See:
+- **Request body:** Exactly what was sent (not what you think was sent)
+- **Validation error:** `"email" must be a valid email`
+- **Schema:** The Zod schema that rejected it
+
+```json
+{
+  "request": {
+    "body": {
+      "name": "John",
+      "email": "john@"  // ← There's your problem
+    }
+  },
+  "error": {
+    "field": "email",
+    "message": "Invalid email format",
+    "received": "john@"
+  }
+}
+```
+
+### Scenario 3: "It works locally but fails in staging"
+
+The eternal mystery. Same code, different behavior.
+
+**With Vision:**
+
+Compare traces side by side:
+- **Local:** All spans complete successfully
+- **Staging:** The `external.api.payment` span fails with timeout
+
+```
+Staging trace:
+├── handler (30.1s) ← Timeout!
+│   └── external.api.payment (30s → TIMEOUT)
+│       └── attributes: { url: "https://api.stripe.com/...", error: "ETIMEDOUT" }
+```
+
+**The answer:** Payment API isn't accessible from staging network. Not a code bug.
+
+### Scenario 4: "Who called this endpoint with wrong params?"
+
+Your logs show errors but you don't know the context.
+
+**With Vision:**
+
+Every trace captures:
+- Full request headers (including `X-Request-ID`, auth tokens)
+- Client IP, User-Agent
+- Full request/response bodies
+- Timing for every operation
+- Associated `console.log` calls
+
+One click shows you everything about that request.
+
+### Scenario 5: "The database query is correct but returns nothing"
+
+You've checked the SQL, it looks right.
+
+**With Vision:**
+
+See the actual query parameters:
+```
+Span: db.select.users
+├── db.table: "users"
+├── db.operation: "SELECT"
+├── query.params: { "id": "123" }  // ← It's a string!
+└── result.rows: 0
+
+// Your database has id as INTEGER
+// You're querying with "123" (string) not 123 (number)
+```
+
+---
+
+## What Makes Vision Different
+
+### vs DataDog / NewRelic / Sentry
+- **Free and open source** - No $50/month minimum, no usage limits
+- **Runs locally** - Your data stays on your machine during development
+- **Zero config** - Works in 2 lines of code, not 2 hours of setup
+- **Developer-focused** - Built for debugging, not enterprise dashboards
+
+### vs console.log
+- **No code changes** - Everything is captured automatically
+- **Structured data** - Search, filter, correlate
+- **Waterfall view** - See timing and nesting at a glance
+- **Persists** - Traces survive restarts during dev
+
+### vs Postman / Insomnia
+- **Live tracing** - See what happened inside your server, not just response
+- **Auto-discovery** - All routes appear automatically
+- **Schema-aware** - Generates request templates from Zod schemas
+- **Integrated** - Testing + debugging in one tool
+
+### vs OpenTelemetry
+- **Beautiful UI included** - Not just a data format
+- **Batteries included** - Dashboard, API explorer, service catalog
+- **Zero boilerplate** - No instrumentation code to write
+- **Dev-focused** - Optimized for local development, not production APM
+
+---
+
+## The "Aha" Moment
+
+Most developers get Vision in about 5 minutes:
+
+1. **Install:** `npm install @getvision/adapter-hono` (or your framework)
+2. **Add 2 lines:**
+   ```typescript
+   app.use('*', visionAdapter())
+   enableAutoDiscovery(app)
+   ```
+3. **Make a request to your API**
+4. **Open localhost:9500**
+5. **Click the trace**
+6. **See everything:** The full waterfall, timing, request/response data, any DB queries
+
+**That's the moment.** You realize you're not guessing anymore. You're *seeing*.
+
+---
+
+## When to Use Vision
+
+**Use Vision when:**
+- Building APIs (REST, will support GraphQL/tRPC/MCP)
+- You want to understand what's happening inside your server
+- Debugging slow endpoints, validation errors, weird behavior
+- Working locally or in staging
+- Testing your API without switching to Postman
+
+**Don't use Vision when:**
+- You need production APM with alerting → Use DataDog/NewRelic
+- You're building a frontend-only app → Vision is for backend APIs
+- You need distributed tracing across microservices → Vision is single-service (for now)
+
+---
+
+## Quick Start
+
+### Existing App (Hono/Express/Fastify)
+
+```bash
+npm install @getvision/adapter-hono  # or adapter-express, adapter-fastify
+```
+
+```typescript
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+
+app.use('*', visionAdapter())
+enableAutoDiscovery(app)
+```
+
+Dashboard: **http://localhost:9500**
+
+### New Project
+
+```bash
+npm install @getvision/server
+```
+
+```typescript
+import { Vision } from '@getvision/server'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+app.service('users')
+  .endpoint('GET', '/users/:id', { input, output }, handler)
+
+app.start(3000)
+```
+
+Dashboard: **http://localhost:9500**
+
+---
+
+## Next Steps
+
+- [**Quickstart**](/docs/quickstart) - Full setup in 5 minutes
+- [**Tracing Deep Dive**](/docs/features/tracing) - Understanding waterfall visualization
+- [**Debugging Workflows**](/docs/debugging) - Step-by-step debugging guides

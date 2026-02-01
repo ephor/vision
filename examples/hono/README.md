@@ -1,79 +1,160 @@
 # Hono + Vision + Drizzle Example
 
-Complete example with Hono API, Vision Dashboard, and Drizzle ORM with SQLite.
+See exactly what happens inside your API. This example shows Vision with a real database.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Setup database
-pnpm db:push
-
-# Run in development mode (starts Vision + Drizzle Studio)
-pnpm dev
+bun install
+bun run db:push
+bun dev
 ```
 
-## What's included
+**Open:**
+- API: http://localhost:3000
+- Vision Dashboard: http://localhost:9500
+- Drizzle Studio: http://localhost:4983
 
-- ✅ **Vision Dashboard** - API monitoring with distributed tracing
-- ✅ **Drizzle ORM** - Type-safe SQLite database
-- ✅ **Drizzle Studio** - Auto-started database browser
-- ✅ **DB Spans** - Database queries traced in waterfall
-- ✅ **CRUD API** - Full user management endpoints
-- ✅ **Service Catalog** - Auto-grouped endpoints
+## Try This: Debug a Slow Query
 
-## Features
+**Step 1:** Create some data
 
-### Vision Dashboard (http://localhost:9500)
-- **API Explorer** - Test endpoints with multi-tab sessions
-- **Traces** - Waterfall visualization with DB spans
-- **Logs** - Real-time structured logging
-- **Services** - Auto-grouped endpoints (Root, Users)
-- **Database** - Embedded Drizzle Studio (http://localhost:4983)
+```bash
+# Create a few users
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com"}'
 
-### Drizzle Studio (http://localhost:4983)
-- Auto-started by Vision
-- Browse/edit database records
-- Visual schema explorer
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Bob","email":"bob@example.com"}'
+```
 
-## Try it out
+**Step 2:** Make a request
 
-1. **Start the server**: `pnpm dev`
-2. **Open Vision Dashboard**: http://localhost:9500
-3. **Test endpoints**:
-   ```bash
-   # Create user
-   curl -X POST http://localhost:3000/users \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Alice","email":"alice@example.com"}'
-   
-   # Get all users
-   curl http://localhost:3000/users
-   
-   # Get user by ID
-   curl http://localhost:3000/users/1
-   
-   # Update user
-   curl -X PUT http://localhost:3000/users/1 \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Alice Updated","email":"alice@example.com"}'
-   
-   # Delete user
-   curl -X DELETE http://localhost:3000/users/1
-   ```
+```bash
+curl http://localhost:3000/users/1
+```
 
-4. **Watch in Vision Dashboard**:
-   - See traces with DB spans in waterfall
-   - Check structured logs
-   - Navigate service catalog
-   - Browse database in Drizzle Studio tab
+**Step 3:** Open Vision Dashboard (localhost:9500)
+
+Click the trace for `GET /users/1`. You'll see:
+
+```
+GET /users/1 (45ms)
+├── http.request (45ms)
+│   └── db.select (12ms)
+│       └── db.table: "users"
+│       └── db.system: "sqlite"
+```
+
+**What you learn:** The database query took 12ms out of 45ms total. If this was slow, you'd see exactly which operation is the bottleneck.
+
+## Try This: Debug a Validation Error
+
+**Step 1:** Send an invalid request
+
+```bash
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"","email":"not-an-email"}'
+```
+
+**Step 2:** Open Vision Dashboard
+
+Find the trace with status 400. Click it to see:
+
+- **Request Body:** What was actually sent
+- **Validation Error:** Which field failed and why
+- **Schema:** The expected format
+
+No more guessing what went wrong.
+
+## Try This: See the Full Request Journey
+
+**Step 1:** Make a request
+
+```bash
+curl -X PUT http://localhost:3000/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Updated","email":"alice@example.com"}'
+```
+
+**Step 2:** Open Vision Dashboard and click the trace
+
+You'll see the complete waterfall:
+- When the request arrived
+- How long each database query took
+- What was returned
+- Total time
+
+## What's Included
+
+- **Vision Dashboard** - Request tracing and debugging
+- **Drizzle ORM** - Type-safe SQLite database
+- **Drizzle Studio** - Database browser (auto-started)
+- **Full CRUD API** - Create, read, update, delete users
+
+## API Endpoints
+
+```bash
+# List all users
+curl http://localhost:3000/users
+
+# Get user by ID
+curl http://localhost:3000/users/1
+
+# Create user
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+# Update user
+curl -X PUT http://localhost:3000/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Updated","email":"alice@example.com"}'
+
+# Delete user
+curl -X DELETE http://localhost:3000/users/1
+```
+
+## How It Works
+
+### Adding Custom Spans
+
+Track any operation in the waterfall:
+
+```typescript
+import { useVisionSpan } from '@getvision/adapter-hono'
+
+app.get('/users/:id', async (c) => {
+  const withSpan = useVisionSpan()
+
+  // This appears as a span in the trace
+  const user = withSpan('db.select', {
+    'db.table': 'users',
+    'db.system': 'sqlite'
+  }, () => {
+    return db.select().from(users).where(eq(users.id, id)).get()
+  })
+
+  return c.json(user)
+})
+```
+
+### What Vision Captures
+
+Every request automatically includes:
+- HTTP method, path, status code
+- Request/response headers and body
+- Query parameters
+- Timing for each span
+- Any errors with stack traces
 
 ## Database
 
-Schema: `src/db/schema.ts`
-```ts
+Schema (`src/db/schema.ts`):
+```typescript
 users {
   id: integer (primary key)
   name: text
@@ -84,81 +165,14 @@ users {
 
 Commands:
 ```bash
-pnpm db:generate  # Generate migrations
-pnpm db:push      # Push schema to DB (no migrations)
-pnpm db:studio    # Open Drizzle Studio manually
+bun run db:generate  # Generate migrations
+bun run db:push      # Push schema to DB
+bun run db:studio    # Open Drizzle Studio manually
 ```
 
-## Architecture
+## Next Steps
 
-### Distributed Tracing with DB Spans
-
-Each request creates a trace with nested spans:
-
-```
-POST /users (201, 45ms)
-  └─ http.request (45ms)
-      └─ db.insert (12ms)  ← Child span shows DB timing!
-```
-
-### Custom Spans with `useVisionSpan()`
-
-```ts
-import { useVisionSpan } from '@getvision/adapter-hono'
-
-app.post('/users', async (c) => {
-  const withSpan = useVisionSpan()  // ✨ Auto-context from AsyncLocalStorage
-  
-  // Wrap any operation in a span
-  const user = withSpan('db.insert', { 'db.table': 'users' }, () => {
-    return db.insert(users).values({...}).returning().get()
-  })
-  
-  return c.json(user, 201)
-})
-```
-
-**No manual propagation needed!** `useVisionSpan()` uses AsyncLocalStorage to automatically get the current trace context.
-
-### What Vision Captures
-
-- ✅ **Request metadata** - headers, query params, JSON body
-- ✅ **Response metadata** - status, headers, JSON body
-- ✅ **Nested spans** - database queries, external APIs, custom operations
-- ✅ **Error traces** - stack traces, error messages
-- ✅ **Timing data** - millisecond precision for each span
-- ✅ **Attributes** - custom metadata on any span
-
-### Example Trace Output
-
-```json
-{
-  "id": "trace_xyz",
-  "method": "POST",
-  "path": "/users",
-  "status": 201,
-  "duration": 45,
-  "spans": [
-    {
-      "id": "span_1",
-      "name": "http.request",
-      "duration": 45,
-      "attributes": {
-        "http.method": "POST",
-        "http.path": "/users",
-        "http.status_code": 201
-      }
-    },
-    {
-      "id": "span_2",
-      "name": "db.insert",
-      "duration": 12,
-      "parentId": "span_1",
-      "attributes": {
-        "db.system": "sqlite",
-        "db.table": "users"
-      }
-    }
-  ]
-}
-```
+- Open Vision Dashboard and explore
+- Try breaking something and see how Vision shows the error
+- Add custom spans to your own code
+- Check out the [debugging workflows](https://getvision.dev/docs/debugging)
