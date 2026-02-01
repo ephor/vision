@@ -268,41 +268,156 @@ INF request completed  [code=200] [duration=131ms] [path=/users/1]
 
 ## Log Context (Wide Events)
 
-Vision follows the **Wide Events** philosophy. Instead of manually adding IDs to every log message, you add context once to the request scope, and it's automatically attached to every log and span in that trace.
+Vision follows the **Wide Events** philosophy: add context once, see it everywhere.
+
+### The Problem
+
+Without wide events, you'd do this:
 
 ```typescript
-app.service('orders')
-  .endpoint('POST', '/orders', schema, async (data, c) => {
-    const orderId = generateId()
-    
-    // Add context once - available in all logs and spans
-    c.addContext({ 
-      orderId, 
-      userId: data.userId,
-      'request.type': 'order_creation'
-    })
-    
-    console.log('Creating order') // automatically has orderId & userId
-    
-    const order = c.span('db.insert', {}, () => {
-      console.log('Inserting into database') // shares the same context
-      return db.insert(orders).values({ ...data, id: orderId }).returning().get()
-    })
-    
-    console.log('Order created successfully')
-    
-    return order
+app.post('/orders', async (c) => {
+  const orderId = generateId()
+  const userId = c.get('userId')
+
+  console.log('Creating order', { orderId, userId })  // Add context manually
+  await validateOrder(data)
+  console.log('Order validated', { orderId, userId }) // Repeat context
+  await chargePayment(data)
+  console.log('Payment charged', { orderId, userId }) // Repeat again
+  await createOrder(data)
+  console.log('Order created', { orderId, userId })   // And again...
+})
+```
+
+### The Solution: addContext()
+
+Add context once at the start. All logs in that request automatically include it:
+
+```typescript
+app.post('/orders', async (c) => {
+  const { vision } = getVisionContext()
+  const orderId = generateId()
+
+  // Add context ONCE
+  vision.addContext({
+    orderId,
+    userId: c.get('userId'),
+    'order.type': 'subscription'
   })
+
+  console.log('Creating order')        // Has orderId, userId automatically
+  await validateOrder(data)
+  console.log('Order validated')       // Has orderId, userId automatically
+  await chargePayment(data)
+  console.log('Payment charged')       // Has orderId, userId automatically
+  await createOrder(data)
+  console.log('Order created')         // Has orderId, userId automatically
+})
 ```
 
-**Dashboard shows:**
-```text
-INF Creating order              [orderId=ord_123] [userId=user_456]
-INF Inserting into database     [orderId=ord_123] [userId=user_456]
-INF Order created successfully  [orderId=ord_123] [userId=user_456]
+### Two Places to See Your Logs
+
+**1. Logs Tab (Global Search)**
+
+The Logs tab shows ALL logs from your application. You can search by:
+- Log message text
+- Log level (error, warn, info, debug)
+- **Any context field** - search `userId=user_123` to find all logs for that user
+
+```
+[Search: "orderId=ord_456"]
+
+Results:
+10:30:45  Creating order       [orderId=ord_456] [userId=user_123]
+10:30:46  Order validated      [orderId=ord_456] [userId=user_123]
+10:30:47  Payment charged      [orderId=ord_456] [userId=user_123]
+10:30:48  Order created        [orderId=ord_456] [userId=user_123]
 ```
 
-This context is also indexed for search.
+**2. Trace Details (Request-Scoped)**
+
+When you click on a trace, you see logs **only from that specific request**:
+
+```
+Trace: POST /orders [201] 320ms
+
+Request Body:
+  { "items": [...], "total": 99.99 }
+
+Logs:
+  10:30:45  Creating order       [orderId=ord_456]
+  10:30:46  Order validated      [orderId=ord_456]
+  10:30:47  Payment charged      [orderId=ord_456]
+  10:30:48  Order created        [orderId=ord_456]
+
+Spans:
+  ├── validate.order (15ms)
+  ├── payment.charge (180ms)
+  └── db.insert.orders (45ms)
+```
+
+**This is the power of wide events:** You see the complete picture of what happened in ONE request - the HTTP data, the logs, the spans, all correlated together.
+
+### What to Add to Context
+
+```typescript
+vision.addContext({
+  // User info
+  'user.id': user.id,
+  'user.email': user.email,
+  'user.plan': user.plan,
+
+  // Request info
+  'request.id': requestId,
+  'request.type': 'api',
+
+  // Business context
+  orderId: order.id,
+  'cart.items': cart.items.length,
+
+  // Feature flags
+  'feature.newCheckout': isEnabled('new-checkout'),
+
+  // Environment
+  'env': process.env.NODE_ENV
+})
+```
+
+### When to Use addContext()
+
+```typescript
+// ✅ Good - add context early in request
+app.use('*', async (c, next) => {
+  const { vision } = getVisionContext()
+
+  // Add user context from auth
+  const user = c.get('user')
+  if (user) {
+    vision.addContext({
+      'user.id': user.id,
+      'user.plan': user.plan
+    })
+  }
+
+  // Add request ID
+  vision.addContext({
+    'request.id': c.req.header('X-Request-ID') || nanoid()
+  })
+
+  await next()
+})
+
+// ✅ Good - add business context in handler
+app.post('/orders', async (c) => {
+  const { vision } = getVisionContext()
+  const orderId = generateId()
+
+  vision.addContext({ orderId })
+
+  // Now all logs have orderId
+  console.log('Processing order')
+})
+```
 
 ## Log Retention
 
