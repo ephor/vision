@@ -126,42 +126,42 @@ Vision Dashboard will show:
 
 ## With Pub/Sub Events
 
-Add event-driven features:
+Add event-driven features with type-safe events:
 
 ```typescript
 const app = new Vision({
-  service: { name: 'My API' },
-  pubsub: {
-    schemas: {
-      'user/created': {
-        data: z.object({
-          userId: z.string(),
-          email: z.string().email()
-        })
-      }
-    }
-  }
+  service: { name: 'My API' }
 })
 
 app.service('users')
+  // Define event handler FIRST (so TypeScript knows the schema for c.emit)
+  .on('user/created', {
+    schema: z.object({
+      userId: z.string(),
+      email: z.string().email()
+    }),
+    handler: async (data) => {
+      console.log('Send welcome email to:', data.email)
+    }
+  })
+  // Then define endpoints that emit events
   .endpoint('POST', '/users', {
     input: z.object({ name: z.string(), email: z.string() }),
     output: z.object({ id: z.string() })
   }, async (data, c) => {
     const user = { id: '123', ...data }
-    
-    // Emit event (type-safe!)
+
+    // Emit event (type-safe based on .on() schema above!)
     await c.emit('user/created', {
       userId: user.id,
       email: user.email
     })
-    
+
     return { id: user.id }
   })
-  .on('user/created', async (event) => {
-    console.log('Send welcome email to:', event.data.email)
-  })
 ```
+
+> **Note:** Define `.on()` handlers BEFORE endpoints that call `c.emit()` so TypeScript can infer the event type.
 
 ## With Drizzle Studio
 
@@ -214,8 +214,8 @@ const app = new Vision({
     maxLogs: 10000      // Max logs to store
   },
   pubsub: {
-    id: 'my-app',      // App ID for event bus
-    schemas: { /* ... */ }
+    devMode: true,      // Use in-memory queue (no Redis needed)
+    // redis: { host: 'localhost', port: 6379 }  // For production
   }
 })
 ```
