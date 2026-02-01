@@ -289,29 +289,44 @@ app.post('/orders', async (c) => {
 })
 ```
 
-### The Solution: addContext()
+### The Solution: c.addContext()
 
 Add context once at the start. All logs in that request automatically include it:
 
 ```typescript
+// Vision Server - c.addContext() is built in
+app.service('orders')
+  .endpoint('POST', '/orders', schema, async (data, c) => {
+    const orderId = generateId()
+
+    // Add context ONCE - built into context!
+    c.addContext({
+      orderId,
+      userId: data.userId,
+      'order.type': 'subscription'
+    })
+
+    console.log('Creating order')        // Has orderId, userId automatically
+    await validateOrder(data)
+    console.log('Order validated')       // Has orderId, userId automatically
+    await chargePayment(data)
+    console.log('Payment charged')       // Has orderId, userId automatically
+    await createOrder(data)
+    console.log('Order created')         // Has orderId, userId automatically
+
+    return order
+  })
+```
+
+**With Adapters** (Hono/Express/Fastify), use `getVisionContext()`:
+
+```typescript
+import { getVisionContext } from '@getvision/adapter-hono'
+
 app.post('/orders', async (c) => {
   const { vision } = getVisionContext()
-  const orderId = generateId()
-
-  // Add context ONCE
-  vision.addContext({
-    orderId,
-    userId: c.get('userId'),
-    'order.type': 'subscription'
-  })
-
-  console.log('Creating order')        // Has orderId, userId automatically
-  await validateOrder(data)
-  console.log('Order validated')       // Has orderId, userId automatically
-  await chargePayment(data)
-  console.log('Payment charged')       // Has orderId, userId automatically
-  await createOrder(data)
-  console.log('Order created')         // Has orderId, userId automatically
+  vision.addContext({ orderId, userId })
+  // ...
 })
 ```
 
@@ -383,40 +398,40 @@ vision.addContext({
 })
 ```
 
-### When to Use addContext()
+### When to Use c.addContext()
 
 ```typescript
-// ✅ Good - add context early in request
+// Vision Server - add context in middleware
 app.use('*', async (c, next) => {
-  const { vision } = getVisionContext()
-
   // Add user context from auth
   const user = c.get('user')
   if (user) {
-    vision.addContext({
+    c.addContext({
       'user.id': user.id,
       'user.plan': user.plan
     })
   }
 
   // Add request ID
-  vision.addContext({
+  c.addContext({
     'request.id': c.req.header('X-Request-ID') || nanoid()
   })
 
   await next()
 })
 
-// ✅ Good - add business context in handler
-app.post('/orders', async (c) => {
-  const { vision } = getVisionContext()
-  const orderId = generateId()
+// Add business context in handler
+app.service('orders')
+  .endpoint('POST', '/orders', schema, async (data, c) => {
+    const orderId = generateId()
 
-  vision.addContext({ orderId })
+    c.addContext({ orderId })
 
-  // Now all logs have orderId
-  console.log('Processing order')
-})
+    // Now all logs have orderId
+    console.log('Processing order')
+
+    return order
+  })
 ```
 
 ## Log Retention

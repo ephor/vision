@@ -18,13 +18,24 @@ After:  Open Vision. Click the slow request. See the waterfall. Fix it.
 
 ## 30-Second Demo
 
-**1. Add Vision to your app (2 lines):**
+**1. Create your app:**
 
 ```typescript
-import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
 
-app.use('*', visionAdapter())
-enableAutoDiscovery(app)
+const app = new Vision({ service: { name: 'My API' } })
+
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({ id: z.string(), name: z.string() })
+  }, async ({ id }, c) => {
+    const user = c.span('db.select', { 'db.table': 'users' }, () => getUser(id))
+    return user
+  })
+
+app.start(3000)
 ```
 
 **2. Make a request to your API**
@@ -81,10 +92,11 @@ Your `console.log` calls appear in the dashboard with automatic context:
 
 - **Request-scoped** - Click a trace to see only logs from that request
 - **Searchable** - Search by message OR by context fields like `userId=123`
-- **Add context once, see it everywhere** - `addContext({ userId })` attaches to all logs in that request
+- **Add context once, see it everywhere** - `c.addContext()` attaches to all logs in that request
 
 ```typescript
-vision.addContext({ userId: '123', orderId: 'abc' })
+// Vision Server - c.addContext() is built in
+c.addContext({ userId: '123', orderId: 'abc' })
 console.log('Processing')  // Automatically has userId, orderId
 console.log('Done')        // Automatically has userId, orderId
 ```
@@ -92,6 +104,46 @@ console.log('Done')        // Automatically has userId, orderId
 ---
 
 ## Two Ways to Use Vision
+
+### Vision Server (Recommended)
+
+The best way to use Vision. Everything is built into the context:
+
+```bash
+npm install @getvision/server
+```
+
+```typescript
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({
+  service: { name: 'My API' }
+})
+
+app.service('users')
+  .endpoint('GET', '/users/:id', {
+    input: z.object({ id: z.string() }),
+    output: z.object({ id: z.string(), name: z.string() })
+  }, async ({ id }, c) => {
+    // Everything is built into context:
+    c.addContext({ userId: id })           // Wide events
+    const user = c.span('db.select', {     // Tracing
+      'db.table': 'users'
+    }, () => db.select().from(users).where(eq(users.id, id)))
+
+    return user
+  })
+
+app.start(3000)
+```
+
+**Vision Server includes:**
+- `c.span()` - Built-in tracing
+- `c.addContext()` - Wide events logging
+- `c.emit()` - Type-safe pub/sub events
+- Type-safe validation with Zod
+- Cron jobs, file-based routing
 
 ### Add to Existing App
 
@@ -117,49 +169,7 @@ app.get('/users/:id', async (c) => {
 })
 ```
 
-**Works with:**
-- Hono (`@getvision/adapter-hono`)
-- Fastify (`@getvision/adapter-fastify`)
-- Express (`@getvision/adapter-express`)
-- More coming: NestJS, Elysia, tRPC, GraphQL
-
-### Start New with Vision Server
-
-Building something new? Vision Server gives you observability from the start:
-
-```bash
-npm install @getvision/server
-```
-
-```typescript
-import { Vision } from '@getvision/server'
-import { z } from 'zod'
-
-const app = new Vision({
-  service: { name: 'My API' }
-})
-
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    // c.span() is built in
-    const user = c.span('db.select', { 'db.table': 'users' }, () => {
-      return db.select().from(users).where(eq(users.id, id))
-    })
-    return user
-  })
-
-app.start(3000)
-```
-
-**Vision Server includes:**
-- Built-in tracing with `c.span()`
-- Type-safe validation with Zod
-- Event-driven pub/sub with BullMQ
-- Cron jobs
-- File-based routing
+**Works with:** Hono, Fastify, Express (more coming)
 
 ---
 
@@ -167,12 +177,12 @@ app.start(3000)
 
 | Scenario | Use This |
 |----------|----------|
-| I have an existing Hono/Fastify/Express app | **Adapters** - add 2 lines, done |
-| I'm starting a new API project | **Vision Server** - everything built in |
-| I want to try Vision quickly | **Adapters** - lower friction |
-| I want structured services + events + cron | **Vision Server** - batteries included |
+| Starting a new API project | **Vision Server** - everything built in |
+| Want `c.span()`, `c.addContext()`, `c.emit()` | **Vision Server** - all in context |
+| Need structured services + events + cron | **Vision Server** - batteries included |
+| Have an existing Hono/Fastify/Express app | **Adapters** - add 2 lines to existing code |
 
-Both give you the same dashboard. The difference is how much is built-in.
+**Recommendation:** Start with Vision Server. It's the full experience.
 
 ---
 
