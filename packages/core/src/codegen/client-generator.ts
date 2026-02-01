@@ -70,6 +70,9 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
       const pathSegments = route.path.split('/').filter(Boolean)
       const procedureName = pathSegments[pathSegments.length - 1].replace(/[:-]/g, '_')
 
+      // Extract path parameters: /users/:id/delete → ['id']
+      const pathParams = route.path.match(/:(\w+)/g)?.map(p => p.slice(1)) || []
+
       // Extract input schema
       let inputSchema = 'z.void()'
 
@@ -96,6 +99,27 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
 
         if (inputFields) {
           inputSchema = generateZodSchemaFromFields(inputFields)
+        }
+      }
+
+      // Add path parameters to input schema
+      if (pathParams.length > 0) {
+        const pathParamsSchema = pathParams.map(param => `  ${param}: z.string()`).join(',\n')
+
+        if (inputSchema === 'z.void()') {
+          // No body/query params, only path params
+          inputSchema = `z.object({\n${pathParamsSchema}\n})`
+        } else if (inputSchema.startsWith('z.object({')) {
+          // Merge with existing object schema
+          // Remove closing }), trim whitespace, and add comma if not present
+          let withoutClosing = inputSchema.slice(0, -2).trimEnd()
+          if (!withoutClosing.endsWith(',')) {
+            withoutClosing += ','
+          }
+          inputSchema = `${withoutClosing}\n${pathParamsSchema}\n})`
+        } else {
+          // Other schema type - wrap in intersection
+          inputSchema = `z.intersection(z.object({\n${pathParamsSchema}\n}), ${inputSchema})`
         }
       }
 

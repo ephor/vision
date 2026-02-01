@@ -22,7 +22,9 @@ const users_list_output = z.object({
   limit: z.number(),
   total: z.number()
 })
-const users__id_input = z.void()
+const users__id_input = z.object({
+  id: z.string()
+})
 const users__id_output = z.object({
   id: z.number(),
   name: z.string(),
@@ -41,7 +43,8 @@ const users_create_output = z.object({
 })
 const users_update_input = z.object({
   name: z.string().optional(),
-  email: z.string().optional()
+  email: z.string().optional(),
+  id: z.string()
 })
 const users_update_output = z.object({
   id: z.number(),
@@ -49,7 +52,9 @@ const users_update_output = z.object({
   email: z.string(),
   createdAt: z.string()
 })
-const users_delete_input = z.void()
+const users_delete_input = z.object({
+  id: z.string()
+})
 const users_delete_output = z.object({
   success: z.boolean(),
   user: z.object({
@@ -120,7 +125,7 @@ const routes = {
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-02-01T17:55:35.822Z
+ * Generated at: 2026-02-01T18:05:13.618Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate

@@ -59,15 +59,18 @@ function TestComponent() {
           {/* TypeScript knows user has: id, name, email, createdAt */}
           <span>{user.name} ({user.email})</span>
 
-          {/* ✅ Update works - only name/email */}
+          {/* ✅ Update works - id goes in URL path, name/email in body */}
           <button onClick={() => updateUser.mutate({
-            name: `${user.name} Updated`
+            id: String(user.id),  // Path param
+            name: `${user.name} Updated`  // Body param
           })}>
             Update
           </button>
 
-          {/* ✅ Delete works - no params (id is in URL) */}
-          <button onClick={() => deleteUser.mutate()}>
+          {/* ✅ Delete works - id goes in URL path */}
+          <button onClick={() => deleteUser.mutate({
+            id: String(user.id)  // Path param
+          })}>
             Delete
           </button>
         </div>
@@ -75,8 +78,9 @@ function TestComponent() {
 
       {/* ❌ These would be TypeScript ERRORS (correctly!): */}
       {/* createUser.mutate({ foo: 'bar' }) // ✗ unknown field */}
-      {/* updateUser.mutate({ id: 123, name: 'Test' }) // ✗ 'id' not allowed */}
-      {/* deleteUser.mutate({ id: 123 }) // ✗ expects void */}
+      {/* updateUser.mutate({ name: 'Test' }) // ✗ missing required 'id' path param */}
+      {/* deleteUser.mutate() // ✗ missing required 'id' path param */}
+      {/* updateUser.mutate({ id: '123', unknown: 'field' }) // ✗ unknown field */}
     </div>
   )
 }

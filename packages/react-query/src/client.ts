@@ -177,9 +177,39 @@ export function createVisionClient<TAppOrContract = any>(
     return config.headers
   }
 
-  // Build URL from procedure path: ['users', 'list'] → '/users/list'
-  const buildUrl = (procedure: string[]): string => {
-    return `${config.baseUrl}/${procedure.join('/')}`
+  // Build URL from procedure path and substitute path params
+  // Example: /users/:id/delete + { id: 123 } → /users/123/delete
+  const buildUrl = (path: string, input?: any): string => {
+    let url = path
+    const pathParams: string[] = []
+
+    // Extract and substitute path parameters
+    if (input && typeof input === 'object') {
+      url = path.replace(/:(\w+)/g, (match, paramName) => {
+        pathParams.push(paramName)
+        const value = input[paramName]
+        return value !== undefined ? String(value) : match
+      })
+    }
+
+    return `${config.baseUrl}${url}`
+  }
+
+  // Remove path params from input to get body params
+  const getBodyParams = (path: string, input?: any): any => {
+    if (!input || typeof input !== 'object') return input
+
+    const pathParams = path.match(/:(\w+)/g)?.map(p => p.slice(1)) || []
+    if (pathParams.length === 0) return input
+
+    // Remove path params from input
+    const bodyParams = { ...input }
+    for (const param of pathParams) {
+      delete bodyParams[param]
+    }
+
+    // Return undefined if no body params left
+    return Object.keys(bodyParams).length > 0 ? bodyParams : undefined
   }
 
   // Find route metadata by procedure path
@@ -195,7 +225,9 @@ export function createVisionClient<TAppOrContract = any>(
     // Direct call function
     const directCall = async (input?: any) => {
       const routeMetadata = await findRouteMetadata(procedure)
-      const url = buildUrl(procedure)
+      const path = routeMetadata?.path || `/${procedure.join('/')}`
+      const url = buildUrl(path, input)
+      const bodyParams = getBodyParams(path, input)
       const httpMethod = routeMetadata?.method || 'POST'
       const headers = await getHeaders()
 
@@ -205,7 +237,7 @@ export function createVisionClient<TAppOrContract = any>(
           'Content-Type': 'application/json',
           ...headers,
         },
-        body: httpMethod !== 'GET' ? JSON.stringify(input) : undefined,
+        body: httpMethod !== 'GET' ? JSON.stringify(bodyParams) : undefined,
       })
 
       if (!response.ok) {
@@ -220,7 +252,9 @@ export function createVisionClient<TAppOrContract = any>(
       queryKey: [...procedure, input],
       queryFn: async () => {
         const routeMetadata = await findRouteMetadata(procedure)
-        const url = buildUrl(procedure)
+        const path = routeMetadata?.path || `/${procedure.join('/')}`
+        const url = buildUrl(path, input)
+        const bodyParams = getBodyParams(path, input)
         const httpMethod = routeMetadata?.method || 'POST'
         const headers = await getHeaders()
 
@@ -230,7 +264,7 @@ export function createVisionClient<TAppOrContract = any>(
             'Content-Type': 'application/json',
             ...headers,
           },
-          body: httpMethod !== 'GET' ? JSON.stringify(input) : undefined,
+          body: httpMethod !== 'GET' ? JSON.stringify(bodyParams) : undefined,
         })
 
         if (!response.ok) {
@@ -245,7 +279,9 @@ export function createVisionClient<TAppOrContract = any>(
     directCall.mutationOptions = (options?: any) => ({
       mutationFn: async (mutationInput: any) => {
         const routeMetadata = await findRouteMetadata(procedure)
-        const url = buildUrl(procedure)
+        const path = routeMetadata?.path || `/${procedure.join('/')}`
+        const url = buildUrl(path, mutationInput)
+        const bodyParams = getBodyParams(path, mutationInput)
         const httpMethod = routeMetadata?.method || 'POST'
         const headers = await getHeaders()
 
@@ -255,7 +291,7 @@ export function createVisionClient<TAppOrContract = any>(
             'Content-Type': 'application/json',
             ...headers,
           },
-          body: JSON.stringify(mutationInput),
+          body: JSON.stringify(bodyParams),
         })
 
         if (!response.ok) {
@@ -273,7 +309,9 @@ export function createVisionClient<TAppOrContract = any>(
         queryKey,
         queryFn: async () => {
           const routeMetadata = await findRouteMetadata(procedure)
-          const url = buildUrl(procedure)
+          const path = routeMetadata?.path || `/${procedure.join('/')}`
+          const url = buildUrl(path, input)
+          const bodyParams = getBodyParams(path, input)
           const httpMethod = routeMetadata?.method || 'POST'
           const headers = await getHeaders()
 
@@ -283,7 +321,7 @@ export function createVisionClient<TAppOrContract = any>(
               'Content-Type': 'application/json',
               ...headers,
             },
-            body: httpMethod !== 'GET' ? JSON.stringify(input) : undefined,
+            body: httpMethod !== 'GET' ? JSON.stringify(bodyParams) : undefined,
           })
 
           if (!response.ok) {
