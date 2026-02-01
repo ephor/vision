@@ -12,9 +12,37 @@ bun dev
 **Open:**
 - API: http://localhost:3000
 - Vision Dashboard: http://localhost:9500
-- Inngest Dev Server: http://localhost:8288 (if installed)
 
-No Redis, no external services. Everything runs locally.
+No Redis, no external services. Everything runs locally with in-memory BullMQ.
+
+## Try This: Use the API Explorer
+
+**Step 1:** Open Vision Dashboard (localhost:9500)
+
+**Step 2:** Go to **API Explorer** tab
+
+You'll see all your endpoints auto-discovered:
+- `GET /users` - List users
+- `GET /users/:id` - Get user
+- `POST /users` - Create user
+- `POST /orders` - Create order
+
+**Step 3:** Click `POST /users`
+
+Vision auto-generates a request template from your Zod schema:
+
+```json
+{
+  "name": "",   // string (required)
+  "email": ""   // email (required)
+}
+```
+
+**Step 4:** Fill in and send
+
+Click Send. The response appears, and a new trace is created automatically.
+
+**No curl needed.** The API Explorer knows your schemas and generates templates.
 
 ## Try This: See the Service Builder Pattern
 
@@ -34,54 +62,28 @@ app.service('users')
   })
 ```
 
-**Step 2:** Make a request
+**Step 2:** Make a request (via API Explorer or curl)
 
-```bash
-curl http://localhost:3000/users/1
-```
-
-**Step 3:** Open Vision Dashboard
+**Step 3:** Open **Traces** tab
 
 You'll see the trace with the `db.select` span already tracked. No extra setup.
 
 ## Try This: See Events in Action
 
-**Step 1:** Create a user
+**Step 1:** Create a user via API Explorer
 
-```bash
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-```
+Go to `POST /users`, fill in name and email, click Send.
 
 **Step 2:** Check the console
 
 You'll see: `📧 Sending welcome email to: alice@example.com`
 
-**Step 3:** Open Vision Dashboard
+**Step 3:** Open **Traces** tab
 
 In the trace, you'll see:
 - The HTTP request
 - The database insert
-- The event being sent
-
-## Try This: Create an Order
-
-**Step 1:** Create an order
-
-```bash
-curl -X POST http://localhost:3000/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "1",
-    "items": [{"productId": "prod_1", "quantity": 2}],
-    "total": 99.99
-  }'
-```
-
-**Step 2:** Open Vision Dashboard
-
-You'll see the complete trace with all database operations and events.
+- The event being processed
 
 ## When to Use Vision Server vs Adapters
 
@@ -153,7 +155,7 @@ Input and output are validated and typed:
 })
 ```
 
-### 4. Event Handlers
+### 4. Event Handlers (BullMQ)
 
 Handle events with type safety:
 
@@ -164,7 +166,7 @@ Handle events with type safety:
 })
 ```
 
-### 5. Cron Jobs
+### 5. Cron Jobs (BullMQ)
 
 Schedule recurring tasks:
 
@@ -174,32 +176,9 @@ Schedule recurring tasks:
 })
 ```
 
-## API Endpoints
-
-```bash
-# API info
-curl http://localhost:3000/
-
-# List users
-curl http://localhost:3000/users
-
-# Get user by ID (includes articles)
-curl http://localhost:3000/users/1
-
-# Create user (triggers welcome email event)
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-
-# Create order
-curl -X POST http://localhost:3000/orders \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"1","items":[{"productId":"p1","quantity":2}],"total":99.99}'
-```
-
 ## Event System
 
-Vision Server uses Inngest for events:
+Vision Server uses BullMQ for events (in-memory during development):
 
 ```typescript
 // Define event schemas
@@ -214,10 +193,17 @@ pubsub: {
   }
 }
 
-// Send events
-await app.getInngest().send({
-  name: 'user/created',
-  data: { userId: '123', email: 'alice@example.com' }
+// Send events from handler
+.endpoint('POST', '/users', schema, async (data, c) => {
+  const user = await createUser(data)
+
+  // Emit event (type-safe!)
+  await c.emit('user/created', {
+    userId: user.id,
+    email: user.email
+  })
+
+  return user
 })
 
 // Handle events
@@ -256,27 +242,17 @@ app.service('products')
 export default app
 ```
 
-## Troubleshooting
+## API Explorer Features
 
-### Inngest not starting
+The API Explorer in Vision Dashboard:
 
-Install the CLI:
-```bash
-brew install inngest/tap/inngest
-```
+- **Auto-discovers** all your endpoints
+- **Generates templates** from Zod schemas
+- **Shows validation** errors inline
+- **Saves history** of requests
+- **Supports** path params, query params, headers, body
 
-Or disable auto-start:
-```typescript
-const app = new Vision({
-  inngest: { autoStart: false }
-})
-```
-
-### Events not appearing
-
-1. Check Inngest Dev Server is running (localhost:8288)
-2. Check app logs for "Inngest Dev Server running"
-3. Verify INNGEST_DEV=1 in environment
+Much easier than writing curl commands!
 
 ## Next Steps
 

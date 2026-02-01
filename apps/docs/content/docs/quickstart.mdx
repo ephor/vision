@@ -150,10 +150,10 @@ app.service('users')
   }, async (data, c) => {
     const user = { id: '123', ...data }
     
-    // Send event
-    await app.getInngest().send({
-      name: 'user/created',
-      data: { userId: user.id, email: user.email }
+    // Emit event (type-safe!)
+    await c.emit('user/created', {
+      userId: user.id,
+      email: user.email
     })
     
     return { id: user.id }
@@ -214,7 +214,7 @@ const app = new Vision({
     maxLogs: 10000      // Max logs to store
   },
   pubsub: {
-    id: 'my-app',      // Inngest app ID (optional)
+    id: 'my-app',      // App ID for event bus
     schemas: { /* ... */ }
   }
 })
