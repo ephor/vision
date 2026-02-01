@@ -1,122 +1,210 @@
-# Express Basic Example
+# Express + Vision Example
 
-Example Express.js application using Vision Dashboard.
-
-## Features
-
-- ✅ **Vision Middleware** - Automatic request tracing
-- ✅ **Custom Spans** - Track database queries and operations
-- ✅ **Auto-discovery** - Routes automatically registered in Vision (services grouping)
-- ✅ **Zod validation** - `zValidator()` middleware with schema introspection
-- ✅ **CORS ready** - headers for Vision Dashboard added automatically
-- ✅ **Error Tracking** - Errors captured in spans
+Add Vision to your Express app in 2 lines. See exactly what happens inside every request.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 bun install
-
-# Run development server
 bun dev
 ```
 
-## URLs
+**Open:**
+- API: http://localhost:3000
+- Vision Dashboard: http://localhost:9500
 
-- **Express API**: http://localhost:3000
-- **Vision Dashboard**: http://localhost:9500
+## Try This: See Your First Trace
 
-## API Endpoints
-
-### GET /
-Get API info
-
-```bash
-curl http://localhost:3000/
-```
-
-### GET /users
-List all users (with DB span)
+**Step 1:** Make a request
 
 ```bash
 curl http://localhost:3000/users
 ```
 
-### GET /users/:id
-Get user by ID (with DB span)
+**Step 2:** Open Vision Dashboard (localhost:9500)
 
-```bash
-curl http://localhost:3000/users/1
+Click the trace for `GET /users`. You'll see:
+
+```
+GET /users (35ms)
+├── http.request (35ms)
+│   └── db.select (8ms)
+│       └── db.table: "users"
+│       └── db.system: "mock"
 ```
 
-### POST /users
-Create new user (with Zod validation and DB span)
+**That's it.** No console.log needed. You see exactly what happened, how long each step took, and what was returned.
+
+## Try This: Debug a Validation Error
+
+**Step 1:** Send a bad request
 
 ```bash
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com"}'
+  -d '{"name":"","email":"invalid"}'
 ```
 
-### PUT /users/:id
-Update user (with DB span)
+**Step 2:** Find the 400 trace in Vision Dashboard
 
-```bash
-curl -X PUT http://localhost:3000/users/1 \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice Updated"}'
-```
+You'll see:
+- The exact request body that was sent
+- Which validation rule failed
+- The error message
 
-### DELETE /users/:id
-Delete user (with DB span)
+No guessing. No adding logs. Just click and see.
 
-```bash
-curl -X DELETE http://localhost:3000/users/1
-```
+## Try This: Track Custom Operations
 
-## Vision Features
-
-### Request Tracing
-Every request is automatically traced with:
-- HTTP method, path, query params
-- Request/response headers
-- Status code and duration
-- Custom spans
-
-### Custom Spans
-Track database operations:
+**Step 1:** Look at the code in `src/index.ts`
 
 ```typescript
 const withSpan = useVisionSpan()
 
-const users = withSpan('db.select', { 
-  'db.system': 'postgresql',
-  'db.table': 'users' 
+const users = withSpan('db.select', {
+  'db.table': 'users',
+  'db.system': 'mock'
 }, () => {
-  return db.select().from(users).all()
+  return mockDb.users
 })
 ```
 
-### Auto-Discovery
-Routes are automatically discovered and shown in Vision dashboard:
+**Step 2:** Make a request and see the span in the trace
 
-```typescript
-enableAutoDiscovery(app)
+Every operation you wrap in `withSpan()` appears in the waterfall. This is how you track:
+- Database queries
+- External API calls
+- Cache operations
+- Anything else
 
-// Optional manual services grouping
-// enableAutoDiscovery(app, { services: [
-//   { name: 'Users', routes: ['/users/*'] }
-// ]})
+## How to Add Vision to Your Express App
+
+**Step 1:** Install
+
+```bash
+npm install @getvision/adapter-express
 ```
 
-## Testing Vision
+**Step 2:** Add 2 lines
 
-1. Start the app: `bun dev`
-2. Open Vision Dashboard: http://localhost:9500
-3. Make requests to the API
-4. See traces in the dashboard! Root span `http.request` will include child spans like `db.select`.
+```typescript
+import express from 'express'
+import { visionMiddleware, enableAutoDiscovery } from '@getvision/adapter-express'
 
-## Learn More
+const app = express()
 
-- [Vision Documentation](../../apps/docs)
-- [Express Adapter Documentation](../../packages/adapter-express)
+// Add these 2 lines
+app.use(visionMiddleware())
+enableAutoDiscovery(app)
+
+// Your existing routes work as-is
+app.get('/users', (req, res) => {
+  res.json([{ id: 1, name: 'Alice' }])
+})
+
+app.listen(3000)
+```
+
+**Step 3:** Open localhost:9500
+
+Your requests are now traced automatically.
+
+## API Endpoints
+
+```bash
+# Get API info
+curl http://localhost:3000/
+
+# List users
+curl http://localhost:3000/users
+
+# Get user by ID
+curl http://localhost:3000/users/1
+
+# Create user (with validation)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+# Update user
+curl -X PUT http://localhost:3000/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Updated"}'
+
+# Delete user
+curl -X DELETE http://localhost:3000/users/1
+```
+
+## Adding Custom Spans
+
+Track any operation:
+
+```typescript
+import { useVisionSpan } from '@getvision/adapter-express'
+
+app.get('/orders/:id', (req, res) => {
+  const withSpan = useVisionSpan()
+
+  // Track database query
+  const order = withSpan('db.select', {
+    'db.table': 'orders',
+    'db.id': req.params.id
+  }, () => {
+    return db.query('SELECT * FROM orders WHERE id = ?', [req.params.id])
+  })
+
+  // Track external API call
+  const shipping = withSpan('external.api', {
+    'api.name': 'shipping',
+    'order.id': order.id
+  }, async () => {
+    return fetch(`https://shipping.api/track/${order.trackingId}`)
+  })
+
+  res.json({ order, shipping })
+})
+```
+
+## Adding Validation
+
+Use the `validator` middleware with Zod schemas:
+
+```typescript
+import { validator } from '@getvision/adapter-express'
+import { z } from 'zod'
+
+const CreateUserSchema = z.object({
+  name: z.string().min(1).describe('Full name'),
+  email: z.string().email().describe('Email address')
+})
+
+app.post('/users',
+  validator('body', CreateUserSchema),
+  (req, res) => {
+    // req.body is typed and validated
+    res.json({ id: '123', ...req.body })
+  }
+)
+```
+
+Vision extracts the schema and:
+- Shows it in the API Explorer
+- Generates request templates
+- Displays validation errors in traces
+
+## What Vision Captures
+
+For every request:
+- HTTP method, path, status code
+- Request headers and body
+- Response headers and body
+- Custom spans with timing
+- Errors with stack traces
+- console.log output (linked to trace)
+
+## Next Steps
+
+- Add Vision to your own Express app
+- Add custom spans for your database queries
+- Check out the [debugging workflows](https://getvision.dev/docs/debugging)
+- See [common patterns](https://getvision.dev/docs/patterns) for best practices

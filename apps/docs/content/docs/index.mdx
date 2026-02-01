@@ -1,50 +1,125 @@
 ---
 title: Introduction
-description: Observability platform for modern APIs - See everything, debug anything
+description: See exactly what happens inside your API. Debug in seconds, not hours.
 ---
 
-# Vision Documentation
+# Vision
 
-Welcome to **Vision** - the observability platform for modern APIs.
+**See exactly what happens inside your API.**
 
-## What is Vision?
+Vision shows you the complete journey of every request: which database queries ran, how long each step took, what data was sent and received. When something breaks, you click the failed request and see exactly where and why.
 
-Vision is an **observability platform** that gives you complete visibility into your API: real-time tracing, request inspection, service catalog, and API testing - all in one beautiful dashboard.
+```
+Before: Something's slow. Add console.log. Restart. Check logs. Repeat.
+After:  Open Vision. Click the slow request. See the waterfall. Fix it.
+```
 
-### Two Ways to Use Vision
+---
 
-**🚀 Vision Server** (Recommended for new projects)  
-Meta-framework with observability built-in. Zero configuration, maximum productivity.
+## 30-Second Demo
 
-**🔌 Vision Adapters** (For existing apps)  
-Add Vision observability to your existing Hono, Fastify, or Express apps — more coming (tRPC, NestJS, GraphQL, MCP).
+**1. Add Vision to your app (2 lines):**
 
-### Why Vision?
+```typescript
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
 
-Modern APIs need observability, but existing tools are fragmented:
-- ❌ **Current state:** Separate tools for tracing, testing, monitoring, docs
-- ✅ **Vision:** Unified platform with everything in one dashboard
+app.use('*', visionAdapter())
+enableAutoDiscovery(app)
+```
 
-**vs DataDog/NewRelic:** Free, open source, runs locally  
-**vs Postman:** Live tracing + testing in one tool  
-**vs OpenTelemetry:** Zero config, beautiful UI included
+**2. Make a request to your API**
 
-### Platform Features
+**3. Open `localhost:9500` and click the request:**
 
-- 🔍 **Real-Time Tracing** - See every request with waterfall visualization
-- 🧪 **API Explorer** - Test endpoints directly from the dashboard
-- 🏗️ **Service Catalog** - Auto-discover all your routes and schemas
-- 📊 **Live Logs** - Stream logs in real-time with filtering
-- 🎯 **Request Inspection** - Headers, body, timing, everything
-- 🌐 **Framework Agnostic** - Works with any Node.js framework
-- 🆓 **Free & Open Source** - MIT licensed, runs locally
-- 🚀 **Zero Config** - Works out of the box
+```
+GET /users/123 (245ms)
+├── middleware.auth (5ms)
+├── handler (235ms)
+│   ├── db.select.users (12ms)
+│   ├── db.select.orders (180ms) ← Found it! This query is slow
+│   └── transform (40ms)
+└── response (5ms)
+```
 
-## Quick Start
+**You immediately see:** The orders query takes 180ms. That's the problem.
 
-### Option 1: Vision Server (New Projects)
+No console.log. No guessing. Just click and see.
 
-Build APIs with observability built-in:
+---
+
+## What Vision Shows You
+
+### Request Waterfall
+
+See every operation inside your request:
+
+- **HTTP handling** - method, path, status, timing
+- **Database queries** - which queries ran, how long each took
+- **External API calls** - requests to Stripe, SendGrid, etc.
+- **Custom operations** - anything you wrap in a span
+
+### Request & Response Data
+
+See exactly what was sent and received:
+
+- Full request headers and body
+- Full response headers and body
+- Validation errors with field-level detail
+- Error stack traces
+
+### Auto-Discovered Routes
+
+All your endpoints appear automatically:
+
+- Grouped by service (`/users/*` → Users, `/orders/*` → Orders)
+- Input/output schemas extracted from Zod
+- Ready to test in the API Explorer
+
+### Live Logs
+
+Your `console.log` calls appear in the dashboard:
+
+- Correlated with the request that logged them
+- Searchable and filterable
+- No more scrolling through terminal output
+
+---
+
+## Two Ways to Use Vision
+
+### Add to Existing App
+
+Already have a Hono, Fastify, or Express app? Add Vision in 2 lines:
+
+```bash
+npm install @getvision/adapter-hono  # or adapter-fastify, adapter-express
+```
+
+```typescript
+import { Hono } from 'hono'
+import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+
+const app = new Hono()
+
+app.use('*', visionAdapter())
+enableAutoDiscovery(app)
+
+// Your existing routes work as-is
+app.get('/users/:id', async (c) => {
+  const user = await db.select().from(users).where(eq(users.id, id))
+  return c.json(user)
+})
+```
+
+**Works with:**
+- Hono (`@getvision/adapter-hono`)
+- Fastify (`@getvision/adapter-fastify`)
+- Express (`@getvision/adapter-express`)
+- More coming: NestJS, Elysia, tRPC, GraphQL
+
+### Start New with Vision Server
+
+Building something new? Vision Server gives you observability from the start:
 
 ```bash
 npm install @getvision/server
@@ -63,9 +138,9 @@ app.service('users')
     input: z.object({ id: z.string() }),
     output: z.object({ id: z.string(), name: z.string() })
   }, async ({ id }, c) => {
-    // Tracing built into context
+    // c.span() is built in
     const user = c.span('db.select', { 'db.table': 'users' }, () => {
-      return { id, name: 'John' }
+      return db.select().from(users).where(eq(users.id, id))
     })
     return user
   })
@@ -73,131 +148,88 @@ app.service('users')
 app.start(3000)
 ```
 
-### Option 2: Vision Adapters (Existing Apps)
+**Vision Server includes:**
+- Built-in tracing with `c.span()`
+- Type-safe validation with Zod
+- Event-driven pub/sub with Inngest
+- Cron jobs
+- File-based routing
 
-Add Vision to your existing Hono/Fastify app:
+---
+
+## Which Should I Use?
+
+| Scenario | Use This |
+|----------|----------|
+| I have an existing Hono/Fastify/Express app | **Adapters** - add 2 lines, done |
+| I'm starting a new API project | **Vision Server** - everything built in |
+| I want to try Vision quickly | **Adapters** - lower friction |
+| I want structured services + events + cron | **Vision Server** - batteries included |
+
+Both give you the same dashboard. The difference is how much is built-in.
+
+---
+
+## Why Not Just Use console.log?
+
+You can. But:
+
+| Problem | console.log | Vision |
+|---------|-------------|--------|
+| "Which query is slow?" | Add timing logs around each query | Click request, see waterfall |
+| "What was in the request body?" | `console.log(req.body)` | Already captured |
+| "Did the cache hit?" | Add log, restart, test | Already captured as span |
+| "What happened in production staging?" | Scroll through terminal | Open dashboard, click trace |
+| "Which request caused this error?" | Hope you logged enough context | Error is attached to trace |
+
+Vision captures everything automatically. You look at what you need, when you need it.
+
+---
+
+## Why Not DataDog / NewRelic?
+
+Those are great for production monitoring. Vision is for **development**:
+
+| | Vision | DataDog/NewRelic |
+|---|--------|------------------|
+| Cost | Free, open source | $50+/month |
+| Setup | 2 lines of code | SDK + config + agent |
+| Data | Stays on your machine | Sent to cloud |
+| Focus | Debugging during dev | Production monitoring |
+| UI | Local dashboard | Cloud dashboard |
+
+Use Vision during development. Add production APM when you need it.
+
+---
+
+## Get Started
+
+**Quickest path:**
 
 ```bash
-npm install @getvision/adapter-hono
+# Clone an example and try it
+git clone https://github.com/ephor/vision
+cd vision/examples/hono
+bun install && bun run db:push && bun dev
+
+# Open http://localhost:9500
 ```
 
-```typescript
-import { Hono } from 'hono'
-import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
+**Add to your app:**
 
-const app = new Hono()
+- [**Quickstart**](/docs/quickstart) - Full setup in 5 minutes
+- [**Hono Adapter**](/docs/adapters/hono)
+- [**Fastify Adapter**](/docs/adapters/fastify)
+- [**Express Adapter**](/docs/adapters/express)
 
-// Add Vision observability
-app.use('*', visionAdapter())
-enableAutoDiscovery(app)
+**Learn more:**
 
-// Your existing routes
-app.get('/users/:id', async (c) => {
-  return c.json({ id: '123', name: 'John' })
-})
-```
+- [**Why Vision?**](/docs/why-vision) - Real debugging scenarios
+- [**Debugging Workflows**](/docs/debugging) - Step-by-step guides
+- [**Core Concepts**](/docs/concepts) - Traces, spans, context
 
-**Both give you:** Vision Dashboard on `http://localhost:9500` 🎉
-
-## Vision Platform Features
-
-### 🔍 Real-Time Request Tracing
-
-See every request with detailed waterfall view:
-- HTTP method, path, status code, timing
-- Request/response headers and body
-- Database queries and external API calls
-- Custom spans with attributes
-- Full trace correlation across services
-
-### 🧪 API Explorer
-
-Test your API directly from the dashboard:
-- Auto-generated request templates from Zod schemas
-- URL parameter inputs
-- Request body editor with syntax highlighting
-- Response viewer with JSON formatting
-- Save and replay requests
-
-### 🏗️ Service Catalog
-
-Auto-discover your entire API:
-- All routes grouped by service
-- Request/response schemas with descriptions
-- Endpoint metadata and middleware
-- Search and filter routes
-- Export as OpenAPI (coming soon)
-
-### 📊 Live Logs & Monitoring
-
-Stream logs in real-time:
-- Filter by level, service, or search term
-- Correlate logs with traces
-- Performance metrics and trends
-- Error tracking and alerting (coming soon)
-
-## Vision Server vs Adapters
-
-### 🚀 Vision Server
-**Best for:** New projects, greenfield APIs
-
-**What you get:**
-- ✅ **Vision Platform** - Full observability dashboard
-- ✅ **Type-Safe APIs** - Zod validation built-in
-- ✅ **Pub/Sub & Cron** - Inngest integration included
-- ✅ **Service Builder** - Organize code by services
-- ✅ **Drizzle Integration** - Auto-start Studio
-- ✅ **Zero Config** - Everything works out of the box
-
-```typescript
-// Vision Server - Everything included
-app.service('users')
-  .endpoint('POST', '/users', { input, output }, handler)
-  .on('user/created', eventHandler)
-  .cron('0 0 * * *', cronHandler)
-```
-
-### 🔌 Vision Adapters
-**Best for:** Existing Hono/Fastify/Express apps
-
-**What you get:**
-- ✅ **Vision Platform** - Full observability dashboard
-- ✅ **Auto-Discovery** - Routes automatically detected
-- ✅ **Schema Extraction** - Zod schemas parsed
-- ✅ **Minimal Changes** - Add one middleware
-
-```typescript
-// Vision Adapter - Add to existing app
-app.use('*', visionAdapter())
-enableAutoDiscovery(app)
-// Your existing routes work as-is
-```
-
-**Available Adapters:**
-- ✅ `@getvision/adapter-hono`
-- ✅ `@getvision/adapter-fastify`
-- ✅ `@getvision/adapter-express`
-- 🔜 `@getvision/adapter-nestjs`
-- 🔜 `@getvision/adapter-elysiajs`
-
-## Learn More
-
-**Get Started:**
-- [Quickstart](/docs/quickstart) - Get started in 5 minutes
-- [Vision Server](/docs/server) - Build with Vision Server
-- [Adapters](/docs/adapters/hono) - Add Vision to existing apps
-
-**Platform Features:**
-- [Request Tracing](/docs/features/tracing) - Deep dive into tracing
-- [API Explorer](/docs/features/api-explorer) - Testing your APIs
-- [Service Catalog](/docs/features/services) - Auto-discovery
-
-**Concepts:**
-- [Core Concepts](/docs/concepts) - How Vision works
-- [Deployment](/docs/deployment) - Deploy to production
+---
 
 ## Open Source
 
-Vision is MIT licensed and open source. Contributions are welcome!
-
-[View on GitHub](https://github.com/ephor/vision) →
+Vision is MIT licensed. Star us on [GitHub](https://github.com/ephor/vision) if you find it useful.
