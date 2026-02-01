@@ -75,13 +75,19 @@ All your endpoints appear automatically:
 - Input/output schemas extracted from Zod
 - Ready to test in the API Explorer
 
-### Live Logs
+### Live Logs (Wide Events)
 
-Your `console.log` calls appear in the dashboard:
+Your `console.log` calls appear in the dashboard with automatic context:
 
-- Correlated with the request that logged them
-- Searchable and filterable
-- No more scrolling through terminal output
+- **Request-scoped** - Click a trace to see only logs from that request
+- **Searchable** - Search by message OR by context fields like `userId=123`
+- **Add context once, see it everywhere** - `addContext({ userId })` attaches to all logs in that request
+
+```typescript
+vision.addContext({ userId: '123', orderId: 'abc' })
+console.log('Processing')  // Automatically has userId, orderId
+console.log('Done')        // Automatically has userId, orderId
+```
 
 ---
 
