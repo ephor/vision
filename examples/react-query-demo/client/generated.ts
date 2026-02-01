@@ -68,30 +68,50 @@ const routes = {
       path: '/users/list',
       input: users_list_input,
       output: users_list_output,
+      _types: {} as {
+        input: z.infer<typeof users_list_input>,
+        output: z.infer<typeof users_list_output>
+      }
     },
     _id: {
       method: 'GET' as const,
       path: '/users/:id',
       input: users__id_input,
       output: users__id_output,
+      _types: {} as {
+        input: z.infer<typeof users__id_input>,
+        output: z.infer<typeof users__id_output>
+      }
     },
     create: {
       method: 'POST' as const,
       path: '/users/create',
       input: users_create_input,
       output: users_create_output,
+      _types: {} as {
+        input: z.infer<typeof users_create_input>,
+        output: z.infer<typeof users_create_output>
+      }
     },
     update: {
       method: 'PUT' as const,
       path: '/users/:id/update',
       input: users_update_input,
       output: users_update_output,
+      _types: {} as {
+        input: z.infer<typeof users_update_input>,
+        output: z.infer<typeof users_update_output>
+      }
     },
     delete: {
       method: 'DELETE' as const,
       path: '/users/:id/delete',
       input: users_delete_input,
       output: users_delete_output,
+      _types: {} as {
+        input: z.infer<typeof users_delete_input>,
+        output: z.infer<typeof users_delete_output>
+      }
     }
   }
 }
@@ -100,7 +120,7 @@ const routes = {
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-02-01T17:25:14.539Z
+ * Generated at: 2026-02-01T17:55:35.822Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate

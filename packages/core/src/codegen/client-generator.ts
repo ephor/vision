@@ -127,13 +127,17 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
         schemaDefinitions.push(`const ${outputSchemaName} = ${outputSchema}`)
       }
 
-      // Add procedure definition
+      // Add procedure definition (with _types for type inference like tRPC)
       procedures.push(`
     ${procedureName}: {
       method: '${route.method}' as const,
       path: '${route.path}',
       ${includeValidation ? `input: ${inputSchemaName},` : ''}
       ${includeValidation ? `output: ${outputSchemaName},` : ''}
+      _types: {} as {
+        input: z.infer<typeof ${inputSchemaName}>,
+        output: z.infer<typeof ${outputSchemaName}>
+      }
     }`)
     }
 

@@ -159,14 +159,20 @@ export type InferSchemaType<T> = T extends { _output: infer O }
 
 /**
  * Convert route definition to procedure client
+ * Extracts types from _types field (like tRPC $types)
  */
 export type RouteToProcedure<TRoute> = TRoute extends {
   method: string
-  input?: infer I
-  output?: infer O
+  _types: { input: infer I; output: infer O }
 }
-  ? ProcedureClient<InferSchemaType<I>, InferSchemaType<O>>
-  : never
+  ? ProcedureClient<I, O>
+  : TRoute extends {
+      method: string
+      input?: infer I
+      output?: infer O
+    }
+    ? ProcedureClient<InferSchemaType<I>, InferSchemaType<O>>
+    : never
 
 /**
  * Convert service (collection of routes) to client
