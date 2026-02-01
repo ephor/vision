@@ -143,7 +143,7 @@ export function generateClient(routes: RouteMetadata[], options: ClientGenerator
 
   // Generate routes object
   const routesCode = `
-const routes = {${routeDefinitions.join(',')}\n} as const
+const routes = {${routeDefinitions.join(',')}\n}
 `
 
   // Generate client initialization
@@ -156,7 +156,7 @@ const routes = {${routeDefinitions.join(',')}\n} as const
  * Edit your server routes and restart to regenerate
  */
 
-export const api = createVisionClient(routes, {
+export const api = createVisionClient<typeof routes>(routes, {
   baseUrl: ${baseUrl ? `'${baseUrl}'` : "process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'"}
 })
 
@@ -277,9 +277,11 @@ function serializeZodSchema(schema: any): string {
       case 'array':
         return `z.array(${serializeSchema(def.element)})`
       case 'optional':
-        return `${serializeSchema(def.value)}.optional()`
+        // Zod v4 uses 'innerType' instead of 'value'
+        return `${serializeSchema(def.innerType || def.value)}.optional()`
       case 'nullable':
-        return `${serializeSchema(def.value)}.nullable()`
+        // Zod v4 uses 'innerType' instead of 'value'
+        return `${serializeSchema(def.innerType || def.value)}.nullable()`
       case 'default': {
         // Zod v4 uses defaultValue field
         const defaultValue = typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue
@@ -342,7 +344,16 @@ function serializeZodSchema(schema: any): string {
       case 'ZodRecord':
         return `z.record(${serializeSchema(def.valueType)})`
       case 'ZodEffects':
-        return serializeSchema(def.schema)
+        // ZodEffects wraps another schema (used for .refine(), .transform(), .email(), etc.)
+        if (def.schema) {
+          return serializeSchema(def.schema)
+        }
+        // Fallback to inner type if available
+        if (schema._def?.schema) {
+          return serializeSchema(schema._def.schema)
+        }
+        console.warn(`Unknown ZodEffects without schema`)
+        return 'z.unknown()'
       default:
         console.warn(`Unknown Zod v3 type: ${typeName}`)
         return 'z.unknown()'
@@ -386,6 +397,19 @@ function generateTypeExports(serviceMap: Map<string, RouteMetadata[]>): string {
 
       exports.push(`export type ${typeName}Input = z.infer<typeof ${inputSchemaName}>`)
       exports.push(`export type ${typeName}Output = z.infer<typeof ${outputSchemaName}>`)
+    }
+
+    // Export singular entity type (e.g., User from users service)
+    // Find route that returns a single entity (usually has :id param)
+    const singularName = capitalize(serviceName.replace(/s$/, ''))
+    const singleEntityRoute = serviceRoutes.find(r => r.path.includes(':id') && !r.path.includes('update') && !r.path.includes('delete'))
+    if (singleEntityRoute) {
+      const pathSegments = singleEntityRoute.path.split('/').filter(Boolean)
+      const procedureName = pathSegments[pathSegments.length - 1].replace(/[:-]/g, '_')
+      const outputSchemaName = `${serviceName}_${procedureName}_output`
+
+      // Export singular entity type
+      exports.push(`export type ${singularName} = z.infer<typeof ${outputSchemaName}>`)
     }
   }
 

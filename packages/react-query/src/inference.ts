@@ -22,17 +22,14 @@ export type VisionProcedure = {
  * Extract router type from Vision Server, Contract, or Typed Routes
  */
 export type InferVisionRouter<TAppOrContract> =
-  // Typed routes (defineTypedRoutes)
-  TAppOrContract extends Record<string, Record<string, { method: string; path: string }>>
-    ? TAppOrContract
-    : // Contract (defineVisionContract)
-      TAppOrContract extends VisionContract
-      ? InferContract<TAppOrContract>
-      : // Vision Server
-        TAppOrContract extends { _def: { services: infer TServices } }
-        ? InferServices<TServices>
-        : // Fallback: treat as-is
-          TAppOrContract
+  // Contract (defineVisionContract)
+  TAppOrContract extends VisionContract
+    ? InferContract<TAppOrContract>
+    : // Vision Server
+      TAppOrContract extends { _def: { services: infer TServices } }
+      ? InferServices<TServices>
+      : // Fallback: treat as raw routes (auto-generated from codegen)
+        TAppOrContract
 
 /**
  * Infer from contract (adapters)
@@ -128,12 +125,17 @@ export type ProcedureClient<TInput = any, TOutput = any> = {
   /**
    * Get query options for use with useQuery
    */
-  queryOptions: (input?: TInput, options?: any) => any
+  queryOptions: (
+    input?: TInput,
+    options?: Omit<UseQueryOptions<TOutput, Error>, 'queryKey' | 'queryFn'>
+  ) => UseQueryOptions<TOutput, Error>
 
   /**
    * Get mutation options for use with useMutation
    */
-  mutationOptions: (options?: any) => any
+  mutationOptions: (
+    options?: Omit<UseMutationOptions<TOutput, Error, TInput>, 'mutationFn'>
+  ) => UseMutationOptions<TOutput, Error, TInput>
 
   /**
    * Prefetch query data
@@ -147,10 +149,23 @@ export type ProcedureClient<TInput = any, TOutput = any> = {
 }
 
 /**
+ * Infer type from Zod schema or Standard Schema
+ */
+export type InferSchemaType<T> = T extends { _output: infer O }
+  ? O
+  : T extends { parse: (x: any) => infer O }
+  ? O
+  : T
+
+/**
  * Convert route definition to procedure client
  */
-export type RouteToProcedure<TRoute> = TRoute extends { method: string; input?: infer I; output?: infer O }
-  ? ProcedureClient<I, O>
+export type RouteToProcedure<TRoute> = TRoute extends {
+  method: string
+  input?: infer I
+  output?: infer O
+}
+  ? ProcedureClient<InferSchemaType<I>, InferSchemaType<O>>
   : never
 
 /**

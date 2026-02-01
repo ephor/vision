@@ -40,8 +40,8 @@ const users_create_output = z.object({
   createdAt: z.string()
 })
 const users_update_input = z.object({
-  name: z.unknown().optional(),
-  email: z.unknown().optional()
+  name: z.string().optional(),
+  email: z.string().optional()
 })
 const users_update_output = z.object({
   id: z.number(),
@@ -94,19 +94,19 @@ const routes = {
       output: users_delete_output,
     }
   }
-} as const
+}
 
 
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-01-26T09:12:53.483Z
+ * Generated at: 2026-02-01T17:25:14.539Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate
  */
 
-export const api = createVisionClient(routes, {
+export const api = createVisionClient<typeof routes>(routes, {
   baseUrl: 'http://localhost:3000'
 })
 
@@ -121,3 +121,4 @@ export type UsersUpdateInput = z.infer<typeof users_update_input>
 export type UsersUpdateOutput = z.infer<typeof users_update_output>
 export type UsersDeleteInput = z.infer<typeof users_delete_input>
 export type UsersDeleteOutput = z.infer<typeof users_delete_output>
+export type User = z.infer<typeof users__id_output>
