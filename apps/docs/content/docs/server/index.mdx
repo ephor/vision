@@ -219,7 +219,7 @@ const app = new Vision({
     logging: true       // Console logging
   },
   pubsub: {
-    id: 'my-app',      // Inngest app ID
+    id: 'my-app',      // App ID for event bus
     schemas: {         // Event schemas
       'user/created': {
         data: z.object({ userId: z.string(), email: z.string() })

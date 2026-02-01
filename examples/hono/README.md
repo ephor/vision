@@ -15,19 +15,42 @@ bun dev
 - Vision Dashboard: http://localhost:9500
 - Drizzle Studio: http://localhost:4983
 
+## Try This: Use the API Explorer
+
+**Step 1:** Open Vision Dashboard (localhost:9500)
+
+**Step 2:** Go to **API Explorer** tab
+
+You'll see all endpoints auto-discovered:
+- `GET /users` - List users
+- `POST /users` - Create user
+- `PUT /users/:id` - Update user
+- `DELETE /users/:id` - Delete user
+
+**Step 3:** Click `POST /users`
+
+Vision auto-generates a request template from your Zod schema:
+```json
+{
+  "name": "",    // string (required)
+  "email": ""    // email (required)
+}
+```
+
+**Step 4:** Fill in and click Send
+
+The response appears, and a new trace is created. Click the trace to see the full waterfall.
+
+**No curl needed.** But curl examples are below if you prefer.
+
 ## Try This: Debug a Slow Query
 
-**Step 1:** Create some data
+**Step 1:** Create some data via API Explorer or curl
 
 ```bash
-# Create a few users
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice","email":"alice@example.com"}'
-
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Bob","email":"bob@example.com"}'
 ```
 
 **Step 2:** Make a request

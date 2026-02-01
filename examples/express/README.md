@@ -13,15 +13,29 @@ bun dev
 - API: http://localhost:3000
 - Vision Dashboard: http://localhost:9500
 
+## Try This: Use the API Explorer
+
+**Step 1:** Open Vision Dashboard (localhost:9500)
+
+**Step 2:** Go to **API Explorer** tab
+
+All your endpoints are auto-discovered. Click any endpoint to see the auto-generated request template.
+
+**Step 3:** Click `POST /users`
+
+Vision generates a template from your Zod schema. Fill it in and click Send.
+
+**No curl needed** - but curl examples are below if you prefer.
+
 ## Try This: See Your First Trace
 
-**Step 1:** Make a request
+**Step 1:** Make a request via API Explorer or curl
 
 ```bash
 curl http://localhost:3000/users
 ```
 
-**Step 2:** Open Vision Dashboard (localhost:9500)
+**Step 2:** Open **Traces** tab
 
 Click the trace for `GET /users`. You'll see:
 
