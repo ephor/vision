@@ -78,6 +78,31 @@ export interface ExtendedContext<
 }
 
 /**
+ * Hono Variables for Vision-injected context helpers.
+ * These are set via c.set() in Vision middleware and accessible via c.var.* in handlers.
+ */
+export type SpanFn = <T>(
+  name: string,
+  attributes?: Record<string, unknown>,
+  fn?: () => T
+) => T
+
+export type AddContextFn = (context: Record<string, unknown>) => void
+
+export type EmitFn<TEvents extends Record<string, any> = Record<string, any>> = <
+  K extends keyof TEvents
+>(
+  eventName: K,
+  data: TEvents[K]
+) => Promise<void>
+
+export type VisionVariables<TEvents extends Record<string, any> = Record<string, any>> = {
+  span: SpanFn
+  addContext: AddContextFn
+  emit: EmitFn<TEvents>
+}
+
+/**
  * Endpoint type map used by ServiceBuilder to accumulate per-endpoint types.
  * Key format: "METHOD /path" (e.g., "GET /users/:id")
  */
@@ -111,6 +136,28 @@ export type EndpointTypeMap = Record<string, { input: any; output: any }>
 export type InferServiceEndpoints<T> = T extends { readonly _endpointTypes?: infer TEndpoints }
   ? TEndpoints
   : never
+
+/**
+ * Derive a fully-typed AppRouter from a record of ServiceBuilder instances.
+ * Eliminates the need to manually maintain the AppRouter type.
+ *
+ * @example
+ * ```ts
+ * import type { InferAppRouter } from '@getvision/server'
+ *
+ * const _services = { users: userService, orders: orderService }
+ * export type AppRouter = InferAppRouter<typeof _services>
+ * // AppRouter = {
+ * //   users: InferServiceEndpoints<typeof userService>
+ * //   orders: InferServiceEndpoints<typeof orderService>
+ * // }
+ * ```
+ */
+export type InferAppRouter<
+  TServices extends Record<string, { readonly _endpointTypes?: any }>
+> = {
+  [K in keyof TServices]: InferServiceEndpoints<TServices[K]>
+}
 
 /**
  * Handler type with Zod-validated input and Vision-enhanced context

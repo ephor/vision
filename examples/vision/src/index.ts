@@ -1,6 +1,6 @@
 import { config } from "dotenv"
 import { Vision } from '@getvision/server'
-import type { InferServiceEndpoints } from '@getvision/server'
+import type { InferServiceEndpoints, InferAppRouter } from '@getvision/server'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -340,7 +340,5 @@ export type AppType = typeof app
  * const client = createVisionClient<AppRouter>({ baseUrl: 'http://localhost:4000' })
  * ```
  */
-export type AppRouter = {
-  users: InferServiceEndpoints<typeof userService>
-  orders: InferServiceEndpoints<typeof orderService>
-}
+const _services = { users: userService, orders: orderService }
+export type AppRouter = InferAppRouter<typeof _services>

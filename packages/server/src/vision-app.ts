@@ -10,6 +10,11 @@ import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
 import type { serve as honoServe } from '@hono/node-server'
 import type { QueueEventsOptions, QueueOptions, WorkerOptions } from "bullmq";
+import type { VisionVariables } from './types'
+
+type WithVisionVars<E extends Env> = E extends { Variables: infer V }
+  ? Omit<E, 'Variables'> & { Variables: V & VisionVariables }
+  : E & { Variables: VisionVariables }
 
 export interface VisionALSContext {
   vision: VisionCore
@@ -180,13 +185,22 @@ export class Vision<
   E extends Env = Env,
   S extends Schema = {},
   BasePath extends string = '/'
-> extends Hono<E, S, BasePath> {
+> extends Hono<WithVisionVars<E>, S, BasePath> {
   private visionCore: VisionCore
   private eventBus: EventBus
   private config: VisionConfig
   private serviceBuilders: ServiceBuilder<any, any, E>[] = []
   private bunServer?: any
   private signalHandler?: () => Promise<void>
+
+  /**
+   * Returns the underlying Hono app with Vision variables typed.
+   * Useful for passing Vision to adapters or tools that expect a plain Hono instance.
+   * Phase B will remove the need for this once Vision uses composition instead of inheritance.
+   */
+  get hono(): Hono<WithVisionVars<E>> {
+    return this
+  }
 
   constructor(config?: VisionConfig) {
     super()
@@ -373,43 +387,52 @@ export class Vision<
               ctx.rootSpanId = rootSpan.id
             }
 
-            // Provide c.span and c.addContext globally for all downstream handlers (Vision/Hono sub-apps)
-            if (!(c as any).span) {
-              (c as any).addContext = (context: Record<string, unknown>) => {
-                const current = visionContext.getStore()
-                const currentTraceId = current?.traceId || trace.id
-                
-                // Add context to trace metadata via VisionCore
-                const visionTrace = this.visionCore.getTraceStore().getTrace(currentTraceId)
-                if (visionTrace) {
-                  visionTrace.metadata = { ...(visionTrace.metadata || {}), ...context }
-                }
-              }
+            // Provide c.span and c.addContext globally for all downstream handlers (Vision/Hono sub-apps).
+            // We register via both Hono Variables (c.var.span / c.get('span')) for typed access,
+            // and as direct properties (c.span) for backward-compatibility with existing handlers.
+            const cProps = c as unknown as Record<string, unknown>
 
-              (c as any).span = <T>(
-                name: string,
-                attributes: Record<string, any> = {},
-                fn?: () => T
-              ): T => {
-                const current = visionContext.getStore()
-                const currentTraceId = current?.traceId || trace.id
-                const currentRootSpanId = current?.rootSpanId || rootSpan.id
-                const s = tracer.startSpan(name, currentTraceId, currentRootSpanId)
-                for (const [k, v] of Object.entries(attributes)) tracer.setAttribute(s.id, k, v)
-                try {
-                  const result = fn ? fn() : (undefined as any)
-                  const completed = tracer.endSpan(s.id)
-                  if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
-                  return result
-                } catch (err) {
-                  tracer.setAttribute(s.id, 'error', true)
-                  tracer.setAttribute(s.id, 'error.message', err instanceof Error ? err.message : String(err))
-                  const completed = tracer.endSpan(s.id)
-                  if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
-                  throw err
-                }
+            const addContextFn = (context: Record<string, unknown>) => {
+              const current = visionContext.getStore()
+              const currentTraceId = current?.traceId || trace.id
+
+              // Add context to trace metadata via VisionCore
+              const visionTrace = this.visionCore.getTraceStore().getTrace(currentTraceId)
+              if (visionTrace) {
+                visionTrace.metadata = { ...(visionTrace.metadata || {}), ...context }
               }
             }
+
+            const spanFn = <T>(
+              name: string,
+              attributes: Record<string, unknown> = {},
+              fn?: () => T
+            ): T => {
+              const current = visionContext.getStore()
+              const currentTraceId = current?.traceId || trace.id
+              const currentRootSpanId = current?.rootSpanId || rootSpan.id
+              const s = tracer.startSpan(name, currentTraceId, currentRootSpanId)
+              for (const [k, v] of Object.entries(attributes)) tracer.setAttribute(s.id, k, v)
+              try {
+                const result = fn ? fn() : (undefined as any)
+                const completed = tracer.endSpan(s.id)
+                if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
+                return result
+              } catch (err) {
+                tracer.setAttribute(s.id, 'error', true)
+                tracer.setAttribute(s.id, 'error.message', err instanceof Error ? err.message : String(err))
+                const completed = tracer.endSpan(s.id)
+                if (completed) this.visionCore.getTraceStore().addSpan(currentTraceId, completed)
+                throw err
+              }
+            }
+
+            // Hono Variables: typed access via c.var.addContext / c.var.span
+            c.set('addContext', addContextFn)
+            c.set('span', spanFn)
+            // Direct properties: backward-compat with c.addContext() / c.span() in handlers
+            cProps.addContext = addContextFn
+            cProps.span = spanFn
         
               // Add request attributes
               tracer.setAttribute(rootSpan.id, 'http.method', c.req.method)
@@ -544,11 +567,11 @@ export class Vision<
    * ```
    */
   service<E2 extends Env = E, TEvents extends Record<string, any> = {}>(name: string) {
-    const builder = new ServiceBuilder<TEvents, {}, E2>(name, this.eventBus, this.visionCore)
+    const builder = new ServiceBuilder<TEvents, {}, E2>(name, this.eventBus, this, this.visionCore)
 
     // Preserve builder for registration in start()
     this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, any, E>)
-    
+
     return builder
   }
 
@@ -582,7 +605,7 @@ export class Vision<
     
     // Build all services (this populates allServices via builder.build)
     for (const builder of this.serviceBuilders) {
-      builder.build(this as any, allServices)
+      builder.build(allServices)
     }
     
     // Don't register to VisionCore here - let start() handle it after sub-apps are loaded

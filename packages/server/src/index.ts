@@ -63,6 +63,11 @@ export type {
   ExtendedContext,
   EndpointTypeMap,
   InferServiceEndpoints,
+  InferAppRouter,
+  SpanFn,
+  AddContextFn,
+  EmitFn,
+  VisionVariables,
 } from './types'
 
 // Re-export from core for convenience

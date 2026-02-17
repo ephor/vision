@@ -1,4 +1,5 @@
 import type { Hono, Context, MiddlewareHandler, Env, Input } from 'hono'
+import type { VisionVariables } from './types'
 import type { z } from 'zod'
 import { VisionCore, generateTemplate } from '@getvision/core'
 import {
@@ -137,12 +138,16 @@ export class ServiceBuilder<
   private cronJobs: Map<string, any> = new Map()
   private globalMiddleware: MiddlewareHandler<E, string, any, any>[] = []
   private eventSchemas: EventSchemaMap = {}
-  
+  private honoApp: Hono<any, any, any>
+
   constructor(
     private name: string,
     private eventBus: EventBus,
+    honoApp: Hono<any, any, any>,
     private visionCore?: VisionCore
-  ) {}
+  ) {
+    this.honoApp = honoApp
+  }
   
   /**
    * Add global middleware for all endpoints in this service
@@ -440,7 +445,7 @@ export class ServiceBuilder<
   /**
    * Build and register all endpoints with Hono
    */
-  build(app: Hono, servicesAccumulator?: Array<{ name: string; routes: any[] }>) {
+  build(servicesAccumulator?: Array<{ name: string; routes: any[] }>) {
     // Prepare routes with Zod schemas
     const routes = Array.from(this.endpoints.values()).map(ep => {
       // Generate requestBody schema (input) for POST/PUT/PATCH
@@ -525,44 +530,47 @@ export class ServiceBuilder<
       // Create handler with middleware chain
       const finalHandler = async (c: Context<E, any, I>) => {
         try {
-          // Add span helper and emit to context
+          // Add span helper and emit to context.
+          // Registered via both Hono Variables (c.var.*) for typed access
+          // and as direct properties (c.*) for backward-compat with existing c.span() usage.
+          const vc = c as unknown as Context<E & { Variables: VisionVariables<TEvents> }, any, I>
+          const cProps = c as unknown as Record<string, unknown>
+
           const visionCtx = getVisionContext()
           if (visionCtx && this.visionCore) {
             const { vision, traceId, rootSpanId } = visionCtx
-            const tracer = vision.getTracer();
-            
-            // Add addContext() method to context
-            (c as any).addContext = (context: Record<string, unknown>) => {
+            const tracer = vision.getTracer()
+
+            const addContextFn = (context: Record<string, unknown>) => {
               const current = getVisionContext()
               // Use current traceId from context if available (handles nested spans/async correctly)
               const targetTraceId = current?.traceId || traceId
-              
+
               const visionTrace = vision.getTraceStore().getTrace(targetTraceId)
               if (visionTrace) {
                 visionTrace.metadata = { ...(visionTrace.metadata || {}), ...context }
               }
             }
 
-            // Add span() method to context
-            (c as any).span = <T>(
+            const spanFn = <T>(
               name: string,
-              attributes: Record<string, any> = {},
+              attributes: Record<string, unknown> = {},
               fn?: () => T
             ): T => {
               const span = tracer.startSpan(name, traceId, rootSpanId)
-              
+
               for (const [key, value] of Object.entries(attributes)) {
                 tracer.setAttribute(span.id, key, value)
               }
-              
+
               try {
                 const result = fn ? fn() : (undefined as any)
                 const completedSpan = tracer.endSpan(span.id)
-                
+
                 if (completedSpan) {
                   vision.getTraceStore().addSpan(traceId, completedSpan)
                 }
-                
+
                 return result
               } catch (error) {
                 tracer.setAttribute(span.id, 'error', true)
@@ -572,24 +580,33 @@ export class ServiceBuilder<
                   error instanceof Error ? error.message : String(error)
                 )
                 const completedSpan = tracer.endSpan(span.id)
-                
+
                 if (completedSpan) {
                   vision.getTraceStore().addSpan(traceId, completedSpan)
                 }
-                
+
                 throw error
               }
             }
+
+            // Hono Variables: typed access via c.var.addContext / c.var.span
+            vc.set('addContext', addContextFn)
+            vc.set('span', spanFn)
+            // Direct properties: backward-compat with c.addContext() / c.span() in handlers
+            cProps.addContext = addContextFn
+            cProps.span = spanFn
           }
 
           // Always provide emit() so events work in sub-apps without local VisionCore
-          if (!(c as any).emit) {
-            (c as any).emit = async <K extends keyof TEvents>(
+          if (!vc.get('emit')) {
+            const emitFn = async <K extends keyof TEvents>(
               eventName: K,
               data: TEvents[K]
             ): Promise<void> => {
               return this.eventBus.emit(eventName as string, data)
             }
+            vc.set('emit', emitFn)
+            cProps.emit = emitFn
           }
           
           // Parse and merge params, body, query
@@ -638,9 +655,9 @@ export class ServiceBuilder<
       
       // Register with middleware chain
       if (allMiddleware.length > 0) {
-        app.on([ep.method], ep.path, ...allMiddleware, finalHandler)
+        this.honoApp.on([ep.method], ep.path, ...allMiddleware, finalHandler)
       } else {
-        app.on([ep.method], ep.path, finalHandler)
+        this.honoApp.on([ep.method], ep.path, finalHandler)
       }
     })
     
