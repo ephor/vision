@@ -97,6 +97,12 @@ async function runMiddlewareChain<E extends Env, I extends Input>(
 type EventSchemaMap = Record<string, z.ZodSchema<any>>
 
 /**
+ * Endpoint type map - accumulates endpoint input/output types as they're registered
+ * Key format: "METHOD /path" (e.g., "GET /users/:id")
+ */
+type EndpointTypeMap = Record<string, { input: any; output: any }>
+
+/**
  * ServiceBuilder - Builder pattern API for defining services
  * 
  * Automatically infers event types from Zod schemas passed to .on()
@@ -116,9 +122,16 @@ type EventSchemaMap = Record<string, z.ZodSchema<any>>
  */
 export class ServiceBuilder<
   TEvents extends EventSchemaMap = {},
+  TEndpoints extends EndpointTypeMap = {},
   E extends Env = Env,
   I extends Input = {}
 > {
+  /**
+   * Phantom property — never set at runtime; exists only so TypeScript can
+   * extract `TEndpoints` via `InferServiceEndpoints<typeof myService>`.
+   */
+  declare readonly _endpointTypes?: TEndpoints
+
   private endpoints: Map<string, any> = new Map()
   private eventHandlers: Map<string, any> = new Map()
   private cronJobs: Map<string, any> = new Map()
@@ -220,11 +233,12 @@ export class ServiceBuilder<
    * ```
    */
   endpoint<
+    TMethod extends EndpointConfig['method'],
     TInputSchema extends z.ZodType,
     TOutputSchema extends z.ZodType | undefined,
     PPath extends string
   >(
-    method: EndpointConfig['method'],
+    method: TMethod,
     path: PPath,
     schema: {
       input: TInputSchema
@@ -239,7 +253,18 @@ export class ServiceBuilder<
       I
     >,
     config?: Partial<EndpointConfig>
-  ) {
+  ): ServiceBuilder<
+    TEvents,
+    TEndpoints & Record<
+      `${TMethod} ${PPath}`,
+      {
+        input: z.infer<TInputSchema>
+        output: TOutputSchema extends z.ZodType ? z.infer<TOutputSchema> : unknown
+      }
+    >,
+    E,
+    I
+  > {
     this.endpoints.set(`${method}:${path}`, {
       method,
       path,
@@ -248,7 +273,18 @@ export class ServiceBuilder<
       config: { ...config, method, path },
       middleware: config?.middleware || []
     })
-    return this
+    return this as unknown as ServiceBuilder<
+      TEvents,
+      TEndpoints & Record<
+        `${TMethod} ${PPath}`,
+        {
+          input: z.infer<TInputSchema>
+          output: TOutputSchema extends z.ZodType ? z.infer<TOutputSchema> : unknown
+        }
+      >,
+      E,
+      I
+    >
   }
   
   /**
@@ -291,7 +327,7 @@ export class ServiceBuilder<
       concurrency?: number
       handler: (event: T, c: Context<E, any, I>) => Promise<void>
     }
-  ): ServiceBuilder<TEvents & { [key in K]: T }, E, I> {
+  ): ServiceBuilder<TEvents & { [key in K]: T }, TEndpoints, E, I> {
     const { schema, handler, description, icon, tags } = config
     
     // Store schema for type inference
@@ -325,7 +361,7 @@ export class ServiceBuilder<
     this.eventHandlers.set(eventName, config)
     
     // Return typed ServiceBuilder with accumulated events
-    return this as ServiceBuilder<TEvents & { [key in K]: T }, E, I>
+    return this as unknown as ServiceBuilder<TEvents & { [key in K]: T }, TEndpoints, E, I>
   }
   
   /**

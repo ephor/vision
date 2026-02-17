@@ -56,11 +56,13 @@ export { EventBus } from './event-bus'
 export type { EventBusConfig } from './event-bus'
 
 // Types
-export type { 
-  EndpointConfig, 
-  Handler, 
+export type {
+  EndpointConfig,
+  Handler,
   VisionContext,
-  ExtendedContext
+  ExtendedContext,
+  EndpointTypeMap,
+  InferServiceEndpoints,
 } from './types'
 
 // Re-export from core for convenience

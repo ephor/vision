@@ -184,7 +184,7 @@ export class Vision<
   private visionCore: VisionCore
   private eventBus: EventBus
   private config: VisionConfig
-  private serviceBuilders: ServiceBuilder<any, E>[] = []
+  private serviceBuilders: ServiceBuilder<any, any, E>[] = []
   private bunServer?: any
   private signalHandler?: () => Promise<void>
 
@@ -544,10 +544,10 @@ export class Vision<
    * ```
    */
   service<E2 extends Env = E, TEvents extends Record<string, any> = {}>(name: string) {
-    const builder = new ServiceBuilder<TEvents, E2>(name, this.eventBus, this.visionCore)
-    
+    const builder = new ServiceBuilder<TEvents, {}, E2>(name, this.eventBus, this.visionCore)
+
     // Preserve builder for registration in start()
-    this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, E>)
+    this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, any, E>)
     
     return builder
   }

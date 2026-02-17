@@ -84,7 +84,7 @@
     },
     "examples/express": {
       "name": "express-basic-example",
-      "version": "0.0.14",
+      "version": "0.0.15",
       "dependencies": {
         "@getvision/adapter-express": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -100,7 +100,7 @@
     },
     "examples/fastify": {
       "name": "fastify-basic-example",
-      "version": "0.0.14",
+      "version": "0.0.15",
       "dependencies": {
         "@getvision/adapter-fastify": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -117,7 +117,7 @@
     },
     "examples/hono": {
       "name": "hono-basic-example",
-      "version": "0.0.14",
+      "version": "0.0.15",
       "dependencies": {
         "@getvision/adapter-hono": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -139,7 +139,7 @@
     },
     "examples/vision": {
       "name": "vision-basic-example",
-      "version": "0.0.20",
+      "version": "0.0.22",
       "dependencies": {
         "@getvision/server": "workspace:*",
         "@hono/node-server": "^1.19.6",
@@ -161,7 +161,7 @@
     },
     "packages/adapter-express": {
       "name": "@getvision/adapter-express",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "zod": "^4.1.11",
@@ -180,7 +180,7 @@
     },
     "packages/adapter-fastify": {
       "name": "@getvision/adapter-fastify",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@fastify/request-context": "^6.2.1",
         "@getvision/core": "workspace:*",
@@ -202,7 +202,7 @@
     },
     "packages/adapter-hono": {
       "name": "@getvision/adapter-hono",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/zod-validator": "^0.7.3",
@@ -217,6 +217,16 @@
       },
       "peerDependencies": {
         "hono": "^4.0.0",
+      },
+    },
+    "packages/client": {
+      "name": "@getvision/client",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@repo/eslint-config": "workspace:*",
+        "@repo/typescript-config": "workspace:*",
+        "@types/node": "^20.14.9",
+        "typescript": "5.9.3",
       },
     },
     "packages/core": {
@@ -258,7 +268,7 @@
     },
     "packages/server": {
       "name": "@getvision/server",
-      "version": "0.4.1",
+      "version": "0.4.3",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/node-server": "^1.19.6",
@@ -507,6 +517,8 @@
     "@getvision/adapter-fastify": ["@getvision/adapter-fastify@workspace:packages/adapter-fastify"],
 
     "@getvision/adapter-hono": ["@getvision/adapter-hono@workspace:packages/adapter-hono"],
+
+    "@getvision/client": ["@getvision/client@workspace:packages/client"],
 
     "@getvision/core": ["@getvision/core@workspace:packages/core"],
 

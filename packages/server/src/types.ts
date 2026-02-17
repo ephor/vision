@@ -78,6 +78,41 @@ export interface ExtendedContext<
 }
 
 /**
+ * Endpoint type map used by ServiceBuilder to accumulate per-endpoint types.
+ * Key format: "METHOD /path" (e.g., "GET /users/:id")
+ */
+export type EndpointTypeMap = Record<string, { input: any; output: any }>
+
+/**
+ * Infer the accumulated endpoint types from a ServiceBuilder instance.
+ *
+ * ServiceBuilder carries a phantom `_endpointTypes` property (never set at
+ * runtime) so TypeScript can extract the full `TEndpoints` map at compile time.
+ *
+ * @example
+ * ```ts
+ * import type { InferServiceEndpoints } from '@getvision/server'
+ *
+ * const userService = app.service('users')
+ *   .endpoint('GET', '/users/:id', { input, output }, handler)
+ *   .endpoint('POST', '/users', { input, output }, handler)
+ *
+ * export type AppRouter = {
+ *   users: InferServiceEndpoints<typeof userService>
+ * }
+ * // AppRouter = {
+ * //   users: {
+ * //     'GET /users/:id': { input: { id: string }, output: { id: string; name: string } }
+ * //     'POST /users':    { input: { name: string }, output: { id: string; name: string } }
+ * //   }
+ * // }
+ * ```
+ */
+export type InferServiceEndpoints<T> = T extends { readonly _endpointTypes?: infer TEndpoints }
+  ? TEndpoints
+  : never
+
+/**
  * Handler type with Zod-validated input and Vision-enhanced context
  */
 export type Handler<
