@@ -3,13 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Type-safe TanStack Query client for Vision services — no tRPC required",
-  "types": "dist/index.d.ts",
-  "module": "dist/index.js",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "scripts": {
     "dev": "tsc --watch",

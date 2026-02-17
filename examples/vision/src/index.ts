@@ -1,5 +1,6 @@
 import { config } from "dotenv"
 import { Vision } from '@getvision/server'
+import type { InferServiceEndpoints } from '@getvision/server'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -45,8 +46,8 @@ app.use('*', cors())
 // Define Services - using app.service()!
 // ============================================================================
 
-// User Service
-app.service<{ Variables: Variables; }>('users')
+// User Service — saved to a variable so we can export its types via InferServiceEndpoints
+const userService = app.service<{ Variables: Variables; }>('users')
   // some middleware that ingects something in context (db as well)))
   .use((c, next) => {
     c.set("db", "db" as unknown as DrizzleD1Database);
@@ -215,8 +216,8 @@ app.service<{ Variables: Variables; }>('users')
     }
   )
 
-// Order Service
-app.service('orders')
+// Order Service — saved to a variable so we can export its types
+const orderService = app.service('orders')
   .on('order/placed', {
     schema: z.object({
       orderId: z.string(),
@@ -327,3 +328,19 @@ app.start(4000)
 
 // Export AppType for Hono RPC client
 export type AppType = typeof app
+
+/**
+ * AppRouter — the type contract shared between server and client.
+ *
+ * Import this type-only on the client side:
+ * ```ts
+ * import { createVisionClient } from '@getvision/client'
+ * import type { AppRouter } from '../server/src/index'
+ *
+ * const client = createVisionClient<AppRouter>({ baseUrl: 'http://localhost:4000' })
+ * ```
+ */
+export type AppRouter = {
+  users: InferServiceEndpoints<typeof userService>
+  orders: InferServiceEndpoints<typeof orderService>
+}
