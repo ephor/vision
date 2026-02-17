@@ -327,7 +327,8 @@ app.get('/', (c) => {
 app.start(4000)
 
 // Export AppType for Hono RPC client
-export type AppType = typeof app
+// After Phase B (composition), use app.hono to get the typed Hono instance
+export type AppType = typeof app.hono
 
 /**
  * AppRouter — the type contract shared between server and client.

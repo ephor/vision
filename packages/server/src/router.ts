@@ -13,7 +13,7 @@ import type { EventBus } from './event-bus'
  * - app/routes/users/[id]/index.ts   -> /users/:id
  * - app/routes/index.ts              -> /
  */
-export async function loadSubApps(app: Hono, routesDir: string = './app/routes', eventBus?: EventBus): Promise<Array<{ name: string; routes: any[] }>> {
+export async function loadSubApps(app: Hono<any, any, any>, routesDir: string = './app/routes', eventBus?: EventBus): Promise<Array<{ name: string; routes: any[] }>> {
   const mounted: Array<{ base: string }> = []
   const allSubAppSummaries: Array<{ name: string; routes: any[] }> = []
 
@@ -68,10 +68,14 @@ export async function loadSubApps(app: Hono, routesDir: string = './app/routes',
         } catch (e) {
           console.error(`❌ Error preparing sub-app ${dir}:`, (e as any)?.message || e)
         }
-        // Mount the sub-app only if it looks like a Hono/Vision instance with routes
-        const routes = (subApp as any)?.routes
+        // Mount the sub-app only if it looks like a Hono/Vision instance with routes.
+        // After Phase B, Vision uses composition: routes live in vision.app (inner Hono).
+        // For plain Hono sub-apps, mount directly.
+        const visionInner = (subApp as any)?.app  // Vision.app (Phase B composition)
+        const honoSubApp = visionInner ?? subApp   // Use Vision.app if available, else plain Hono
+        const routes = (honoSubApp as any)?.routes
         if (Array.isArray(routes)) {
-          ;(app as any).route(base, subApp)
+          ;(app as any).route(base, honoSubApp)
           mounted.push({ base })
         }
       }

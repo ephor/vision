@@ -28,7 +28,7 @@ const visionContext = new AsyncLocalStorage<VisionALSContext>()
 // Must attach to globalThis because module-scoped variables are reset when the module is reloaded
 const GLOBAL_VISION_KEY = '__vision_instance_state'
 interface VisionGlobalState {
-  instance: Vision<any, any, any> | null
+  instance: Vision<any> | null
   drizzleProcess: ChildProcess | null
 }
 
@@ -44,7 +44,7 @@ function getGlobalState(): VisionGlobalState {
   return (globalThis as any)[GLOBAL_VISION_KEY]
 }
 
-async function cleanupVisionInstance(instance: Vision<any, any, any>): Promise<void> {
+async function cleanupVisionInstance(instance: Vision<any>): Promise<void> {
   const existing = (instance as any)._cleanupPromise as Promise<void> | undefined
   if (existing) return existing;
 
@@ -181,11 +181,22 @@ export interface VisionConfig {
  * app.start(3000)
  * ```
  */
-export class Vision<
-  E extends Env = Env,
-  S extends Schema = {},
-  BasePath extends string = '/'
-> extends Hono<WithVisionVars<E>, S, BasePath> {
+export class Vision<E extends Env = Env> {
+  /**
+   * The underlying Hono application with Vision variables typed.
+   * Use this when you need to pass a Hono instance to adapters or file-based routing:
+   *
+   * @example
+   * ```ts
+   * // File-based routing
+   * parentApp.route('/api', vision.app)
+   *
+   * // Hono RPC type inference
+   * export type AppType = typeof myVision.app
+   * ```
+   */
+  readonly app: Hono<WithVisionVars<E>>
+
   private visionCore: VisionCore
   private eventBus: EventBus
   private config: VisionConfig
@@ -194,16 +205,65 @@ export class Vision<
   private signalHandler?: () => Promise<void>
 
   /**
-   * Returns the underlying Hono app with Vision variables typed.
-   * Useful for passing Vision to adapters or tools that expect a plain Hono instance.
-   * Phase B will remove the need for this once Vision uses composition instead of inheritance.
+   * The underlying Hono app — alias for `app`.
+   * Kept for backward compatibility and internal use.
    */
   get hono(): Hono<WithVisionVars<E>> {
+    return this.app
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hono delegation — forward to this.app so Vision instances can be used
+  // like a Hono app for middleware and routing purposes.
+  // Note: Route schema type inference (for Hono RPC) is available via app.hono / app.app.
+  // ---------------------------------------------------------------------------
+
+  get fetch(): Hono<WithVisionVars<E>>['fetch'] {
+    return this.app.fetch.bind(this.app)
+  }
+
+  use(...args: Parameters<Hono<WithVisionVars<E>>['use']>): this {
+    ;(this.app.use as any)(...args)
+    return this
+  }
+
+  route(path: string, subApp: Hono<any>): this {
+    this.app.route(path, subApp)
+    return this
+  }
+
+  get(path: string, ...handlers: any[]): this {
+    ;(this.app.get as any)(path, ...handlers)
+    return this
+  }
+
+  post(path: string, ...handlers: any[]): this {
+    ;(this.app.post as any)(path, ...handlers)
+    return this
+  }
+
+  put(path: string, ...handlers: any[]): this {
+    ;(this.app.put as any)(path, ...handlers)
+    return this
+  }
+
+  delete(path: string, ...handlers: any[]): this {
+    ;(this.app.delete as any)(path, ...handlers)
+    return this
+  }
+
+  patch(path: string, ...handlers: any[]): this {
+    ;(this.app.patch as any)(path, ...handlers)
+    return this
+  }
+
+  all(path: string, ...handlers: any[]): this {
+    ;(this.app.all as any)(path, ...handlers)
     return this
   }
 
   constructor(config?: VisionConfig) {
-    super()
+    this.app = new Hono<WithVisionVars<E>>()
     
     const defaultConfig: VisionConfig = {
       service: {
@@ -356,7 +416,7 @@ export class Vision<
   private installVisionMiddleware() {
     const logging = this.config.vision?.logging !== false
     
-    this.use('*', async (c, next) => {
+    this.app.use('*', async (c, next) => {
       // Skip OPTIONS requests
       if (c.req.method === 'OPTIONS') {
         return next()
@@ -567,7 +627,7 @@ export class Vision<
    * ```
    */
   service<E2 extends Env = E, TEvents extends Record<string, any> = {}>(name: string) {
-    const builder = new ServiceBuilder<TEvents, {}, E2>(name, this.eventBus, this, this.visionCore)
+    const builder = new ServiceBuilder<TEvents, {}, E2>(name, this.eventBus, this.app, this.visionCore)
 
     // Preserve builder for registration in start()
     this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, any, E>)
@@ -647,7 +707,7 @@ export class Vision<
     for (const d of existing) {
       try {
         // Pass EventBus to sub-apps so they share the same instance
-        const summaries = await loadSubApps(this as any, d, this.eventBus)
+        const summaries = await loadSubApps(this.app, d, this.eventBus)
         allSubAppSummaries = allSubAppSummaries.concat(summaries)
       } catch (e) {
         console.error(`❌ Failed to load sub-apps from ${d}:`, (e as any)?.message || e)
@@ -764,7 +824,7 @@ export class Vision<
         } catch {}
         this.bunServer = BunServe({
           ...bunRest,
-          fetch: this.fetch.bind(this),
+          fetch: this.app.fetch.bind(this.app),
           port,
           hostname
         })
@@ -777,7 +837,7 @@ export class Vision<
       const { serve } = await import('@hono/node-server')
       serve({
         ...nodeRest,
-        fetch: this.fetch.bind(this),
+        fetch: this.app.fetch.bind(this.app),
         port,
         hostname
       })
