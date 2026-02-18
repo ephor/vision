@@ -1,6 +1,5 @@
 import { config } from "dotenv"
 import { Vision } from '@getvision/server'
-import type { InferServiceEndpoints, InferAppRouter } from '@getvision/server'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -327,7 +326,6 @@ app.get('/', (c) => {
 app.start(4000)
 
 // Export AppType for Hono RPC client
-// After Phase B (composition), use app.hono to get the typed Hono instance
 export type AppType = typeof app.hono
 
 /**
@@ -341,5 +339,7 @@ export type AppType = typeof app.hono
  * const client = createVisionClient<AppRouter>({ baseUrl: 'http://localhost:4000' })
  * ```
  */
-const _services = { users: userService, orders: orderService }
-export type AppRouter = InferAppRouter<typeof _services>
+export type AppRouter = ReturnType<typeof app.router<{
+  users: typeof userService
+  orders: typeof orderService
+}>>

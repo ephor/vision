@@ -10,7 +10,7 @@ import { EventBus } from './event-bus'
 import { eventRegistry } from './event-registry'
 import type { serve as honoServe } from '@hono/node-server'
 import type { QueueEventsOptions, QueueOptions, WorkerOptions } from "bullmq";
-import type { VisionVariables } from './types'
+import type { VisionVariables, InferAppRouter } from './types'
 
 type WithVisionVars<E extends Env> = E extends { Variables: infer V }
   ? Omit<E, 'Variables'> & { Variables: V & VisionVariables }
@@ -633,6 +633,35 @@ export class Vision<E extends Env = Env> {
     this.serviceBuilders.push(builder as unknown as ServiceBuilder<any, any, E>)
 
     return builder
+  }
+
+  /**
+   * Declare the router type contract — maps service names to their endpoint types.
+   *
+   * Pass a record of ServiceBuilder instances (the same variables you keep for
+   * event/endpoint wiring). The return value is `never` at runtime; it exists
+   * solely so TypeScript can infer the full `AppRouter` shape via `typeof`.
+   *
+   * @example
+   * ```ts
+   * const userService  = app.service('users').endpoint(...)
+   * const orderService = app.service('orders').endpoint(...)
+   *
+   * // Export the inferred router type — zero boilerplate!
+   * export type AppRouter = ReturnType<typeof app.router<{
+   *   users:  typeof userService
+   *   orders: typeof orderService
+   * }>>
+   *
+   * // Or with an intermediate variable:
+   * const _router = app.router({ users: userService, orders: orderService })
+   * export type AppRouter = typeof _router
+   * ```
+   */
+  router<S extends Record<string, ServiceBuilder<any, any, any, any>>>(
+    _services: S
+  ): InferAppRouter<S> {
+    return null as any
   }
 
   /**
