@@ -659,9 +659,9 @@ export class Vision<E extends Env = Env> {
    * ```
    */
   router<S extends Record<string, ServiceBuilder<any, any, any, any>>>(
-    _services: S
+    services: S
   ): InferAppRouter<S> {
-    return null as any
+    return services as unknown as InferAppRouter<S>
   }
 
   /**
