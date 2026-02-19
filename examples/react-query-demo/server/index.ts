@@ -114,8 +114,6 @@ app.delete('/users/:id/delete', (c) => {
 })
 
 const port = 3000
-console.log(`🚀 Server running at http://localhost:${port}`)
-console.log(`📊 Vision Dashboard at http://localhost:9500`)
 
 export default {
   port,

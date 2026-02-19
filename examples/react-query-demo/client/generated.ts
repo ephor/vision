@@ -11,59 +11,23 @@ const users_list_input = z.object({
   page: z.coerce.number().default(1),
   limit: z.coerce.number().default(10)
 })
-const users_list_output = z.object({
-  users: z.array(z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string(),
-  createdAt: z.string()
-})),
-  page: z.number(),
-  limit: z.number(),
-  total: z.number()
-})
-const users__id_input = z.object({
-  id: z.string()
-})
-const users__id_output = z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string(),
-  createdAt: z.string()
-})
+const users_list_output = z.unknown()
+const users__id_input = z.void()
+const users__id_output = z.unknown()
 const users_create_input = z.object({
+  id: z.unknown().optional(),
   name: z.string(),
   email: z.string()
 })
-const users_create_output = z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string(),
-  createdAt: z.string()
-})
+const users_create_output = z.unknown()
 const users_update_input = z.object({
-  name: z.string().optional(),
-  email: z.string().optional(),
-  id: z.string()
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  email: z.unknown().optional()
 })
-const users_update_output = z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string(),
-  createdAt: z.string()
-})
-const users_delete_input = z.object({
-  id: z.string()
-})
-const users_delete_output = z.object({
-  success: z.boolean(),
-  user: z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string(),
-  createdAt: z.string()
-})
-})
+const users_update_output = z.unknown()
+const users_delete_input = z.void()
+const users_delete_output = z.unknown()
 
 
 const routes = {
@@ -73,65 +37,45 @@ const routes = {
       path: '/users/list',
       input: users_list_input,
       output: users_list_output,
-      _types: {} as {
-        input: z.infer<typeof users_list_input>,
-        output: z.infer<typeof users_list_output>
-      }
     },
     _id: {
       method: 'GET' as const,
       path: '/users/:id',
       input: users__id_input,
       output: users__id_output,
-      _types: {} as {
-        input: z.infer<typeof users__id_input>,
-        output: z.infer<typeof users__id_output>
-      }
     },
     create: {
       method: 'POST' as const,
       path: '/users/create',
       input: users_create_input,
       output: users_create_output,
-      _types: {} as {
-        input: z.infer<typeof users_create_input>,
-        output: z.infer<typeof users_create_output>
-      }
     },
     update: {
       method: 'PUT' as const,
       path: '/users/:id/update',
       input: users_update_input,
       output: users_update_output,
-      _types: {} as {
-        input: z.infer<typeof users_update_input>,
-        output: z.infer<typeof users_update_output>
-      }
     },
     delete: {
       method: 'DELETE' as const,
       path: '/users/:id/delete',
       input: users_delete_input,
       output: users_delete_output,
-      _types: {} as {
-        input: z.infer<typeof users_delete_input>,
-        output: z.infer<typeof users_delete_output>
-      }
     }
   }
-}
+} as const
 
 
 
 /**
  * Auto-generated Vision React Query client
- * Generated at: 2026-02-01T18:05:13.618Z
+ * Generated at: 2026-02-01T18:07:58.841Z
  *
  * DO NOT EDIT MANUALLY - This file is auto-generated
  * Edit your server routes and restart to regenerate
  */
 
-export const api = createVisionClient<typeof routes>(routes, {
+export const api = createVisionClient(routes, {
   baseUrl: 'http://localhost:3000'
 })
 
@@ -146,4 +90,3 @@ export type UsersUpdateInput = z.infer<typeof users_update_input>
 export type UsersUpdateOutput = z.infer<typeof users_update_output>
 export type UsersDeleteInput = z.infer<typeof users_delete_input>
 export type UsersDeleteOutput = z.infer<typeof users_delete_output>
-export type User = z.infer<typeof users__id_output>

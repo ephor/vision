@@ -6,6 +6,7 @@
  */
 
 import { QueryClient } from '@tanstack/react-query'
+import type { UseQueryOptions, UseMutationOptions } from '@tanstack/react-query'
 import type { VisionClient, InferVisionRouter } from './inference'
 
 /**
@@ -248,14 +249,17 @@ export function createVisionClient<TAppOrContract = any>(
     }
 
     // Add methods to direct call function
-    directCall.queryOptions = (input?: any, options?: any) => ({
+    directCall.queryOptions = <TData = any>(
+      input?: any,
+      options?: Omit<UseQueryOptions<any, Error, TData>, 'queryKey' | 'queryFn'>
+    ): UseQueryOptions<any, Error, TData> => ({
       queryKey: [...procedure, input],
       queryFn: async () => {
         const routeMetadata = await findRouteMetadata(procedure)
         const path = routeMetadata?.path || `/${procedure.join('/')}`
         const url = buildUrl(path, input)
         const bodyParams = getBodyParams(path, input)
-        const httpMethod = routeMetadata?.method || 'POST'
+        const httpMethod = routeMetadata?.method || 'GET'
         const headers = await getHeaders()
 
         const response = await fetcher(url, {
@@ -276,7 +280,9 @@ export function createVisionClient<TAppOrContract = any>(
       ...options,
     })
 
-    directCall.mutationOptions = (options?: any) => ({
+    directCall.mutationOptions = <TContext = unknown>(
+      options?: Omit<UseMutationOptions<any, Error, any, TContext>, 'mutationFn'>
+    ): UseMutationOptions<any, Error, any, TContext> => ({
       mutationFn: async (mutationInput: any) => {
         const routeMetadata = await findRouteMetadata(procedure)
         const path = routeMetadata?.path || `/${procedure.join('/')}`

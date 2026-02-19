@@ -24,3 +24,10 @@ export type {
   VisionMutationProcedure,
   InferVisionRouter,
 } from './inference'
+
+// Vision Server type utilities
+export type {
+  InferZodType,
+  ExtractEndpoints,
+  ServiceBuilderToRouter,
+} from './vision-types'

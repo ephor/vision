@@ -12,6 +12,7 @@ export const paginationSchema = z.object({
 })
 
 export const createUserSchema = z.object({
+  id: z.number(),
   name: z.string().min(1),
   email: z.string().email()
 })

@@ -1,0 +1,28 @@
+{
+  "name": "vision-server-react-query-example",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:server": "bun run server.ts",
+    "dev:client": "vite",
+    "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\"",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@getvision/server": "workspace:*",
+    "@getvision/react-query": "workspace:*",
+    "@tanstack/react-query": "^5.62.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

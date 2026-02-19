@@ -4,6 +4,11 @@
  */
 
 import type { QueryClient, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query'
+import type {
+  ServiceBuilderToRouter,
+  TransformEndpointsToRouter,
+  InferZodType,
+} from './vision-types'
 
 /**
  * Contract definition (for adapters)
@@ -22,14 +27,106 @@ export type VisionProcedure = {
  * Extract router type from Vision Server, Contract, or Typed Routes
  */
 export type InferVisionRouter<TAppOrContract> =
-  // Contract (defineVisionContract)
-  TAppOrContract extends VisionContract
-    ? InferContract<TAppOrContract>
-    : // Vision Server
-      TAppOrContract extends { _def: { services: infer TServices } }
-      ? InferServices<TServices>
-      : // Fallback: treat as raw routes (auto-generated from codegen)
-        TAppOrContract
+  // Vision Server ServiceBuilder with _def.endpoints
+  TAppOrContract extends { _def: { endpoints: infer TEndpoints } }
+    ? InferFromServiceBuilder<TAppOrContract>
+    : // Contract (defineVisionContract)
+      TAppOrContract extends VisionContract
+      ? InferContract<TAppOrContract>
+      : // Vision Server with services
+        TAppOrContract extends { _def: { services: infer TServices } }
+        ? InferServices<TServices>
+        : // Fallback: treat as raw routes (auto-generated from codegen)
+          TAppOrContract
+
+/**
+ * Infer router from Vision Server ServiceBuilder
+ * Transforms endpoints to nested service → procedure structure
+ */
+type InferFromServiceBuilder<T> = T extends { _def: { endpoints: infer TEndpoints } }
+  ? TransformToClientRouter<TEndpoints>
+  : never
+
+/**
+ * Transform endpoints map to client router with proper procedure types
+ */
+type TransformToClientRouter<TEndpoints> = {
+  [TService in ExtractServices<TEndpoints>]: {
+    [TProcedure in ExtractProcedures<TEndpoints, TService>]: GetProcedureClient<
+      FindEndpoint<TEndpoints, TService, TProcedure>
+    >
+  }
+}
+
+/**
+ * Extract unique service names from endpoints
+ */
+type ExtractServices<TEndpoints> = {
+  [K in keyof TEndpoints]: TEndpoints[K] extends { path: infer P extends string }
+    ? ExtractServiceName<P>
+    : never
+}[keyof TEndpoints]
+
+/**
+ * Extract service name from path (first segment)
+ */
+type ExtractServiceName<T extends string> = 
+  T extends `/${infer Service}/${string}`
+    ? Service
+    : T extends `/${infer Service}`
+      ? Service
+      : never
+
+/**
+ * Extract procedure names for a service
+ */
+type ExtractProcedures<TEndpoints, TService extends string> = {
+  [K in keyof TEndpoints]: TEndpoints[K] extends { path: infer P extends string }
+    ? ExtractServiceName<P> extends TService
+      ? PathToProcedure<P, TService>
+      : never
+    : never
+}[keyof TEndpoints]
+
+/**
+ * Convert path to procedure name
+ */
+type PathToProcedure<TPath extends string, TService extends string> =
+  TPath extends `/${TService}`
+    ? 'list'
+    : TPath extends `/${TService}/:${string}`
+      ? 'byId'
+      : TPath extends `/${TService}/${infer Rest}`
+        ? Rest extends `${infer Name}/${string}`
+          ? Name extends `:${string}` ? 'byId' : Name
+          : Rest extends `:${string}` ? 'byId' : Rest
+        : 'list'
+
+/**
+ * Find endpoint by service and procedure name
+ */
+type FindEndpoint<TEndpoints, TService extends string, TProcedure extends string> = {
+  [K in keyof TEndpoints]: TEndpoints[K] extends { path: infer P extends string }
+    ? ExtractServiceName<P> extends TService
+      ? PathToProcedure<P, TService> extends TProcedure
+        ? TEndpoints[K]
+        : never
+      : never
+    : never
+}[keyof TEndpoints]
+
+/**
+ * Get procedure client type from endpoint
+ */
+type GetProcedureClient<TEndpoint> = TEndpoint extends {
+  method: infer M
+  input: infer TInput
+  output: infer TOutput
+}
+  ? M extends 'GET'
+    ? VisionQueryProcedure<InferZodType<TInput>, InferZodType<TOutput>>
+    : VisionMutationProcedure<InferZodType<TInput>, InferZodType<TOutput>>
+  : never
 
 /**
  * Infer from contract (adapters)
@@ -84,10 +181,10 @@ export type VisionQueryProcedure<TInput, TOutput> = {
    * Get query options for React Query
    * @example useQuery(api.users.list.queryOptions({ limit: 10 }))
    */
-  queryOptions: (
+  queryOptions: <TData = TOutput>(
     input: TInput,
-    options?: Omit<UseQueryOptions<TOutput, Error>, 'queryKey' | 'queryFn'>
-  ) => UseQueryOptions<TOutput, Error>
+    options?: Omit<UseQueryOptions<TOutput, Error, TData>, 'queryKey' | 'queryFn'>
+  ) => UseQueryOptions<TOutput, Error, TData>
 
   /**
    * Prefetch query (for SSR)
@@ -110,9 +207,9 @@ export type VisionMutationProcedure<TInput, TOutput> = {
    * Get mutation options for React Query
    * @example useMutation(api.users.create.mutationOptions())
    */
-  mutationOptions: (
-    options?: Omit<UseMutationOptions<TOutput, Error, TInput>, 'mutationFn'>
-  ) => UseMutationOptions<TOutput, Error, TInput>
+  mutationOptions: <TContext = unknown>(
+    options?: Omit<UseMutationOptions<TOutput, Error, TInput, TContext>, 'mutationFn'>
+  ) => UseMutationOptions<TOutput, Error, TInput, TContext>
 }
 
 /**
