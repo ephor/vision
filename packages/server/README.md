@@ -211,7 +211,7 @@ const app = new Vision({
       password: 'your-password',
       // Connection settings to prevent timeouts
       keepAlive: 30000,              // Keep connection alive (30s)
-      maxRetriesPerRequest: 20,      // Retry failed commands
+      maxRetriesPerRequest: null,     // Required null for BullMQ
       enableReadyCheck: true,        // Check Redis is ready
       connectTimeout: 10000,         // Connection timeout (10s)
       enableOfflineQueue: true       // Queue commands when offline
@@ -390,7 +390,7 @@ const app = new Vision({
       password: process.env.REDIS_PASSWORD,
       // Connection settings (these are the defaults)
       keepAlive: 30000,              // Keep connection alive (30s)
-      maxRetriesPerRequest: 20,      // Retry failed commands
+      maxRetriesPerRequest: null,     // Required null for BullMQ
       enableReadyCheck: true,        // Check Redis is ready before commands
       connectTimeout: 10000,         // Connection timeout (10s)
       enableOfflineQueue: true       // Queue commands when offline

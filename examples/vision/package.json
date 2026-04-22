@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "dev:node": "tsx watch src/index.ts",
-    "typecheck": "tsc --noEmit src/index.ts",
+    "typecheck": "tsc --noEmit --skipLibCheck src/index.ts",
     "start": "bun src/index.ts",
     "start:node": "tsx src/index.ts",
     "db:generate": "drizzle-kit generate",
@@ -16,20 +16,21 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.6",
+    "@hono/node-server": "^2.0.0",
     "@getvision/server": "workspace:*",
     "bullmq": "^5.62.0",
     "hono-rate-limiter": "^0.4.2",
     "ioredis": "^5.8.2",
     "dotenv": "^16.4.5",
-    "hono": "^4.10.4",
+    "hono": "^4.12.14",
     "better-sqlite3": "^12.4.1",
-    "drizzle-orm": "^0.44.6",
+    "drizzle-orm": "^0.45.2",
     "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
-    "drizzle-kit": "^0.31.5",
+    "@types/bun": "^1.3.9",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.2",
     "typescript": "5.9.3"
   }

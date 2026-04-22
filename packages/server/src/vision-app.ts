@@ -129,9 +129,9 @@ export interface VisionConfig {
        */
       keepAlive?: number
       /**
-       * Max retry attempts for failed commands (default: 20)
+       * Max retry attempts for failed commands. Must be null for BullMQ (default: null)
        */
-      maxRetriesPerRequest?: number
+      maxRetriesPerRequest?: number | null
       /**
        * Enable ready check before executing commands (default: true)
        */

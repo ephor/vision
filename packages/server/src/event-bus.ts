@@ -15,9 +15,9 @@ export interface EventBusConfig {
      */
     keepAlive?: number
     /**
-     * Max retry attempts for failed commands (default: 20)
+     * Max retry attempts for failed commands. Must be null for BullMQ (default: null)
      */
-    maxRetriesPerRequest?: number
+    maxRetriesPerRequest?: number | null
     /**
      * Enable ready check before executing commands (default: true)
      */
@@ -121,7 +121,7 @@ export class EventBus {
       port: baseConfig.port,
       password: baseConfig.password,
       keepAlive: baseConfig.keepAlive ?? 30000, // 30 seconds keepalive
-      maxRetriesPerRequest: baseConfig.maxRetriesPerRequest ?? 20,
+      maxRetriesPerRequest: baseConfig.maxRetriesPerRequest ?? null,
       enableReadyCheck: baseConfig.enableReadyCheck ?? true,
       connectTimeout: baseConfig.connectTimeout ?? 10000,
       enableOfflineQueue: baseConfig.enableOfflineQueue ?? true,
