@@ -27,16 +27,18 @@
   "dependencies": {
     "@getvision/core": "workspace:*",
     "bullmq": "^5.62.0",
-    "elysia": "^1.4.28",
     "ioredis": "^5.8.2",
     "zod": "^4.1.11"
   },
-  "peerDependencies": {},
+  "peerDependencies": {
+    "elysia": "^1.4.28"
+  },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^20.14.9",
     "@types/bun": "^1.3.5",
+    "elysia": "^1.4.28",
     "typescript": "5.9.3"
   },
   "keywords": [
