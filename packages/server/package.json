@@ -2,12 +2,13 @@
   "name": "@getvision/server",
   "version": "0.4.4-61ad392-develop",
   "type": "module",
-  "description": "Vision Server - Meta-framework with built-in observability, pub/sub, and type-safe APIs",
+  "description": "Vision Server — Elysia-based meta-framework with built-in observability, pub/sub, and end-to-end type safety (Eden-ready)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
@@ -18,16 +19,15 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
-    "build": "tsc --emitDeclarationOnly && bun build ./src/*.ts --outdir ./dist --target node --format esm --external '*' --sourcemap=external",
+    "build": "tsc --emitDeclarationOnly && bun build ./src/*.ts --outdir ./dist --target bun --format esm --external '*' --sourcemap=external",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },
   "license": "MIT",
   "dependencies": {
     "@getvision/core": "workspace:*",
-    "@hono/node-server": "^2.0.0",
     "bullmq": "^5.62.0",
-    "hono-rate-limiter": "^0.4.2",
-    "hono": "^4.12.14",
+    "elysia": "^1.4.28",
     "ioredis": "^5.8.2",
     "zod": "^4.1.11"
   },
@@ -44,10 +44,12 @@
     "framework",
     "observability",
     "tracing",
-    "hono",
+    "elysia",
+    "bun",
     "bullmq",
     "pub-sub",
     "type-safe",
+    "eden",
     "event-driven"
   ],
   "config": {}

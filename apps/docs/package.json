@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "next": "15.5.4",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "lucide-react": "^0.544.0",
     "fumadocs-ui": "15.8.5",
     "fumadocs-core": "15.8.5",
@@ -20,8 +20,8 @@
   },
   "devDependencies": {
     "@types/node": "24.6.2",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "^5.9.3",
     "@types/mdx": "^2.0.13",
     "@tailwindcss/postcss": "^4.1.14",

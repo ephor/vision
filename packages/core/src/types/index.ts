@@ -161,6 +161,14 @@ export interface VisionServerOptions {
   captureConsole?: boolean
   enableCors?: boolean
   apiUrl?: string  // URL of the API server (for frontend to make HTTP requests)
+  /**
+   * When `true` (default for backward compatibility with adapters),
+   * the `VisionCore` constructor fires-and-forgets `server.start()` so the
+   * Dashboard port binds eagerly. Set to `false` to defer binding — callers
+   * then invoke `await core.start()` explicitly (the `@getvision/server`
+   * Elysia integration uses this so `app.ready()` owns the lifecycle).
+   */
+  autoStart?: boolean
 }
 
 // Adapter interface

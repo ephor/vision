@@ -1,0 +1,316 @@
+---
+title: Modules
+description: Build and compose Vision modules with createModule, defineEvents, and defineCrons
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Modules
+
+A **module** is a self-contained slice of your API: HTTP routes, pub/sub events, and cron jobs colocated in one file. Modules are plain Elysia plugins with Vision's per-request context pre-typed (`span`, `emit`, `addContext`, `traceId`).
+
+## Why modules?
+
+- **Colocation** — the `POST /orders` route, the `order/placed` event it emits, and the cron that sweeps stuck orders all live together.
+- **Composability** — modules stack with `.use()`. No implicit ordering, no magic imports.
+- **Type-safety end-to-end** — `treaty<typeof app>` flows through `.use()` chains, so each module contributes its types to the Eden client.
+- **No file-system magic** — you `import` and `.use()` modules explicitly. Easy to search, easy to refactor.
+
+## Creating a module
+
+```typescript
+import { createModule, defineEvents } from '@getvision/server'
+import { z } from 'zod'
+
+const User = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+})
+
+export const usersModule = createModule({ prefix: '/users' })
+  // Co-located event schemas + handlers
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        description: 'User account created',
+        icon: '👤',
+        tags: ['user', 'auth'],
+        handler: async (event) => {
+          console.log('[welcome email] →', event.email)
+        },
+      },
+    })
+  )
+  // Routes
+  .get(
+    '/',
+    ({ span }) => {
+      const users = span('db.select', { 'db.table': 'users' }, () => [
+        { id: '1', name: 'Alice', email: 'alice@example.com' },
+      ])
+      return { users }
+    },
+    { response: z.object({ users: z.array(User) }) }
+  )
+  .post(
+    '/',
+    async ({ body, emit, span }) => {
+      const user = span('db.insert', { 'db.table': 'users' }, () => ({
+        id: crypto.randomUUID(),
+        ...body,
+      }))
+      await emit('user/created', { userId: user.id, email: user.email })
+      return user
+    },
+    {
+      body: z.object({ name: z.string().min(1), email: z.string().email() }),
+      response: User,
+    }
+  )
+```
+
+<Callout>
+  `createModule({ prefix })` is just `new Elysia({ prefix })` with Vision's context types decorated. At runtime the real `span/emit/addContext/traceId` implementations come from the root `createVision()` — every module sees them transparently.
+</Callout>
+
+## Composing modules
+
+Import and `.use()` them at the root:
+
+```typescript
+// src/server.ts
+import { createVision } from '@getvision/server'
+import { usersModule } from './modules/users'
+import { ordersModule } from './modules/orders'
+import { productsModule } from './modules/products'
+
+export const app = createVision({
+  service: { name: 'My API', version: '1.0.0' },
+  pubsub: { devMode: true },
+})
+  .use(usersModule)
+  .use(ordersModule)
+  .use(productsModule)
+
+app.listen(3000)
+
+export type AppType = typeof app
+```
+
+## Handler context
+
+Every HTTP handler receives a merged Elysia + Vision context:
+
+```typescript
+.post('/', async ({ body, params, query, set,           // Elysia
+                    span, emit, addContext, traceId }) => // Vision
+  {
+    // ...
+  })
+```
+
+### `span(name, attributes, fn)`
+
+Wraps a block of code in a tracing span. Returns `fn()`'s result.
+
+```typescript
+const user = span(
+  'db.select',
+  { 'db.system': 'postgresql', 'db.table': 'users' },
+  () => db.users.findById(id)
+)
+```
+
+### `emit(event, payload)`
+
+Publishes a typed event to the pub/sub bus. The payload is validated against the event schema registered via `defineEvents(...)`.
+
+```typescript
+await emit('user/created', { userId: user.id, email: user.email })
+```
+
+### `addContext(attrs)`
+
+Adds "wide event" attributes to the current trace. Every subsequent log in the request picks them up automatically.
+
+```typescript
+addContext({ 'tenant.id': body.tenantId, 'user.plan': 'pro' })
+```
+
+### `traceId`
+
+The current request's trace id — useful for logging correlation or returning in error responses.
+
+## Defining events
+
+`defineEvents(map)` registers pub/sub handlers and their schemas. The resulting plugin is a normal Elysia plugin — `.use()` it in the module that owns the events.
+
+```typescript
+const notificationsModule = createModule().use(
+  defineEvents({
+    'user/created': {
+      schema: z.object({ userId: z.string(), email: z.string().email() }),
+      description: 'User account created',
+      icon: '👤',
+      tags: ['user', 'auth'],
+      handler: async (event) => {
+        await sendWelcomeEmail(event.email)
+      },
+    },
+    'order/placed': {
+      schema: z.object({ orderId: z.string(), total: z.number() }),
+      handler: async (event) => {
+        await queueFulfillment(event.orderId)
+      },
+    },
+  })
+)
+```
+
+Both the Vision Dashboard's **Events** tab and runtime validation use the registered schemas.
+
+## Cron jobs
+
+Similar API via `defineCrons`:
+
+```typescript
+import { defineCrons } from '@getvision/server'
+
+const maintenanceModule = createModule().use(
+  defineCrons({
+    'nightly-cleanup': {
+      schedule: '0 0 * * *',
+      description: 'Purge expired sessions',
+      handler: async () => {
+        await db.sessions.deleteExpired()
+      },
+    },
+  })
+)
+```
+
+Crons run under BullMQ's repeatable jobs — in-memory in `devMode`, Redis-backed in production.
+
+## Module-level hooks
+
+`createModule()` returns an Elysia instance, so every Elysia lifecycle hook works. Use them for cross-cutting concerns that should apply to the whole module:
+
+```typescript
+import { rateLimit } from '@getvision/server'
+
+export const adminModule = createModule({ prefix: '/admin' })
+  // Apply rate-limit + auth to every admin route
+  .onBeforeHandle(rateLimit({ requests: 10, window: '30s' }))
+  .onBeforeHandle(({ request, set }) => {
+    if (!request.headers.get('authorization')) {
+      set.status = 401
+      return { error: 'unauthorized' }
+    }
+  })
+  .get('/stats', () => ({ ok: true }))
+  .delete('/sessions/:id', ({ params }) => ({ revoked: params.id }))
+```
+
+## Nested sub-resources
+
+Model nested routes with plain Elysia path syntax — `params` is typed from the path:
+
+```typescript
+export const productsModule = createModule({ prefix: '/products' })
+  .get('/', handler)
+  .get('/:id', handler, { params: z.object({ id: z.string() }) })
+  .get(
+    '/:id/reviews',
+    ({ params, span }) => {
+      return span('db.select', { 'product.id': params.id }, () => [])
+    },
+    { params: z.object({ id: z.string() }) }
+  )
+  .post(
+    '/:id/reviews',
+    handler,
+    {
+      params: z.object({ id: z.string() }),
+      body: z.object({ rating: z.number().min(1).max(5) }),
+    }
+  )
+```
+
+## Validation libraries
+
+Use any Standard Schema-compatible library. Mix and match per route if you want:
+
+```typescript
+import { t } from '@getvision/server'  // Elysia / TypeBox (re-exported)
+import { z } from 'zod'
+import * as v from 'valibot'
+
+.post('/', handler, { body: z.object({ name: z.string() }) })           // Zod
+.post('/', handler, { body: v.object({ name: v.string() }) })           // Valibot
+.post('/', handler, { body: t.Object({ name: t.String() }) })           // TypeBox
+```
+
+## Complete example
+
+```typescript
+import { createVision, createModule, defineEvents, defineCrons, rateLimit } from '@getvision/server'
+import { z } from 'zod'
+
+const User = z.object({ id: z.string(), name: z.string(), email: z.string().email() })
+
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        handler: async (event) => {
+          console.log('[welcome email] →', event.email)
+        },
+      },
+    })
+  )
+  .use(
+    defineCrons({
+      'daily-digest': {
+        schedule: '0 9 * * *',
+        handler: async () => {
+          console.log('sending daily digest')
+        },
+      },
+    })
+  )
+  .get('/', ({ span }) =>
+    span('db.select', {}, () => ({
+      users: [{ id: '1', name: 'Alice', email: 'alice@example.com' }],
+    }))
+  )
+  .post(
+    '/',
+    async ({ body, emit, span }) => {
+      const user = span('db.insert', {}, () => ({ id: crypto.randomUUID(), ...body }))
+      await emit('user/created', { userId: user.id, email: user.email })
+      return user
+    },
+    {
+      body: z.object({ name: z.string().min(1), email: z.string().email() }),
+      response: User,
+      beforeHandle: [rateLimit({ requests: 5, window: '15m' })],
+    }
+  )
+
+const app = createVision({
+  service: { name: 'My API', version: '1.0.0' },
+  pubsub: { devMode: true },
+}).use(usersModule)
+
+app.listen(3000)
+
+export type AppType = typeof app
+```
+
+## Next Steps
+
+- [Rate Limiting](/docs/server/rate-limiting) — configure per-endpoint limits
+- [Features](/docs/features) — dashboard, traces, logs, API Explorer

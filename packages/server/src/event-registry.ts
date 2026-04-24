@@ -52,10 +52,16 @@ export class EventRegistry {
     }
   ): void {
     const existing = this.events.get(name)
-    
+
     if (existing) {
-      // Add handler to existing event
+      // Add handler to existing event and refresh metadata — on HMR the
+      // user may have tweaked `description`/`icon`/`tags` or tightened the
+      // schema; we want those visible in the Dashboard without a restart.
       existing.handlers.push(handler)
+      existing.schema = schema
+      if (metadata?.description !== undefined) existing.description = metadata.description
+      if (metadata?.icon !== undefined) existing.icon = metadata.icon
+      if (metadata?.tags !== undefined) existing.tags = metadata.tags
     } else {
       // Create new event
       this.events.set(name, {
@@ -152,7 +158,36 @@ export class EventRegistry {
     this.events.clear()
     this.crons.clear()
   }
+
+  /**
+   * Drop every registered handler for an event name but keep the metadata
+   * entry (totals, lastTriggered, description…) intact. Used by the
+   * HMR-safe re-registration path — we want the UI-visible stats to
+   * survive a module reload even as the underlying handler closure is
+   * swapped for the freshly compiled one.
+   */
+  clearEventHandlers(name: string): void {
+    const ev = this.events.get(name)
+    if (ev) ev.handlers = []
+  }
+
+  /**
+   * Remove a cron registration entirely — the handler closure is going
+   * away and so is the BullMQ worker that referenced it.
+   */
+  removeCron(name: string): void {
+    this.crons.delete(name)
+  }
 }
 
-// Global singleton
-export const eventRegistry = new EventRegistry()
+// Global singleton — stashed on `globalThis` so Turbopack/HMR module
+// re-evaluation reuses the same instance instead of creating a fresh one
+// per reload (which would reset event counts and discard the cron map the
+// Dashboard already snapshot-ed).
+const REGISTRY_KEY = '__vision_event_registry'
+const globalForRegistry = globalThis as unknown as {
+  [REGISTRY_KEY]?: EventRegistry
+}
+export const eventRegistry: EventRegistry =
+  globalForRegistry[REGISTRY_KEY] ??
+  (globalForRegistry[REGISTRY_KEY] = new EventRegistry())

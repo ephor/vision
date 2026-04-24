@@ -1,0 +1,291 @@
+---
+title: Migration guide
+description: Map the old Hono-based Vision API to the new Elysia-based module pattern. Written to be both human- and LLM-readable.
+---
+
+# Migrating to the Elysia-based server
+
+Vision's HTTP server was rewritten on Elysia. The `Vision` class, the service builder, file-based autodiscovery, and Hono middleware are gone; module composition, colocated `defineEvents` / `defineCrons`, and explicit `ready(app)` replace them.
+
+This guide is intentionally dense and structured so it can be fed to an LLM as migration instructions for an existing codebase.
+
+## TL;DR
+
+- `new Vision(...)` → `createVision(...)` (returns an Elysia instance)
+- `app.service('x').endpoint('GET', '/path', { input, output }, handler)` → `createModule({ prefix: '/x' }).get('/path', handler, { body, query, response })`
+- File-based routing (`app/routes/**/index.ts`) is removed. Compose modules explicitly via `.use(mod)`.
+- `.on('event', { schema, handler })` → `.use(defineEvents({ 'event': { schema, handler, ... } }))`
+- `.cron(expr, handler, { id })` → `.use(defineCrons({ [id]: { schedule: expr, handler } }))`
+- `c.emit(...)`, `c.span(...)` → destructured handler context: `({ emit, span, addContext, traceId, body, params, query })`
+- Hono middleware (`.use(logger())`, `jwt(...)`, etc.) → Elysia plugins or `beforeHandle` hooks
+- `app.start(3000)` → `app.listen(3000)` or `await ready(app)` + `app.handle(req)` (Next.js / WinterCG)
+- Return values replace `c.json(...)` — Elysia serializes automatically
+
+## Public API mapping
+
+| Old (Hono era) | New (Elysia era) |
+| --- | --- |
+| `new Vision({ service, routes })` | `createVision({ service, vision, pubsub })` |
+| `app.service('users')` | `createModule({ prefix: '/users' })` |
+| `.endpoint('GET', '/:id', { input, output }, handler)` | `.get('/:id', handler, { params, query, response })` |
+| `.endpoint('POST', '/', { input, output }, handler)` | `.post('/', handler, { body, response })` |
+| `(data, c) => ...` | `({ body, params, query, span, addContext, emit, traceId }) => ...` |
+| `c.json(value)` / `c.json(err, 404)` | `return value` / `set.status = 404; return err` |
+| `c.span(name, attrs, fn)` | `span(name, attrs, fn)` (destructured) |
+| `c.emit(name, data)` | `emit(name, data)` (destructured, type-safe against `defineEvents`) |
+| `.on('event', handler)` | `.use(defineEvents({ event: { schema, handler } }))` (schema required) |
+| `.on('event', { schema, handler })` | same as above |
+| `.cron(expr, handler, { id })` | `.use(defineCrons({ id: { schedule: expr, handler } }))` |
+| `.use(honoMiddleware)` | Elysia plugin via `.use(elysiaPlugin)`, or per-route `beforeHandle: [...]` |
+| `app.use('*', cors())` / `logger()` | `.use(cors())` from `@elysiajs/cors`; logging via `vision: { logging: true }` |
+| File-based `app/routes/**/index.ts` | Remove. Build modules and `.use()` them into `createVision`. |
+| `app.start(port)` | `app.listen(port)` or Next.js `instrumentation.register()` + `await ready(app)` |
+| Implicit Vision bootstrap | Explicit `await ready(app)` before `app.handle(req)` in fetch-style runtimes |
+
+## Rewriting a service
+
+### Before
+
+```ts
+import { Vision } from '@getvision/server'
+import { z } from 'zod'
+
+const app = new Vision({ service: { name: 'My API' } })
+
+app
+  .service('users')
+  .endpoint(
+    'POST',
+    '/users',
+    {
+      input: z.object({ name: z.string().min(1), email: z.string().email() }),
+      output: z.object({ id: z.string(), name: z.string(), email: z.string() }),
+    },
+    async (data, c) => {
+      const user = c.span('db.insert', { 'db.table': 'users' }, () => db.users.create(data))
+      await c.emit('user/created', { userId: user.id, email: user.email, name: user.name })
+      return user
+    }
+  )
+  .on('user/created', {
+    schema: z.object({ userId: z.string(), email: z.string().email(), name: z.string() }),
+    handler: async (event) => {
+      await sendEmail(event.data.email, 'welcome')
+    },
+  })
+
+app.start(3000)
+```
+
+### After
+
+```ts
+import { createVision, createModule, defineEvents } from '@getvision/server'
+import { z } from 'zod'
+
+const User = z.object({ id: z.string(), name: z.string(), email: z.string() })
+
+const UserCreated = z.object({
+  userId: z.string(),
+  email: z.string().email(),
+  name: z.string(),
+})
+
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: UserCreated,
+        handler: async (event) => {
+          await sendEmail(event.email, 'welcome')
+        },
+      },
+    })
+  )
+  .post(
+    '/',
+    async ({ body, emit, span }) => {
+      const user = span('db.insert', { 'db.table': 'users' }, () => db.users.create(body))
+      await emit('user/created', { userId: user.id, email: user.email, name: user.name })
+      return user
+    },
+    {
+      body: z.object({ name: z.string().min(1), email: z.string().email() }),
+      response: User,
+    }
+  )
+
+export const app = createVision({
+  service: { name: 'My API' },
+  vision: { enabled: true },
+  pubsub: { devMode: true },
+}).use(usersModule)
+
+app.listen(3000)
+```
+
+Key differences:
+
+- Event payload is `event` (typed), not `event.data`.
+- `emit` is narrowed by the `defineEvents` schema — wrong name or wrong payload is a compile error.
+- Schemas are provided per route via `body` / `params` / `query` / `response`, not via `{ input, output }`.
+- Context helpers are destructured from the handler argument.
+
+## Dropping file-based routing
+
+Replace every `app/routes/**/index.ts` sub-app with a module that composes into `createVision`.
+
+Before:
+
+```
+app/routes/products/index.ts
+app/routes/products/[id]/index.ts
+app/routes/analytics/dashboard/index.ts
+```
+
+After:
+
+```ts
+// src/modules/products.ts
+export const productsModule = createModule({ prefix: '/products' })
+  .get('/', ...)
+  .get('/:id', ...)
+
+// src/modules/analytics.ts
+export const analyticsModule = createModule({ prefix: '/analytics' })
+  .get('/dashboard', ...)
+
+// src/index.ts
+export const app = createVision({ ... })
+  .use(productsModule)
+  .use(analyticsModule)
+```
+
+## Starting the server
+
+### Listen path (unchanged semantics)
+
+```ts
+app.listen(3000)
+```
+
+`ready()` is awaited internally via `onStart`.
+
+### Fetch / Next.js App Router path
+
+When you call `app.handle(req)` directly (Next.js catch-all, WinterCG runtimes, serverless), Elysia's `onStart` never fires. Call `ready(app)` explicitly:
+
+```ts
+// app/api/[[...slug]]/route.ts
+import { app } from '@/vision'
+
+async function handler(req: Request): Promise<Response> {
+  const url = new URL(req.url)
+  url.pathname = url.pathname.replace(/^\/api/, '') || '/'
+  return app.handle(new Request(url, req))
+}
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH }
+```
+
+```ts
+// instrumentation.ts
+export async function register() {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return
+  const [{ ready }, { app }] = await Promise.all([
+    import('@getvision/server'),
+    import('./src/vision'),
+  ])
+  await ready(app)
+}
+```
+
+`ready(app)` is idempotent; an internal `onRequest` hook inside `createVision` re-runs it on fresh module instances so HMR keeps Dashboard metadata in sync without user code.
+
+## Events & cron
+
+### Subscribing
+
+Use `defineEvents` colocated with the module that owns the event, or `onEvent(decorator, name, cfg)` from elsewhere if you need imperative registration.
+
+```ts
+createModule({ prefix: '/notifications' })
+  .use(
+    defineEvents({
+      'order/placed': {
+        schema: z.object({ orderId: z.string(), total: z.number() }),
+        handler: async (event) => {
+          await sendEmail(event.orderId, 'order-confirmation')
+        },
+      },
+    })
+  )
+```
+
+### Emitting cross-module
+
+Import the same event map into the emitting module and pass it to `defineEvents`. The pending queue deduplicates by name, so handlers register once, but every module that includes the map gets a correctly typed `emit`.
+
+### Cron
+
+```ts
+createModule()
+  .use(
+    defineCrons({
+      'daily-cleanup': {
+        schedule: '0 0 * * *',
+        handler: async () => cleanupOldRecords(),
+      },
+    })
+  )
+```
+
+## Middleware
+
+- Replace Hono `cors`, `logger`, `jwt` etc. with their Elysia equivalents. For example: `import cors from '@elysiajs/cors'; app.use(cors())`.
+- Per-route guards / validators that used to be middleware arguments now go into the route option bag via `beforeHandle`.
+
+```ts
+.post('/', handler, {
+  body: CreateUser,
+  beforeHandle: [rateLimit({ requests: 3, window: '1m' })],
+})
+```
+
+## Responses & status codes
+
+- `return value` replaces `c.json(value)`.
+- For non-200 responses use Elysia's `set`: `({ set }) => { set.status = 404; return { error: 'Not found' } }`.
+- The `response` schema validates and types the returned value.
+
+## Tracing helpers
+
+`span`, `addContext`, `traceId` are destructured from the handler context. They were previously on `c`. API is otherwise the same.
+
+```ts
+.get('/:id', ({ params, span, addContext }) => {
+  addContext({ 'user.id': params.id })
+  return span('db.select', { 'db.table': 'users' }, () => db.users.findById(params.id))
+})
+```
+
+## Removed / deprecated surface
+
+- `new Vision(...)` class
+- `app.service(name)` builder
+- `.endpoint('METHOD', path, { input, output }, handler)`
+- File-based autodiscovery (`routes: { autodiscover, dirs }`)
+- Hono-style handler context (`c.json`, `c.req.valid`, `c.req.header`, `c.set/get`)
+- `.on('event', handler)` without a schema — schemas are now required
+
+## Type-safe `emit` — what to know
+
+- `defineEvents({...})` narrows `emit` at the call site using a mapped type: `<K extends keyof M>(name: K, data: EventPayload<M[K]>) => Promise<void>`.
+- `createModule` installs an uncallable placeholder so `emit` exists on the context type even without `defineEvents`, but you cannot call it until at least one event is declared.
+- Wrong event name or wrong payload shape is a TypeScript error (`TS2769` / `TS2322`).
+
+## Troubleshooting
+
+- **"Request received before `ready()`"** (warn, dev only) — you are on the fetch/handle path. Call `await ready(app)` at module scope, or wire a Next.js `instrumentation.register()` hook.
+- **`EADDRINUSE` on Dashboard port** — benign, `ready()` TCP-probes the port and skips binding when it's already owned by another dev process.
+- **HMR doesn't refresh Dashboard metadata** — expected until the next request. Vision re-runs `ready()` idempotently per request on fresh module instances; edits land as soon as a request touches the module.
