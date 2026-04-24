@@ -32,16 +32,16 @@
     "lucide-react": "^0.468.0",
     "prettier": "^3.8.0",
     "prismjs": "^1.30.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "react-router-dom": "^7.9.3",
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^19.0.1",
-    "@types/react-dom": "^19.0.2",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@types/prismjs": "^1.26.5",
     "@vitejs/plugin-react": "^3.1.0",
     "autoprefixer": "^10.4.20",
@@ -49,6 +49,6 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.4.2"
   }
 }

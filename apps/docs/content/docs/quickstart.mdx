@@ -9,12 +9,8 @@ Get Vision Server up and running in under 5 minutes.
 
 ## Installation
 
-Install Vision Server:
-
 ```bash
-npm install @getvision/server
-# or
-bun add @getvision/server
+bun add @getvision/server zod
 ```
 
 **Already using Hono or Fastify?** Check out [Adapters](/docs/adapters/hono) to add Vision to your existing app.
@@ -24,204 +20,220 @@ bun add @getvision/server
 Create your first Vision Server app:
 
 ```typescript title="src/index.ts"
-import { Vision } from '@getvision/server'
+import { createVision, createModule } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision({
+const usersModule = createModule({ prefix: '/users' })
+  .get(
+    '/:id',
+    ({ params }) => ({
+      id: params.id,
+      name: 'John Doe',
+      email: 'john@example.com',
+    }),
+    {
+      params: z.object({ id: z.string() }),
+      response: z.object({
+        id: z.string(),
+        name: z.string(),
+        email: z.string(),
+      }),
+    }
+  )
+
+const app = createVision({
   service: {
     name: 'My API',
     version: '1.0.0',
-    description: 'My awesome API'
-  }
-})
+    description: 'My awesome API',
+  },
+}).use(usersModule)
 
-// Define a service
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({
-      id: z.string(),
-      name: z.string(),
-      email: z.string()
-    })
-  }, async ({ id }, c) => {
-    // Your handler logic
-    return {
-      id,
-      name: 'John Doe',
-      email: 'john@example.com'
-    }
-  })
+app.listen(3000)
 
-app.start(3000)
+/** Eden Treaty type for typed RPC on the client. */
+export type AppType = typeof app
 ```
 
 **That's it!** Start your app and visit:
+
 - **API:** http://localhost:3000
 - **Dashboard:** http://localhost:9500 🎉
 
-## File-based Routes (Vision Server)
+## Composing Modules
 
-Vision Server supports file-based routing with auto-loaded sub-apps. Create sub-apps under `app/routes/**/index.ts` that export a `Vision` instance. The folder path becomes the base path.
+Modules are the building blocks. Each one lives in its own file, owns a path prefix, and is composed at the root via `.use()`:
 
-```typescript title="app/routes/products/index.ts"
-import { Vision } from '@getvision/server'
+```typescript title="src/modules/users.ts"
+import { createModule } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision()
-
-// Base path for this sub-app will be "/products" (from folder name)
-app.service('products')
-  .endpoint('GET', '/', {
-    input: z.object({}),
-    output: z.object({ items: z.array(z.object({ id: z.string() })) })
-  }, async (_input, c) => {
-    return { items: [{ id: 'p1' }] }
-  })
-
-export default app
+export const usersModule = createModule({ prefix: '/users' })
+  .get('/', () => ({ users: [] }))
+  .post(
+    '/',
+    async ({ body }) => ({ id: crypto.randomUUID(), ...body }),
+    { body: z.object({ name: z.string(), email: z.string().email() }) }
+  )
 ```
 
-Nested folders compose the path and dynamic segments:
+```typescript title="src/index.ts"
+import { createVision } from '@getvision/server'
+import { usersModule } from './modules/users'
+import { ordersModule } from './modules/orders'
+import { productsModule } from './modules/products'
 
-- `app/routes/analytics/dashboard/index.ts` → `GET /analytics/dashboard`
-- `app/routes/products/[id]/index.ts` → `GET /products/:id`
-- `app/routes/notifications/index.ts` → `POST /notifications`
+const app = createVision({ service: { name: 'My API' } })
+  .use(usersModule)
+  .use(ordersModule)
+  .use(productsModule)
 
-Important:
+app.listen(3000)
 
-- Define endpoint paths relative to the sub-app base. Use `'/'` for the index of that folder.
-- Vision auto-discovers sub-apps on startup; no manual mounting is required.
+export type AppType = typeof app
+```
+
+[Learn more about modules →](/docs/server/modules)
 
 ## With Database Tracing
 
-Use `c.span()` to trace database queries:
+Every handler receives `span()` for tracing arbitrary blocks:
 
 ```typescript
 import { db } from './db'
 import { users } from './db/schema'
 import { eq } from 'drizzle-orm'
 
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    // Trace database query
-    const user = c.span('db.select', {
-      'db.system': 'sqlite',
-      'db.table': 'users'
-    }, () => {
-      return db.select().from(users).where(eq(users.id, id)).get()
-    })
-    
-    return user
-  })
+export const usersModule = createModule({ prefix: '/users' })
+  .get(
+    '/:id',
+    ({ params, span }) => {
+      const user = span(
+        'db.select',
+        { 'db.system': 'sqlite', 'db.table': 'users' },
+        () => db.select().from(users).where(eq(users.id, params.id)).get()
+      )
+      return user
+    },
+    { params: z.object({ id: z.string() }) }
+  )
 ```
 
 Vision Dashboard will show:
+
 - Request → Handler → DB Query waterfall
 - Query timing and attributes
 - Full trace correlation
 
 ## With Pub/Sub Events
 
-Add event-driven features with type-safe events:
+Use `defineEvents()` to register typed event handlers, then `emit()` from any route in the same app:
 
 ```typescript
-const app = new Vision({
-  service: { name: 'My API' }
-})
+import { createModule, defineEvents } from '@getvision/server'
+import { z } from 'zod'
 
-app.service('users')
-  // Define event handler FIRST (so TypeScript knows the schema for c.emit)
-  .on('user/created', {
-    schema: z.object({
-      userId: z.string(),
-      email: z.string().email()
-    }),
-    handler: async (data) => {
-      console.log('Send welcome email to:', data.email)
-    }
-  })
-  // Then define endpoints that emit events
-  .endpoint('POST', '/users', {
-    input: z.object({ name: z.string(), email: z.string() }),
-    output: z.object({ id: z.string() })
-  }, async (data, c) => {
-    const user = { id: '123', ...data }
-
-    // Emit event (type-safe based on .on() schema above!)
-    await c.emit('user/created', {
-      userId: user.id,
-      email: user.email
+export const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({
+          userId: z.string(),
+          email: z.string().email(),
+        }),
+        handler: async (event) => {
+          console.log('Send welcome email to:', event.email)
+        },
+      },
     })
-
-    return { id: user.id }
-  })
+  )
+  .post(
+    '/',
+    async ({ body, emit }) => {
+      const user = { id: crypto.randomUUID(), ...body }
+      await emit('user/created', { userId: user.id, email: user.email })
+      return user
+    },
+    { body: z.object({ name: z.string(), email: z.string().email() }) }
+  )
 ```
 
-> **Note:** Define `.on()` handlers BEFORE endpoints that call `c.emit()` so TypeScript can infer the event type.
+Pub/sub is powered by BullMQ — in-memory during development (`pubsub: { devMode: true }`), Redis-backed in production.
+
+## Eden Treaty Client
+
+On the frontend, import the exported `AppType` and get a fully-typed RPC client — no codegen:
+
+```typescript title="frontend/api.ts"
+import { treaty } from '@elysiajs/eden'
+import type { AppType } from '../server'
+
+const api = treaty<AppType>('http://localhost:3000')
+
+const { data } = await api.users({ id: '1' }).get()
+//         ^? { id: string; name: string; email: string }
+```
 
 ## With Drizzle Studio
 
-Auto-start Drizzle Studio:
+Auto-start Drizzle Studio alongside your app:
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: {
     name: 'My API',
     integrations: {
-      database: 'sqlite://./dev.db'
+      database: 'sqlite://./dev.db',
     },
     drizzle: {
-      autoStart: true,  // Auto-start Drizzle Studio
-      port: 4983
-    }
-  }
+      autoStart: true, // Auto-start Drizzle Studio
+      port: 4983,
+    },
+  },
 })
 ```
 
 Vision will:
+
 - ✅ Detect `drizzle.config.ts`
 - ✅ Start Drizzle Studio on port 4983
-- ✅ Show link in Dashboard → Integrations
-- ✅ Open https://local.drizzle.studio
+- ✅ Show a link in Dashboard → Integrations
 
 ## Configuration
 
 Full configuration options:
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: {
     name: 'My API',
     version: '1.0.0',
     description: 'Optional description',
     integrations: {
       database: 'postgresql://localhost/mydb',
-      redis: 'redis://localhost:6379'
+      redis: 'redis://localhost:6379',
     },
     drizzle: {
       autoStart: true,
-      port: 4983
-    }
+      port: 4983,
+    },
   },
   vision: {
-    enabled: true,      // Enable/disable dashboard
-    port: 9500,         // Dashboard port
-    maxTraces: 1000,    // Max traces to store
-    maxLogs: 10000      // Max logs to store
+    enabled: true,   // enable/disable dashboard
+    port: 9500,      // dashboard port
+    maxTraces: 1000,
+    maxLogs: 10000,
   },
   pubsub: {
-    devMode: true,      // Use in-memory queue (no Redis needed)
-    // redis: { host: 'localhost', port: 6379 }  // For production
-  }
+    devMode: true,   // in-memory queue, no Redis required
+    // redis: { host: 'localhost', port: 6379 }
+  },
 })
 ```
 
 ## Next Steps
 
-- [Vision Server Guide](/docs/server) - Full documentation
-- [Core Concepts](/docs/concepts) - Understanding Vision
-- [Adapters](/docs/adapters/hono) - Add Vision to existing apps
+- [Vision Server Overview](/docs/server) — the big picture
+- [Modules](/docs/server/modules) — build and compose modules
+- [Rate Limiting](/docs/server/rate-limiting) — per-endpoint & module-level limits
+- [Core Concepts](/docs/concepts) — traces, spans, wide events

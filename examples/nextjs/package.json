@@ -1,0 +1,30 @@
+{
+  "name": "nextjs-vision-example",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/eden": "^1.4.9",
+    "@getvision/core": "workspace:*",
+    "@getvision/server": "workspace:*",
+    "@tanstack/react-query": "^5.100.1",
+    "elysia": "^1.4.28",
+    "next": "^16.2.4",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "5.9.3"
+  }
+}

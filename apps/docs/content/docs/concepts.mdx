@@ -28,10 +28,11 @@ Each trace contains:
 
 ```typescript
 // This creates one trace
-app.get('/users/:id', async (c) => {
-  const user = await db.query('SELECT * FROM users WHERE id = ?', [id])
-  return c.json(user)
-})
+createModule({ prefix: '/users' })
+  .get('/:id', async ({ params }) => {
+    const user = await db.query('SELECT * FROM users WHERE id = ?', [params.id])
+    return user
+  })
 ```
 
 ## Spans
@@ -50,22 +51,18 @@ Trace: GET /users/123
 
 ### Creating Custom Spans
 
-```typescript
-import { useVisionSpan } from '@getvision/adapter-hono'
+Every Vision Server handler receives `span` in its context:
 
-app.get('/users', async (c) => {
-  const withSpan = useVisionSpan()
-  
-  // Automatically tracked
-  const users = withSpan('db.query', {
-    'db.system': 'postgresql',
-    'db.statement': 'SELECT * FROM users',
-  }, async () => {
-    return await db.select().from(users).all()
+```typescript
+createModule({ prefix: '/users' })
+  .get('/', async ({ span }) => {
+    const users = span(
+      'db.query',
+      { 'db.system': 'postgresql', 'db.statement': 'SELECT * FROM users' },
+      async () => db.select().from(users).all()
+    )
+    return { users }
   })
-  
-  return c.json(users)
-})
 ```
 
 ### Span Attributes
@@ -73,7 +70,7 @@ app.get('/users', async (c) => {
 Spans can have custom attributes:
 
 ```typescript
-withSpan('operation.name', {
+span('operation.name', {
   // Common attributes
   'service.name': 'my-api',
   'service.version': '1.0.0',

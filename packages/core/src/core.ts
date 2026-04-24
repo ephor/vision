@@ -25,6 +25,7 @@ export class VisionCore {
   private consoleInterceptor?: ConsoleInterceptor
   private routes: RouteMetadata[] = []
   private services: ServiceGroup[] = []
+  private startPromise?: Promise<void>
   private appStatus: AppStatus = {
     name: 'Unknown',
     version: '0.0.0',
@@ -37,7 +38,7 @@ export class VisionCore {
     this.traceStore = new TraceStore(options.maxTraces)
     this.tracer = new Tracer()
     this.logStore = new LogStore(options.maxLogs)
-    
+
     // Optional console intercept
     if (options.captureConsole !== false) {
       this.consoleInterceptor = new ConsoleInterceptor(
@@ -45,9 +46,9 @@ export class VisionCore {
         this.traceStore,
         () => {
           // Broadcast latest log entry to connected clients
-          this.broadcast({ 
-            type: 'log.entry', 
-            data: this.logStore.getLogs({ limit: 1 })[0] 
+          this.broadcast({
+            type: 'log.entry',
+            data: this.logStore.getLogs({ limit: 1 })[0]
           })
         }
       )
@@ -55,6 +56,26 @@ export class VisionCore {
     }
 
     this.registerMethods()
+
+    // Backward-compat eager startup for legacy adapter consumers (Hono,
+    // Express, Fastify) that construct `VisionCore` and expect the Dashboard
+    // port to be bound synchronously. `@getvision/server` opts out via
+    // `autoStart: false` and awaits `core.start()` from inside `ready()`.
+    if (options.autoStart !== false) {
+      void this.start()
+    }
+  }
+
+  /**
+   * Bind the Dashboard port (idempotent). Resolves once the underlying WS +
+   * HTTP server is listening, or immediately if a prior Vision instance in
+   * another process already owns the port (detected via TCP probe).
+   */
+  async start(): Promise<void> {
+    if (!this.startPromise) {
+      this.startPromise = this.server.start()
+    }
+    await this.startPromise
   }
 
   /**
@@ -339,9 +360,15 @@ export class VisionCore {
   }
 
   /**
-   * Close the Vision server
+   * Close the Vision server (alias for `stop()`).
    */
   async close(): Promise<void> {
-    await this.server.close()
+    await this.stop()
+  }
+
+  /** Stop the Dashboard port. Idempotent. */
+  async stop(): Promise<void> {
+    this.startPromise = undefined
+    await this.server.stop()
   }
 }

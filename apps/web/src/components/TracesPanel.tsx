@@ -5,7 +5,6 @@ import type { Trace } from '@getvision/core'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
-import { ScrollArea } from './ui/scroll-area'
 
 interface TracesPanelProps {
   sessionId?: string
@@ -35,7 +34,7 @@ export function TracesPanel({ sessionId }: TracesPanelProps) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1" ref={containerRef}>
+      <div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-3 space-y-2">
           {traces.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -54,7 +53,7 @@ export function TracesPanel({ sessionId }: TracesPanelProps) {
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

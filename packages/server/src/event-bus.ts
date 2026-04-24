@@ -379,6 +379,25 @@ export class EventBus {
   }
 
   /**
+   * Drop every handler registered for `eventName`. In dev mode that just
+   * empties the in-memory handler array; in prod it closes the BullMQ
+   * worker so no stale closures keep consuming jobs. Used by the
+   * HMR-safe re-registration path in `@getvision/server`.
+   */
+  clearHandler(eventName: string): void {
+    if (this.config.devMode) {
+      this.devModeHandlers.delete(eventName)
+      return
+    }
+    const workerKey = `${eventName}-handler`
+    const existing = this.workers.get(workerKey)
+    if (existing) {
+      void existing.close().catch(() => {})
+      this.workers.delete(workerKey)
+    }
+  }
+
+  /**
    * Close all connections
    */
   async close(): Promise<void> {

@@ -7,229 +7,261 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Vision Server
 
-**Vision Server** is a meta-framework built on Hono with automatic observability. Everything you need, nothing you don't.
+**Vision Server** is a Bun-first, Elysia-based meta-framework with automatic observability, pub/sub, and end-to-end type safety (Eden-ready).
 
 <Callout type="info">
-  Vision Server extends Hono, so all Hono features work seamlessly!
+  Vision Server wraps Elysia — the underlying instance is still an Elysia app,
+  so every Elysia plugin (`@elysiajs/cors`, `@elysiajs/jwt`, `@elysiajs/swagger`, …)
+  works, and the type chain flows into the Eden Treaty client.
 </Callout>
 
 ## Why Vision Server?
 
-**vs NestJS:** 10x faster, 10x simpler, built-in observability  
-**vs Encore.ts:** 100% open source, no vendor lock-in  
-**vs Plain Hono:** Built-in observability, type-safety, pub/sub
+- **vs NestJS** — orders of magnitude faster, zero DI ceremony, built-in observability
+- **vs Encore.ts** — 100% open source, no vendor lock-in
+- **vs plain Elysia** — adds tracing, logs, API Explorer, pub/sub, cron, rate limiting
+- **Type-safe end-to-end** — `treaty<AppType>` on the client, response shapes inferred from server schemas
 
 ## Quick Start
 
 ```bash
-npm install @getvision/server
+bun add @getvision/server zod
 ```
 
 ```typescript
-import { Vision } from '@getvision/server'
+import { createVision, createModule, defineEvents } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision({
-  service: {
-    name: 'My API',
-    version: '1.0.0'
-  }
-})
-
-// Define services with type-safe endpoints
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    // c.span() is built-in! 🔥
-    const user = c.span('db.select', { 'db.table': 'users' }, () => {
-      return { id, name: 'John' }
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        handler: async (event) => {
+          console.log('[welcome email] →', event.email)
+        },
+      },
     })
-    return user
+  )
+  .get('/', ({ span }) => {
+    const users = span('db.select', { 'db.table': 'users' }, () => [
+      { id: '1', name: 'Alice' },
+    ])
+    return { users }
   })
+  .post(
+    '/',
+    async ({ body, emit }) => {
+      const id = crypto.randomUUID()
+      await emit('user/created', { userId: id, email: body.email })
+      return { id, ...body }
+    },
+    {
+      body: z.object({ name: z.string(), email: z.string().email() }),
+    }
+  )
 
-app.start(3000)
+const app = createVision({
+  service: { name: 'My API', version: '1.0.0' },
+  pubsub: { devMode: true },
+}).use(usersModule)
+
+app.listen(3000)
+
+/** Eden Treaty client type — export for the frontend. */
+export type AppType = typeof app
 ```
 
 **That's it!** You get:
+
 - ✅ Vision Dashboard on port 9500
 - ✅ Automatic request tracing
-- ✅ Type-safe validation
-- ✅ Service catalog
+- ✅ Type-safe validation (Zod / Valibot / TypeBox via Standard Schema)
+- ✅ Service & event catalog
+- ✅ Eden Treaty type export for your frontend
 
-## Two Ways to Build APIs
+## The Module Pattern
 
-Vision Server gives you flexibility in how you structure your code:
-
-### 1. Service Builder Pattern (Inline)
-
-Best for: Small to medium APIs, grouped logic, when you need pub/sub + cron
+Vision composes apps from small, focused **modules**. A module is an Elysia plugin with Vision's per-request context (`span`, `emit`, `addContext`, `traceId`) already typed in.
 
 ```typescript
-app.service('users')
-  .endpoint('GET', '/users', schema, handler)
-  .endpoint('POST', '/users', schema, handler)
-  .on('user/created', eventHandler)
-  .cron('0 0 * * *', cronHandler)
+const ordersModule = createModule({ prefix: '/orders' })
+  .use(defineEvents({ 'order/placed': { schema, handler } }))
+  .post('/', async ({ body, emit }) => {
+    await emit('order/placed', { orderId: '...', total: body.total })
+    return { ok: true }
+  }, { body: OrderBody })
 ```
 
-[Learn more →](/docs/server/service-builder)
-
-### 2. File-Based Routing (Next.js Style)
-
-Best for: Large APIs, Next.js users, file-system organization
-
-```
-app/api/
-├── users/
-│   ├── route.ts          → GET, POST /users
-│   └── [id]/
-│       └── route.ts      → GET /users/:id
-└── products/
-    └── route.ts          → GET, POST /products
-```
+Compose at the root via `.use()` — order doesn't matter and each module contributes its own routes, events, and crons:
 
 ```typescript
-// app/api/users/route.ts
-export async function GET(req, c) {
-  const users = c.span('db.select', {}, () => db.users.all())
-  return { users }
-}
-
-export const GET_schema = {
-  output: z.object({ users: z.array(...) })
-}
+const app = createVision({ service: { name: 'Shop' } })
+  .use(usersModule)
+  .use(ordersModule)
+  .use(productsModule)
 ```
 
-[Learn more →](/docs/server/file-based-routing)
+[Learn more about modules →](/docs/server/modules)
 
 ## Core Features
 
-### 🚀 Zero Configuration
+### 🚀 Zero configuration
 
 Everything works out of the box:
-- Vision Dashboard automatically starts
-- Tracing middleware auto-installed
-- Service catalog auto-discovered
-- No manual setup required
 
-### 🔥 c.span() Built Into Context
+- Vision Dashboard starts automatically on port 9500
+- Tracing hooks are pre-wired (`onRequest`, `onAfterResponse`, `onError`)
+- Service & route catalog auto-registered (once on `listen`, or lazily on first request for `.handle(req)` deployments like Next.js)
 
-No more manual imports or setup:
+### 🔥 `span` / `emit` / `addContext` in the handler
 
-```typescript
-async (data, c) => {
-  // Just use c.span()!
-  const user = c.span('db.select', { 'db.table': 'users' }, () => {
-    return db.users.findOne(data.id)
-  })
-  
-  const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
-    return db.posts.findMany({ userId: user.id })
-  })
-  
-  return { user, posts }
-}
-```
-
-### ✅ Type-Safe Everything
-
-Zod validation for inputs and outputs:
+Every handler receives Vision's context alongside Elysia's `body/query/params`:
 
 ```typescript
-.endpoint('POST', '/users', {
-  input: z.object({
-    name: z.string().min(1).describe('User full name'),
-    email: z.string().email().describe('Email address')
-  }),
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-    email: z.string()
+.post('/', async ({ body, span, emit, addContext }) => {
+  addContext({ 'user.email': body.email })
+
+  const user = span('db.insert', { 'db.table': 'users' }, () => {
+    return db.users.create(body)
   })
-}, handler)
+
+  await emit('user/created', { userId: user.id, email: user.email })
+  return user
+})
 ```
 
-**Invalid request?** Automatic 400 with Zod error details.
+### ✅ Validation with any Standard Schema library
 
-### 📊 Built-in Pub/Sub & Cron
+Use Zod, Valibot, or Elysia's built-in TypeBox (`t`) — all interchangeable:
+
+```typescript
+import { t } from '@getvision/server'
+import { z } from 'zod'
+import * as v from 'valibot'
+
+// Zod
+.post('/', handler, { body: z.object({ name: z.string() }) })
+
+// Valibot
+.post('/', handler, { body: v.object({ name: v.string() }) })
+
+// Elysia / TypeBox — re-exported from @getvision/server
+.post('/', handler, { body: t.Object({ name: t.String() }) })
+```
+
+**Invalid request?** Elysia returns a 422 with validation details automatically.
+
+### 📊 Built-in pub/sub & cron
 
 Powered by BullMQ (in-memory during development, Redis in production):
 
 ```typescript
-app.service('notifications')
-  .on('user/created', {
-    schema: z.object({ userId: z.string(), email: z.string() }),
-    handler: async (data) => {
-      console.log('Send welcome email to:', data.email)
-    }
-  })
-  .cron('0 9 * * *', async () => {
-    console.log('Send daily digest')
-  })
+const notificationsModule = createModule()
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string() }),
+        handler: async (event) => {
+          await sendWelcomeEmail(event.email)
+        },
+      },
+    })
+  )
 ```
 
-**No extra setup!** Event bus is auto-initialized.
-
-> **Note:** Define `.on()` handlers BEFORE endpoints that call `c.emit()` so TypeScript can infer the event type.
-
-### 🎯 Hono Compatible
-
-Use any Hono feature:
+Schedule work with cron:
 
 ```typescript
-import { logger } from 'hono/logger'
-import { cors } from 'hono/cors'
-import { jwt } from 'hono/jwt'
+import { defineCrons } from '@getvision/server'
 
-// Global middleware
-app.use('*', logger())
-app.use('*', cors())
-
-// Service middleware
-app.service('admin')
-  .use(jwt({ secret: 'secret' }))
-  .endpoint('GET', '/admin/users', schema, handler)
-
-// Plain Hono routes still work
-app.get('/health', (c) => c.json({ status: 'ok' }))
+const cleanupModule = createModule().use(
+  defineCrons({
+    'nightly-cleanup': {
+      schedule: '0 0 * * *',
+      handler: async () => {
+        console.log('running cleanup')
+      },
+    },
+  })
+)
 ```
+
+### 🎯 Elysia-native
+
+Vision's underlying instance is Elysia — every plugin and feature works unmodified:
+
+```typescript
+import { cors } from '@elysiajs/cors'
+import { swagger } from '@elysiajs/swagger'
+
+const app = createVision({ service: { name: 'My API' } })
+  .use(cors())
+  .use(swagger())
+  .use(usersModule)
+  .get('/health', () => ({ status: 'ok' }))
+```
+
+### 🔒 Per-endpoint rate limiting
+
+```typescript
+import { rateLimit } from '@getvision/server'
+
+.post('/', handler, {
+  body: SignupBody,
+  beforeHandle: [rateLimit({ requests: 5, window: '15m' })],
+})
+```
+
+[Learn more →](/docs/server/rate-limiting)
+
+### 🧩 Eden Treaty — typed RPC on the client
+
+```typescript
+import { treaty } from '@elysiajs/eden'
+import type { AppType } from './server'
+
+const api = treaty<AppType>('http://localhost:3000')
+
+const { data } = await api.users.get()
+//         ^? { users: { id: string; name: string }[] }
+```
+
+Change a schema on the server → the client gets a compile error. No codegen.
 
 ## Configuration
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: {
     name: 'My API',
     version: '1.0.0',
     description: 'Optional description',
     integrations: {
       database: 'postgresql://localhost/mydb',
-      redis: 'redis://localhost:6379'
+      redis: 'redis://localhost:6379',
     },
     drizzle: {
-      autoStart: true,  // Auto-start Drizzle Studio
-      port: 4983
-    }
+      autoStart: true, // auto-start Drizzle Studio in dev
+      port: 4983,
+    },
   },
   vision: {
-    enabled: true,      // Enable/disable dashboard
-    port: 9500,         // Dashboard port
-    maxTraces: 1000,    // Max traces to store
-    maxLogs: 10000,     // Max logs to store
-    logging: true       // Console logging
+    enabled: true,    // enable/disable dashboard
+    port: 9500,       // dashboard port
+    maxTraces: 1000,
+    maxLogs: 10000,
+    logging: true,
   },
   pubsub: {
-    devMode: true,      // Use in-memory queue (no Redis)
-    // redis: { host: 'localhost', port: 6379 }  // For production
-  }
+    devMode: true,    // in-memory queue — no Redis required
+    // redis: { host: 'localhost', port: 6379 }
+  },
 })
 ```
 
 ## Next Steps
 
-- [Service Builder Pattern](/docs/server/service-builder) - Learn the inline approach
-- [File-Based Routing](/docs/server/file-based-routing) - Learn the Next.js approach
-- [Next.js Integration](/docs/server/nextjs-integration) - Use with Next.js projects
-- [Features](/docs/features) - Explore all Vision features
+- [Modules](/docs/server/modules) — build and compose modules
+- [Rate Limiting](/docs/server/rate-limiting) — configure per-endpoint limits
+- [Features](/docs/features) — explore tracing, logs, API Explorer

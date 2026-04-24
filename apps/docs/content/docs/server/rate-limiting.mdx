@@ -1,86 +1,126 @@
 ---
-title: Per-Endpoint Rate Limiting
-description: Configure rate limiting on ServiceBuilder endpoints using hono-rate-limiter
+title: Rate Limiting
+description: Per-endpoint and module-level rate limiting with the rateLimit() helper
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Per-Endpoint Rate Limiting
+# Rate Limiting
 
-Vision Server integrates the `hono-rate-limiter` middleware, allowing you to enable rate limiting per endpoint via `EndpointConfig.ratelimit`.
+Vision Server ships a small `rateLimit()` helper that plugs into Elysia's `beforeHandle` hook. It works on individual routes, whole modules, or the entire app.
 
 ## Quick Start
 
-```ts
-app.service('users')
-  .endpoint(
-    'GET',
-    '/users',
+```typescript
+import { createModule, rateLimit } from '@getvision/server'
+import { z } from 'zod'
+
+export const usersModule = createModule({ prefix: '/users' })
+  .post(
+    '/',
+    async ({ body }) => ({ id: crypto.randomUUID(), ...body }),
     {
-      input: z.object({}),
-      output: z.object({ users: z.array(z.object({ id: z.string() })) })
-    },
-    async (_, c) => {
-      // ...
-      return { users }
-    },
-    {
-      ratelimit: {
-        requests: 100,
-        window: '15m'
-      }
+      body: z.object({ name: z.string(), email: z.string().email() }),
+      beforeHandle: [rateLimit({ requests: 5, window: '15m' })],
     }
   )
 ```
 
-- **requests**: max number of requests allowed per window.
-- **window**: time window. Supported formats: `'30s'`, `'15m'`, `'1h'`, `'2d'`, or raw milliseconds as string like `'900000'`.
+- **requests** — max number of requests allowed per window.
+- **window** — time window. Supported formats: `'30s'`, `'15m'`, `'1h'`, `'2d'`, or raw milliseconds as a string (`'900000'`).
+
+Exceeding the limit returns a `429 Too Many Requests` with a JSON body and `RateLimit-*` / `Retry-After` headers:
+
+```json
+{ "error": "Too Many Requests", "retryAfter": 900 }
+```
+
+## Module-level rate limiting
+
+Use `.onBeforeHandle` on the module to apply the limiter to every route it defines:
+
+```typescript
+export const adminModule = createModule({ prefix: '/admin' })
+  .onBeforeHandle(rateLimit({ requests: 10, window: '30s' }))
+  .get('/stats', handler)
+  .get('/sessions', handler)
+  .delete('/sessions/:id', handler)
+```
+
+## Custom key generator
+
+By default the limiter keys on the client IP (falling back to `User-Agent`). Provide `keyBy` to scope limits differently — for example, per-authenticated-user:
+
+```typescript
+rateLimit({
+  requests: 100,
+  window: '1h',
+  keyBy: ({ request }) => request.headers.get('x-user-id') ?? 'anonymous',
+})
+```
+
+## Custom message
+
+```typescript
+rateLimit({
+  requests: 3,
+  window: '1m',
+  message: 'Slow down — you can try again in a minute.',
+})
+```
+
+The `message` replaces the default `"Too Many Requests"` error field.
+
+## Distributed store (Redis, etc.)
+
+The default store is in-memory and **per-process**. For multi-instance deployments you need a shared store. Vision exposes a minimal `RateLimitStore` interface — plug in any backend you like (Redis, Upstash, Cloudflare KV, …):
+
+```typescript
+import { Redis } from 'ioredis'
+import type { RateLimitStore } from '@getvision/server'
+import { rateLimit } from '@getvision/server'
+
+const redis = new Redis(process.env.REDIS_URL!)
+
+const redisStore: RateLimitStore = {
+  async increment(key, windowMs) {
+    const now = Date.now()
+    const bucketKey = `rl:${key}:${Math.floor(now / windowMs)}`
+    const resetAt = Math.floor(now / windowMs) * windowMs + windowMs
+
+    const multi = redis.multi()
+    multi.incr(bucketKey)
+    multi.pexpire(bucketKey, windowMs)
+    const [[, count]] = (await multi.exec()) as [[null, number], [null, number]]
+
+    return { count, resetAt }
+  },
+}
+
+.post('/', handler, {
+  beforeHandle: [
+    rateLimit({ requests: 50, window: '1h', store: redisStore }),
+  ],
+})
+```
 
 <Callout>
-Rate limiting is applied before endpoint-level middleware and after any service-level global middleware.
+  In Docker or single-node deployments the default `MemoryRateLimitStore` is fine. For auto-scaling or serverless you **must** use a shared store, or each instance will apply its own independent limit.
 </Callout>
 
-## Using a Distributed Store (Redis, etc.)
+## How it works
 
-By default, the limiter uses an in-memory store. For multi-instance deployments, provide a distributed store.
+`rateLimit()` returns an Elysia `beforeHandle` hook. When the limit is exceeded it short-circuits with a raw `Response(429, ...)`; Elysia skips the handler and response schema. Vision's tracing hooks detect the raw `Response` and log `code=429` correctly.
 
-```ts
-import { RedisStore } from '@hono-rate-limiter/redis'
-import { Redis } from '@upstash/redis'
+Headers included on rejected responses:
 
-const store = new RedisStore({
-  client: new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!
-  })
-})
-
-app.service('users')
-  .endpoint(
-    'POST',
-    '/users',
-    { input, output },
-    handler,
-    {
-      ratelimit: {
-        requests: 50,
-        window: '1h',
-        store
-      }
-    }
-  )
-```
-
-## What Vision Applies Under the Hood
-
-The following is wired automatically in `ServiceBuilder.build()`:
-
-- **Middleware**: `rateLimiter({ windowMs, limit, keyGenerator, standardHeaders: 'draft-6', store? })`
-- **Key generation**: combines client IP (or `User-Agent` fallback) + HTTP method + endpoint path to scope limits per endpoint.
-- **Headers**: `RateLimit-*` response headers are enabled via `standardHeaders: 'draft-6'`.
+- `RateLimit-Limit` — configured `requests`
+- `RateLimit-Remaining` — how many are left (0 on rejection)
+- `RateLimit-Reset` — seconds until the window resets
+- `Retry-After` — same value, standard HTTP header
 
 ## Tips
 
-- **Clusters/Serverless**: Always use a distributed store to ensure consistent limits across instances.
-- **Endpoint-specific**: Configure different limits per endpoint as needed.
-- **Observability**: Limits run before your handler; use Vision tracing in your handler as usual.
+- **Per-endpoint** — set different limits per route: stricter for auth/signup, looser for reads.
+- **Observability** — rate-limit hits appear in the Vision Dashboard with full trace context (IP, path, key).
+- **Composition** — stack `beforeHandle` hooks freely: `[rateLimit(...), authMiddleware, ...]`.

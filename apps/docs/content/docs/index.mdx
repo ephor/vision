@@ -21,21 +21,21 @@ After:  Open Vision. Click the slow request. See the waterfall. Fix it.
 **1. Create your app:**
 
 ```typescript
-import { Vision } from '@getvision/server'
+import { createVision, createModule } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision({ service: { name: 'My API' } })
+const usersModule = createModule({ prefix: '/users' })
+  .get(
+    '/:id',
+    ({ params, span }) => {
+      return span('db.select', { 'db.table': 'users' }, () => getUser(params.id))
+    },
+    { params: z.object({ id: z.string() }) }
+  )
 
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    const user = c.span('db.select', { 'db.table': 'users' }, () => getUser(id))
-    return user
-  })
+const app = createVision({ service: { name: 'My API' } }).use(usersModule)
 
-app.start(3000)
+app.listen(3000)
 ```
 
 **2. Make a request to your API**
@@ -83,7 +83,7 @@ See exactly what was sent and received:
 All your endpoints appear automatically:
 
 - Grouped by service (`/users/*` → Users, `/orders/*` → Orders)
-- Input/output schemas extracted from Zod
+- Input/output schemas extracted from Zod / Valibot / TypeBox
 - Ready to test in the API Explorer
 
 ### Live Logs (Wide Events)
@@ -92,13 +92,15 @@ Your `console.log` calls appear in the dashboard with automatic context:
 
 - **Request-scoped** - Click a trace to see only logs from that request
 - **Searchable** - Search by message OR by context fields like `userId=123`
-- **Add context once, see it everywhere** - `c.addContext()` attaches to all logs in that request
+- **Add context once, see it everywhere** - `addContext()` attaches to all logs in that request
 
 ```typescript
-// Vision Server - c.addContext() is built in
-c.addContext({ userId: '123', orderId: 'abc' })
-console.log('Processing')  // Automatically has userId, orderId
-console.log('Done')        // Automatically has userId, orderId
+// Vision Server — addContext is available in every handler
+.get('/:id', ({ params, addContext }) => {
+  addContext({ userId: params.id, orderId: 'abc' })
+  console.log('Processing')  // Automatically has userId, orderId
+  console.log('Done')        // Automatically has userId, orderId
+})
 ```
 
 ---
@@ -107,69 +109,66 @@ console.log('Done')        // Automatically has userId, orderId
 
 ### Vision Server (Recommended)
 
-The best way to use Vision. Everything is built into the context:
+A Bun-first, Elysia-based meta-framework with everything built in:
 
 ```bash
-npm install @getvision/server
+bun add @getvision/server zod
 ```
 
 ```typescript
-import { Vision } from '@getvision/server'
+import { createVision, createModule, defineEvents } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision({
-  service: { name: 'My API' }
-})
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        handler: async (event) => console.log('welcome →', event.email),
+      },
+    })
+  )
+  .post(
+    '/',
+    async ({ body, addContext, emit, span }) => {
+      addContext({ 'user.email': body.email })
+      const user = span('db.insert', { 'db.table': 'users' }, () => ({
+        id: crypto.randomUUID(),
+        ...body,
+      }))
+      await emit('user/created', { userId: user.id, email: user.email })
+      return user
+    },
+    {
+      body: z.object({ name: z.string().min(1), email: z.string().email() }),
+    }
+  )
 
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    // Everything is built into context:
-    c.addContext({ userId: id })           // Wide events
-    const user = c.span('db.select', {     // Tracing
-      'db.table': 'users'
-    }, () => db.select().from(users).where(eq(users.id, id)))
+const app = createVision({ service: { name: 'My API' } }).use(usersModule)
 
-    return user
-  })
+app.listen(3000)
 
-app.start(3000)
+export type AppType = typeof app  // ← Eden Treaty type for the client
 ```
 
 **Vision Server includes:**
-- `c.span()` - Built-in tracing
-- `c.addContext()` - Wide events logging
-- `c.emit()` - Type-safe pub/sub events
-- Type-safe validation with Zod
-- Cron jobs, file-based routing
 
-### Add to Existing App
+- `span()` — built-in tracing
+- `addContext()` — wide-events logging
+- `emit()` — type-safe pub/sub events (BullMQ)
+- Cron jobs via `defineCrons()`
+- Rate limiting via `rateLimit()`
+- End-to-end type safety via Eden Treaty (`treaty<AppType>`)
 
-Already have a Hono, Fastify, or Express app? Add Vision in 2 lines:
+### Legacy Adapters
+
+Already have an **existing** Hono, Fastify, or Express app and just want the dashboard? Frozen-but-maintained adapters are still available:
 
 ```bash
-npm install @getvision/adapter-hono  # or adapter-fastify, adapter-express
+bun add @getvision/adapter-hono  # or adapter-fastify, adapter-express
 ```
 
-```typescript
-import { Hono } from 'hono'
-import { visionAdapter, enableAutoDiscovery } from '@getvision/adapter-hono'
-
-const app = new Hono()
-
-app.use('*', visionAdapter())
-enableAutoDiscovery(app)
-
-// Your existing routes work as-is
-app.get('/users/:id', async (c) => {
-  const user = await db.select().from(users).where(eq(users.id, id))
-  return c.json(user)
-})
-```
-
-**Works with:** Hono, Fastify, Express (more coming)
+New projects should prefer **Vision Server** — adapters no longer receive new features.
 
 ---
 
@@ -177,10 +176,11 @@ app.get('/users/:id', async (c) => {
 
 | Scenario | Use This |
 |----------|----------|
-| Starting a new API project | **Vision Server** - everything built in |
-| Want `c.span()`, `c.addContext()`, `c.emit()` | **Vision Server** - all in context |
-| Need structured services + events + cron | **Vision Server** - batteries included |
-| Have an existing Hono/Fastify/Express app | **Adapters** - add 2 lines to existing code |
+| Starting a new API project | **Vision Server** — everything built in |
+| Want `span()`, `addContext()`, `emit()` in handlers | **Vision Server** — all typed in context |
+| Need routes + pub/sub + cron in one place | **Vision Server** — batteries included |
+| Want a typed RPC client on the frontend | **Vision Server** — Eden Treaty ready |
+| Have a mature Hono / Fastify / Express app you don't want to port | **Adapters** |
 
 **Recommendation:** Start with Vision Server. It's the full experience.
 
@@ -223,26 +223,24 @@ Use Vision during development. Add production APM when you need it.
 **Quickest path:**
 
 ```bash
-# Clone an example and try it
 git clone https://github.com/ephor/vision
-cd vision/examples/hono
-bun install && bun run db:push && bun dev
+cd vision/examples/vision
+bun install && bun dev
 
 # Open http://localhost:9500
 ```
 
 **Add to your app:**
 
-- [**Quickstart**](/docs/quickstart) - Full setup in 5 minutes
-- [**Hono Adapter**](/docs/adapters/hono)
-- [**Fastify Adapter**](/docs/adapters/fastify)
-- [**Express Adapter**](/docs/adapters/express)
+- [**Quickstart**](/docs/quickstart) — full setup in 5 minutes
+- [**Vision Server**](/docs/server) — modules, events, cron, rate limiting
+- [**Next.js integration**](/docs/server#quick-start) — mount Vision inside a Next.js catch-all
 
 **Learn more:**
 
-- [**Why Vision?**](/docs/why-vision) - Real debugging scenarios
-- [**Debugging Workflows**](/docs/debugging) - Step-by-step guides
-- [**Core Concepts**](/docs/concepts) - Traces, spans, context
+- [**Why Vision?**](/docs/why-vision) — real debugging scenarios
+- [**Debugging Workflows**](/docs/debugging) — step-by-step guides
+- [**Core Concepts**](/docs/concepts) — traces, spans, context
 
 ---
 

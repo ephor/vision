@@ -1,308 +1,63 @@
-import { config } from "dotenv"
-import { Vision } from '@getvision/server'
-import { logger } from 'hono/logger'
-import { cors } from 'hono/cors'
-import { z } from 'zod'
-import type { DrizzleD1Database } from 'drizzle-orm/d1' // example
+import { config } from 'dotenv'
+import { createVision } from '@getvision/server'
+
+import { usersModule } from './modules/users'
+import { ordersModule } from './modules/orders'
+import { productsModule } from './modules/products'
+import { analyticsModule } from './modules/analytics'
+import { notificationsModule } from './modules/notifications'
 
 config({ path: '.env.development' })
 
-// ============================================================================
-// Create Vision App - Everything automatic! 🚀
-// ============================================================================
-
-type Variables = {
-  db: DrizzleD1Database;
-};
-
-const app = new Vision({
+/**
+ * Vision Basic Example — Elysia edition.
+ *
+ * Migrated from the Hono-based ServiceBuilder API to the Elysia module
+ * pattern. Each resource lives in its own file under `src/modules/*.ts`;
+ * the root simply composes them via `.use(module)`.
+ *
+ * Compared to the old API:
+ *   - `new Vision()` + `app.service('x').endpoint(...).on(...).cron(...)`
+ *   → `createVision()` + `createModule({ prefix }).use(defineEvents(...)).get(...)`
+ *   - File-based routing (`app/routes/`) removed — just `import` and `.use()`.
+ *   - Middleware for per-request state → Elysia `.derive/.decorate` inside the
+ *     module (not shown here for brevity).
+ *
+ * Eden Treaty — `export type AppType = typeof app` gives a typed RPC client.
+ */
+const app = createVision({
   service: {
     name: 'Vision hybrid routes',
     version: '1.0.0',
-    description: 'Example app using Vision Server meta-framework',
+    description: 'Example app using Vision Server meta-framework (Elysia)',
     integrations: {
-      database: 'sqlite://./dev.db'
+      database: 'sqlite://./dev.db',
     },
     drizzle: {
-      autoStart: true,  // Auto-start Drizzle Studio
+      autoStart: true,
       port: 4983,
-    }
+    },
   },
   vision: {
     enabled: true,
     port: 9500,
-    apiUrl: 'http://localhost:4000'  // Tell dashboard where API server is running
+    apiUrl: 'http://localhost:4000',
   },
   pubsub: {
-    devMode: true,  // Use in-memory event bus (no Redis required)
-  }
+    devMode: true,
+  },
 })
-
-app.use('*', logger())
-app.use('*', cors())
-
-// ============================================================================
-// Define Services - using app.service()!
-// ============================================================================
-
-// User Service
-app.service<{ Variables: Variables; }>('users')
-  // some middleware that ingects something in context (db as well)))
-  .use((c, next) => {
-    c.set("db", "db" as unknown as DrizzleD1Database);
-    return next();
-  })
-  .endpoint(
-    'GET',
-    '/users',
-    {
-      input: z.object({}),
-      output: z.object({
-        users: z.array(z.object({
-          id: z.string(),
-          name: z.string(),
-          email: z.string()
-        }))
-      })
-    },
-    async (_, c) => {
-      // c.span() and c.get("db") are built into context! 🔥
-      const users = c.span('db.select', {
-        'db.system': 'postgresql',
-        'db.table': 'users'
-      }, () => {
-        // Sync sleep for demo
-        const sleep = (ms: number) => {
-          const start = Date.now()
-          while (Date.now() - start < ms) {}
-        }
-        sleep(30)
-        
-        return [
-          { id: '1', name: 'Alice', email: 'alice@example.com' },
-          { id: '2', name: 'Bob', email: 'bob@example.com' }
-        ]
-      })
-      
-      return { users }
-    },
-    {
-      ratelimit: {
-        requests: 10,
-        window: '15m'
-      }
-    }
-  )
-  .endpoint(
-    'GET',
-    '/users/:id',
-    {
-      input: z.object({
-        isActive: z.string()
-      }),
-      output: z.object({
-        id: z.string(),
-        name: z.string(),
-        email: z.string(),
-        articles: z.array(z.object({
-          id: z.string(),
-          title: z.string()
-        }))
-      })
-    },
-    async ({ isActive }, c) => {
-      const { id } = c.req.param()
-      // Example: Add context using built-in c.addContext()
-      c.addContext({
-        'user.id': id,
-        'request.type': 'user_details',
-        'user.isActive': isActive
-      })
-
-      const sleep = (ms: number) => {
-        const start = Date.now()
-        while (Date.now() - start < ms) {}
-      }
-
-      console.log('User ID:', id)
-      
-      // First span - fetch user (c.span is built-in!)
-      const user = c.span('db.select', {
-        'db.system': 'postgresql',
-        'db.table': 'users'
-      }, () => {
-        sleep(50)
-        return { id: id, name: 'Alice', email: 'alice@example.com' }
-      })
-
-      console.log("------------user---------------");
-      console.log(user);
-      console.log("------------user---------------");
-      
-      // Second span - fetch articles
-      const articles = c.span('db.select', {
-        'db.system': 'postgresql',
-        'db.table': 'articles'
-      }, () => {
-        sleep(80)
-        return [
-          { id: '1', title: 'First Article' },
-          { id: '2', title: 'Second Article' }
-        ]
-      })
-      
-      return { ...user, articles }
-    }
-  )
-  .on('user/created', {
-    schema: z.object({
-      userId: z.string(),
-      email: z.string().email(),
-      name: z.string()
-    }),
-    description: 'User account created',
-    icon: '👤',
-    tags: ['user', 'auth'],
-    handler: async (event, c) => {
-      // Demonstrate event handler context: read db injected by service middleware
-      const db = c.get('db');
-      // Simulate a write using the db
-      console.log('🗄️ Saving user to DB via event handler with db =', db)
-      console.log('📧 Sending welcome email to:', event.email)
-    }
-  })
-  .cron('0 0 * * *', {
-    description: 'Daily user cleanup',
-    icon: '🧹',
-    tags: ['maintenance'],
-    handler: async (c) => {
-      console.log('🧹 Running daily user cleanup')
-    }
-  })
-  .endpoint(
-    'POST',
-    '/users',
-    {
-      input: z.object({
-        name: z.string().min(1).describe('Full name'),
-        email: z.string().email().describe('Email address')
-      }),
-      output: z.object({
-        id: z.string(),
-        name: z.string(),
-        email: z.string()
-      })
-    },
-    async (data, c) => {
-      const userId = Math.random().toString(36).substring(7)
-      
-      // Insert to DB with c.span()
-      const user = c.span('db.insert', {
-        'db.system': 'postgresql',
-        'db.table': 'users'
-      }, () => {
-        return { id: userId, ...data }
-      })
-      
-      // Emit event (automatically validated with Zod!)
-      await c.emit('user/created', {
-        userId,
-        email: data.email,
-        name: data.name
-      });
-      
-      return user
-    }
-  )
-
-// Order Service
-app.service('orders')
-  .on('order/placed', {
-    schema: z.object({
-      orderId: z.string(),
-      userId: z.string(),
-      total: z.number()
-    }),
-    description: 'Order placed',
-    icon: '📦',
-    tags: ['order', 'payment'],
-    handler: async (event) => {
-      // event is fully typed from the schema!
-      // If you try to access event.dd (which doesn't exist in schema),
-      // TypeScript will warn you, and runtime validation will catch it
-      console.log('📦 Processing order:', event.orderId)
-    }
-  })
-  .endpoint(
-    'POST',
-    '/orders',
-    {
-      input: z.object({
-        userId: z.string(),
-        items: z.array(z.object({
-          productId: z.string(),
-          quantity: z.number().int().positive()
-        })),
-        total: z.number().positive()
-      }),
-      output: z.object({
-        orderId: z.string(),
-        status: z.string(),
-        total: z.number()
-      })
-    },
-    async (data, c) => {
-      const orderId = Math.random().toString(36).substring(7)
-      
-      // Insert order with c.span()
-      c.span('db.insert', {
-        'db.system': 'postgresql',
-        'db.table': 'orders'
-      }, () => {
-        const sleep = (ms: number) => {
-          const start = Date.now()
-          while (Date.now() - start < ms) {}
-        }
-        sleep(40)
-      })
-      
-      // Emit event (type-safe - TypeScript checks the event schema!)
-      await c.emit('order/placed', {
-        orderId,
-        userId: data.userId,
-        total: data.total,
-      })
-      
-      return {
-        orderId,
-        status: 'pending',
-        total: data.total
-      }
-    }
-  )
-
-// ============================================================================
-// Root Route - Hono-style still works!
-// ============================================================================
-
-app.get('/', (c) => {
-  return c.json({
-    name: 'Vision Server - Basic Example',
+  .use(usersModule)
+  .use(ordersModule)
+  .use(productsModule)
+  .use(analyticsModule)
+  .use(notificationsModule)
+  .get('/', () => ({
+    name: 'Vision Server — Basic Example',
     version: '1.0.0',
-    description: 'Demonstrating inline services + file-based routes (Next.js-style)',
-    inline_services: [
-      'Users',
-      'Orders'
-    ],
-    file_based_routes: [
-      'GET /products',
-      'GET /products/:id',
-      'POST /products/create',
-      'GET /analytics/dashboard',
-      'POST /analytics/track',
-      'POST /notifications'
-    ],
-    all_endpoints: [
+    description: 'Elysia-based modules composed via `.use()`',
+    services: ['users', 'orders', 'products', 'analytics', 'notifications'],
+    endpoints: [
       'GET /',
       'GET /users',
       'GET /users/:id',
@@ -313,17 +68,12 @@ app.get('/', (c) => {
       'POST /products/create',
       'GET /analytics/dashboard',
       'POST /analytics/track',
-      'POST /notifications'
+      'POST /notifications',
     ],
-    dashboard: 'http://localhost:9500'
-  })
-})
+    dashboard: 'http://localhost:9500',
+  }))
 
-// ============================================================================
-// Start Server - Vision handles everything!
-// ============================================================================
+app.listen(4000)
 
-app.start(4000)
-
-// Export AppType for Hono RPC client
+/** Export for Eden Treaty clients. */
 export type AppType = typeof app

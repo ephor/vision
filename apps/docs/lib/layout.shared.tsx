@@ -10,12 +10,7 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: (
-        <>
-          <span className="text-2xl">🔮</span>
-          <span className="font-bold">Vision</span>
-        </>
-      ),
+      title: 'Vision',
     },
     links: [
       {
