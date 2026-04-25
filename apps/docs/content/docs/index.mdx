@@ -160,15 +160,15 @@ export type AppType = typeof app  // ← Eden Treaty type for the client
 - Rate limiting via `rateLimit()`
 - End-to-end type safety via Eden Treaty (`treaty<AppType>`)
 
-### Legacy Adapters
+### Framework Adapters
 
-Already have an **existing** Hono, Fastify, or Express app and just want the dashboard? Frozen-but-maintained adapters are still available:
+Prefer to keep your existing Hono, Fastify, or Express app? Adapters give you the Vision dashboard and tracing without switching frameworks:
 
 ```bash
 bun add @getvision/adapter-hono  # or adapter-fastify, adapter-express
 ```
 
-New projects should prefer **Vision Server** — adapters no longer receive new features.
+Adapters and **Vision Server** are equally supported — pick whichever fits your stack.
 
 ---
 
