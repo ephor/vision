@@ -53,5 +53,5 @@
     "eden",
     "event-driven"
   ],
-  "config": {}
+  "config": { "publishOrder": "dependsOnCore" }
 }

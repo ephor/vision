@@ -71,5 +71,5 @@
   "files": [
     "dist"
   ],
-  "config": {}
+  "config": { "publishOrder": "core" }
 }

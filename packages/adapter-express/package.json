@@ -26,5 +26,5 @@
     "express": "^5.1.0",
     "typescript": "5.9.3"
   },
-  "config": {}
+  "config": { "publishOrder": "dependsOnCore" }
 }

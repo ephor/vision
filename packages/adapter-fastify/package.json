@@ -43,5 +43,5 @@
     "typescript": "^5.9.3",
     "zod": "^3.24.4"
   },
-  "config": {}
+  "config": { "publishOrder": "dependsOnCore" }
 }
