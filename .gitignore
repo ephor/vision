@@ -11,3 +11,5 @@ server/dist
 public/dist
 /.idea
 .next
+tsconfig.tsbuildinfo
+next-env.d.ts

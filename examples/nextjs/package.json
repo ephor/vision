@@ -15,7 +15,7 @@
     "@getvision/core": "workspace:*",
     "@getvision/server": "workspace:*",
     "@tanstack/react-query": "^5.100.1",
-    "elysia": "^1.4.28",
+    "elysia": "catalog:",
     "next": "^16.2.4",
     "react": "catalog:",
     "react-dom": "catalog:",

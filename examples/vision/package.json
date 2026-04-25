@@ -20,7 +20,7 @@
     "bullmq": "^5.62.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
-    "elysia": "^1.4.28",
+    "elysia": "catalog:",
     "ioredis": "^5.8.2",
     "zod": "^4.1.11"
   },
