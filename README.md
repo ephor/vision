@@ -77,28 +77,26 @@ app.listen(3000)
 // Dashboard at http://localhost:9500
 ```
 
-### Start from Scratch (Hono-based)
+### Start from Scratch (Elysia-based)
+
+```bash
+bun add @getvision/server elysia zod
+```
 
 ```typescript
-import { Vision } from '@getvision/server'
-import { v } from 'valibot'
+import { createVision, createModule } from '@getvision/server'
+import { z } from 'zod'
 
-const app = new Vision({ service: { name: 'My API' } })
+const usersModule = createModule({ prefix: '/users' })
+  .post(
+    '/',
+    async ({ body }) => ({ id: crypto.randomUUID(), ...body }),
+    { body: z.object({ name: z.string(), email: z.string().email() }) }
+  )
 
-app.service('users').endpoint('POST', '/users', {
-  input: v.object({
-    name: v.string(),
-    email: v.pipe(v.string(), v.email()),
-  }),
-  output: v.object({
-    id: v.string(),
-    name: v.string(),
-  })
-}, async (input) => {
-  return { id: '1', ...input }
-})
-
-app.start(3000)
+createVision({ service: { name: 'My API' } })
+  .use(usersModule)
+  .listen(3000)
 // Dashboard at http://localhost:9500
 ```
 
@@ -106,12 +104,11 @@ app.start(3000)
 
 ## Supported Frameworks
 
-- **Express** - Stable
-- **Fastify** - Stable  
-- **Hono** - Stable
-- tRPC - In development
-- NestJS - Planned
-- Next.js API Routes - Planned
+- **Elysia** (via `@getvision/server`) - Stable
+- **Next.js** (App Router catch-all) - Stable
+- **Express** (via adapter) - Stable
+- **Fastify** (via adapter) - Stable
+- **Hono** (via adapter) - Stable
 
 ---
 

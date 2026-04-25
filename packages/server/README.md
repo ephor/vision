@@ -2,49 +2,58 @@
 
 **Meta-framework with built-in observability — everything you need, nothing you don't.**
 
-Built on Hono. Automatic tracing. Type-safe APIs. Pub/Sub & Cron. Zero config. Supports both Service Builder and File-based routing.
+Built on Elysia. Automatic tracing. Type-safe APIs. Pub/Sub & Cron. Zero config. Eden Treaty ready.
 
 ## Why Vision Server?
 
 **vs NestJS:** Faster, simpler, better DX  
 **vs Encore.ts:** Open source, no vendor lock-in  
-**vs Plain Hono:** Built-in observability, type-safety, pub/sub & cron
+**vs Plain Elysia:** Built-in observability, type-safety, pub/sub & cron
 
 ## Quick Start
 
 ```bash
-npm install @getvision/server
+bun add @getvision/server elysia zod
 ```
 
 ```typescript
-import { Vision } from '@getvision/server'
+import { createVision, createModule, defineEvents } from '@getvision/server'
 import { z } from 'zod'
 
-const app = new Vision({
-  service: {
-    name: 'My API',
-    version: '1.0.0'
-  }
-})
-
-// Define services
-app.service('users')
-  .endpoint('GET', '/users/:id', {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  }, async ({ id }, c) => {
-    // c.span() is built-in! 🔥
-    const user = c.span('db.select', { 'db.table': 'users' }, () => {
-      return { id, name: 'John' }
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        handler: async (event) => {
+          console.log('[welcome email] →', event.email)
+        },
+      },
     })
-    return user
+  )
+  .get('/', ({ span }) => {
+    const users = span('db.select', { 'db.table': 'users' }, () => [
+      { id: '1', name: 'Alice' },
+    ])
+    return { users }
   })
-  .on('user/created', async (event) => {
-    console.log('User created:', event.data)
-  })
+  .post(
+    '/',
+    async ({ body, emit }) => {
+      const id = crypto.randomUUID()
+      await emit('user/created', { userId: id, email: body.email })
+      return { id, ...body }
+    },
+    { body: z.object({ name: z.string(), email: z.string().email() }) }
+  )
 
-// Start server
-app.start(3000)
+const app = createVision({
+  service: { name: 'My API', version: '1.0.0' },
+  vision: { enabled: true },
+  pubsub: { devMode: true },
+})
+  .use(usersModule)
+  .listen(3000)
 ```
 
 **That's it!** You get:
@@ -52,6 +61,7 @@ app.start(3000)
 - ✅ Automatic request tracing
 - ✅ Type-safe validation
 - ✅ Pub/Sub events (BullMQ-based)
+- ✅ Eden Treaty client support (`treaty<typeof app>`)
 
 ## Features
 
