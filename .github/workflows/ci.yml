@@ -32,6 +32,10 @@ jobs:
     outputs:
       upgraded: ${{ steps.release.outputs.upgraded }}
       upgraded-packages: ${{ steps.release.outputs.upgraded-packages }}
+      core-packages: ${{ steps.split.outputs.core-packages }}
+      dependent-packages: ${{ steps.split.outputs.dependent-packages }}
+      has-core: ${{ steps.split.outputs.has-core }}
+      has-dependents: ${{ steps.split.outputs.has-dependents }}
       git-head-ref: ${{ steps.set-git-head-ref.outputs.git-head-ref }}
     steps:
       - name: Checkout
@@ -79,77 +83,38 @@ jobs:
       - name: Set git HEAD ref
         id: set-git-head-ref
         run: echo "git-head-ref=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-  publish-core:
-    name: Publish core to NPM
-    needs: build
-    if: needs.build.outputs.upgraded == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code at new version commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.build.outputs.git-head-ref }}
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: '1.3.11'
-      - name: Cache Bun packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-      - name: Cache Turborepo
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ hashFiles('**/bun.lock', '**/bun.lockb', 'turbo.json') }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-      - name: Install deps
-        run: bun install --frozen-lockfile
-      - name: Build
-        run: bunx turbo run build
-      - name: Get NPM Tag
-        id: get_tag
+      - name: Split upgraded packages by publishOrder
+        id: split
+        if: steps.release.outputs.upgraded == 'true'
         run: |
-          if [[ "${{ github.ref_name }}" == release* ]]; then
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "tag=next" >> $GITHUB_OUTPUT
-          fi
-      - name: Sync internal @getvision/* dep versions
-        if: steps.get_tag.outputs.tag != ''
-        env:
-          CI: 'true'
-        run: bun scripts/sync-internal-deps.ts
-      - name: Publish core-tier packages
-        if: steps.get_tag.outputs.tag != ''
-        run: |
-          PACKAGES='${{ needs.build.outputs.upgraded-packages }}'
-          TAG=${{ steps.get_tag.outputs.tag }}
-          echo "$PACKAGES" | jq -c '.[]' | while read pkg; do
+          PACKAGES='${{ steps.release.outputs.upgraded-packages }}'
+          CORE='[]'
+          DEPS='[]'
+          for pkg in $(echo "$PACKAGES" | jq -c '.[]'); do
             PATH_VAL=$(echo "$pkg" | jq -r '.path')
             ORDER=$(jq -r '.config.publishOrder // "dependsOnCore"' "$PATH_VAL/package.json")
             if [ "$ORDER" = "core" ]; then
-              echo "Publishing $PATH_VAL (order: core)"
-              cd "$PATH_VAL" && bun publish --access public --tag "$TAG" && cd -
+              CORE=$(echo "$CORE" | jq -c ". += [$pkg]")
+            else
+              DEPS=$(echo "$DEPS" | jq -c ". += [$pkg]")
             fi
           done
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          {
+            echo "core-packages=$CORE"
+            echo "dependent-packages=$DEPS"
+            echo "has-core=$(echo "$CORE" | jq 'length > 0')"
+            echo "has-dependents=$(echo "$DEPS" | jq 'length > 0')"
+          } >> $GITHUB_OUTPUT
 
-  publish-dependents:
-    name: Publish dependents to NPM
-    needs: [build, publish-core]
-    if: needs.build.outputs.upgraded == 'true'
+  publish-core:
+    name: Publish ${{ matrix.package.name }} (core) to NPM
+    needs: build
+    if: needs.build.outputs.has-core == 'true'
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
       matrix:
-        package: ${{ fromJSON(needs.build.outputs.upgraded-packages) }}
+        package: ${{ fromJSON(needs.build.outputs.core-packages) }}
     steps:
       - name: Checkout code at new version commit
         uses: actions/checkout@v4
@@ -185,18 +150,69 @@ jobs:
           elif [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "tag=next" >> $GITHUB_OUTPUT
           fi
-      - name: Skip if core-tier
-        id: check_order
-        run: |
-          ORDER=$(jq -r '.config.publishOrder // "dependsOnCore"' '${{ matrix.package.path }}/package.json')
-          echo "order=$ORDER" >> $GITHUB_OUTPUT
       - name: Sync internal @getvision/* dep versions
-        if: steps.get_tag.outputs.tag != '' && steps.check_order.outputs.order == 'dependsOnCore'
+        if: steps.get_tag.outputs.tag != ''
         env:
           CI: 'true'
         run: bun scripts/sync-internal-deps.ts
       - name: Publish ${{ matrix.package.name }} to NPM
-        if: steps.get_tag.outputs.tag != '' && steps.check_order.outputs.order == 'dependsOnCore'
+        if: steps.get_tag.outputs.tag != ''
+        working-directory: ${{ matrix.package.path }}
+        run: bun publish --access public --tag ${{ steps.get_tag.outputs.tag }}
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-dependents:
+    name: Publish ${{ matrix.package.name }} to NPM
+    needs: [build, publish-core]
+    if: always() && needs.build.outputs.has-dependents == 'true' && (needs.publish-core.result == 'success' || needs.publish-core.result == 'skipped')
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        package: ${{ fromJSON(needs.build.outputs.dependent-packages) }}
+    steps:
+      - name: Checkout code at new version commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.git-head-ref }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.11'
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/bun.lock', '**/bun.lockb', 'turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bunx turbo run build
+      - name: Get NPM Tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.ref_name }}" == release* ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "tag=next" >> $GITHUB_OUTPUT
+          fi
+      - name: Sync internal @getvision/* dep versions
+        if: steps.get_tag.outputs.tag != ''
+        env:
+          CI: 'true'
+        run: bun scripts/sync-internal-deps.ts
+      - name: Publish ${{ matrix.package.name }} to NPM
+        if: steps.get_tag.outputs.tag != ''
         working-directory: ${{ matrix.package.path }}
         run: bun publish --access public --tag ${{ steps.get_tag.outputs.tag }}
         env:
