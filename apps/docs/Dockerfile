@@ -57,7 +57,6 @@ USER nextjs
 # Copy standalone build
 COPY --from=installer --chown=nextjs:nodejs /app/apps/docs/.next/standalone ./
 COPY --from=installer --chown=nextjs:nodejs /app/apps/docs/.next/static ./apps/docs/.next/static
-COPY --from=installer --chown=nextjs:nodejs /app/apps/docs/public ./apps/docs/public
 
 EXPOSE 3000
 ENV PORT=3000
