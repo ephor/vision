@@ -14,7 +14,7 @@ FROM base AS builder
 WORKDIR /app
 RUN bun add -g turbo
 COPY . .
-RUN turbo prune app --docker
+RUN turbo prune docs --docker
 
 # ============================================
 # Installer stage - install dependencies and build
