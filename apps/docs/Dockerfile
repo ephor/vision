@@ -26,12 +26,15 @@ WORKDIR /app
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/bun.lock ./bun.lock
 
-# Install dependencies with bun
-RUN bun install
+# Install dependencies with bun (skip postinstall — fumadocs-mdx needs source.config.ts)
+RUN bun install --ignore-scripts
 
 # Copy source code
 COPY --from=builder /app/out/full/ .
 COPY --from=builder /app/turbo.json ./turbo.json
+
+# Run skipped postinstall scripts now that source is available
+RUN cd apps/docs && bun run postinstall
 
 # Build Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
