@@ -538,8 +538,30 @@ export function createVision(config: VisionConfig) {
         })
       }
 
+      // Streaming responses (SSE, NDJSON, AI SDK `toUIMessageStreamResponse()`,
+      // etc.) MUST NOT be buffered here. `response.clone().text()` awaits the
+      // entire stream — and because Elysia awaits `onAfterHandle` before handing
+      // the response to the runtime's HTTP layer, doing so blocks the chunk
+      // flush to the client until generation completes (i.e. the user sees the
+      // full reply in one shot instead of token-by-token).
+      //
+      // Detect streaming via content-type or via a `ReadableStream` body that
+      // lacks `content-length`. Record a `<stream>` placeholder in the trace.
+      const contentType = resHeaders['content-type'] ?? ''
+      const isStreamingContentType =
+        contentType.includes('text/event-stream') ||
+        contentType.includes('application/x-ndjson') ||
+        contentType.includes('stream')
+      const isStreamingBody =
+        isRawResponse &&
+        response.body instanceof ReadableStream &&
+        !resHeaders['content-length']
+      const isStreaming = isStreamingContentType || isStreamingBody
+
       let responseBody: unknown = response
-      if (isRawResponse) {
+      if (isStreaming) {
+        responseBody = '<stream>'
+      } else if (isRawResponse) {
         // Clone before reading so we don't consume the stream that the runtime
         // still needs to flush to the client. Try JSON first, fall back to text.
         try {
