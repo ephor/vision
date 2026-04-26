@@ -11,6 +11,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://getvision.dev'
   ),
+  robots: {
+    index: true,
+    follow: true,
+  },
+  verification: {
+    google: 'gRXIMDfMK13pfDWOy8lxvHMB6RhduDzBp9guQwAhU7A',
+  },
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
