@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Copy, Play, Plus, X, Clock, Send, Plug } from 'lucide-react'
+import { Copy, Play, Plus, X, Clock, Send, Plug, KeyRound } from 'lucide-react'
 import { Button } from './ui/button'
 import { SectionCard } from './ui/section-card'
 import { Badge } from './ui/badge'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Checkbox } from './ui/checkbox'
-import { useRoutes, useAddClientMetrics } from '../hooks/useVision'
+import { useRoutes, useAddClientMetrics } from '@/hooks/useVision'
 import { TracesPanel } from './TracesPanel'
 import { JsonEditor } from './JsonEditor'
 import { JsonViewer } from './JsonViewer'
 import { TraceLogs } from './TraceLogs'
-import { useToast } from '../contexts/ToastContext'
-import { getBackendUrl } from '../lib/config'
-import { parseJson5 } from '../lib/parseJson5'
+import { useToast } from '@/contexts/ToastContext'
+import { getBackendUrl } from '@/lib/config'
+import { parseJson5 } from '@/lib/parseJson5'
 import type { RouteMetadata } from '@getvision/core'
+
+type HeaderEntry = { key: string; value: string; enabled: boolean }
 
 type ExplorerTab = {
   id: string
@@ -25,6 +27,7 @@ type ExplorerTab = {
   queryParams: Record<string, string>
   // Custom query params added by user (not from schema)
   customQueryParams: Array<{ key: string; value: string; enabled: boolean }>
+  headers: HeaderEntry[]
   requestBody: string
   response: any
   requestTime: number | null
@@ -47,6 +50,7 @@ export function ApiExplorer() {
     urlParams: {},
     queryParams: {},
     customQueryParams: [],
+    headers: [],
     requestBody: '',
     response: null,
     requestTime: null,
@@ -55,20 +59,29 @@ export function ApiExplorer() {
 
   const [tabs, setTabs] = useState<ExplorerTab[]>([initialTab])
   const [activeTabId, setActiveTabId] = useState<string>(initialTab.id)
+  const [globalHeaders, setGlobalHeaders] = useState<HeaderEntry[]>([])
   const [loading, setLoading] = useState(false)
 
   const STORAGE_TABS_KEY = 'vision.apiExplorer.tabs'
   const STORAGE_ACTIVE_KEY = 'vision.apiExplorer.activeTabId'
+  const STORAGE_GLOBAL_HEADERS_KEY = 'vision.apiExplorer.globalHeaders'
 
   // Load persisted tabs once
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_TABS_KEY)
       const rawActive = localStorage.getItem(STORAGE_ACTIVE_KEY)
+      const rawGlobalHeaders = localStorage.getItem(STORAGE_GLOBAL_HEADERS_KEY)
+      if (rawGlobalHeaders) {
+        const parsedGlobalHeaders: HeaderEntry[] = JSON.parse(rawGlobalHeaders)
+        if (Array.isArray(parsedGlobalHeaders)) {
+          setGlobalHeaders(parsedGlobalHeaders)
+        }
+      }
       if (raw) {
         const parsed: ExplorerTab[] = JSON.parse(raw)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setTabs(parsed)
+          setTabs(parsed.map(t => ({ ...t, customQueryParams: t.customQueryParams || [], headers: t.headers || [] })))
           if (rawActive && parsed.some(t => t.id === rawActive)) {
             setActiveTabId(rawActive)
           } else {
@@ -84,8 +97,9 @@ export function ApiExplorer() {
     try {
       localStorage.setItem(STORAGE_TABS_KEY, JSON.stringify(tabs))
       localStorage.setItem(STORAGE_ACTIVE_KEY, activeTabId)
+      localStorage.setItem(STORAGE_GLOBAL_HEADERS_KEY, JSON.stringify(globalHeaders))
     } catch {}
-  }, [tabs, activeTabId])
+  }, [tabs, activeTabId, globalHeaders])
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0]
 
@@ -95,7 +109,7 @@ export function ApiExplorer() {
     const requestBody = route.requestBody?.template || ''
     
     setTabs(tabs => tabs.map(t => t.id === activeTabId
-      ? { ...t, route, title: route.path, response: null, requestTime: null, executedAt: null, urlParams: {}, queryParams: {}, customQueryParams: t.customQueryParams || [], requestBody }
+      ? { ...t, route, title: route.path, response: null, requestTime: null, executedAt: null, urlParams: {}, queryParams: {}, customQueryParams: t.customQueryParams || [], headers: t.headers || [], requestBody }
       : t
     ))
   }
@@ -128,6 +142,13 @@ export function ApiExplorer() {
         : ''
       
       const fullUrl = `${getBackendUrl()}${url}${queryString}`
+      const customHeaders = [...globalHeaders, ...(tab.headers || [])].reduce<Record<string, string>>((acc, header) => {
+        const key = header.key.trim()
+        if (header.enabled && key) {
+          acc[key] = header.value
+        }
+        return acc
+      }, {})
       
       // Prepare request options
       const options: RequestInit = {
@@ -135,6 +156,7 @@ export function ApiExplorer() {
         headers: {
           'Content-Type': 'application/json',
           'X-Vision-Session': tab.sessionId,
+          ...customHeaders,
         },
       }
       
@@ -225,6 +247,108 @@ export function ApiExplorer() {
     } : t))
   }
 
+  const addHeader = (scope: 'global' | 'tab') => {
+    if (scope === 'global') {
+      setGlobalHeaders(headers => [...headers, { key: '', value: '', enabled: true }])
+      return
+    }
+
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      headers: [...(t.headers || []), { key: '', value: '', enabled: true }]
+    } : t))
+  }
+
+  const updateHeader = (scope: 'global' | 'tab', index: number, field: keyof HeaderEntry, value: string | boolean) => {
+    if (scope === 'global') {
+      setGlobalHeaders(headers => headers.map((header, i) => i === index ? { ...header, [field]: value } : header))
+      return
+    }
+
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      headers: (t.headers || []).map((header, i) => i === index ? { ...header, [field]: value } : header)
+    } : t))
+  }
+
+  const removeHeader = (scope: 'global' | 'tab', index: number) => {
+    if (scope === 'global') {
+      setGlobalHeaders(headers => headers.filter((_, i) => i !== index))
+      return
+    }
+
+    setTabs(tabs => tabs.map(t => t.id === activeTabId ? {
+      ...t,
+      headers: (t.headers || []).filter((_, i) => i !== index)
+    } : t))
+  }
+
+  const renderHeadersEditor = (scope: 'global' | 'tab', headers: HeaderEntry[]) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-medium">{scope === 'global' ? 'Global Headers' : 'Tab Headers'}</Label>
+          <p className="text-xs text-muted-foreground">
+            {scope === 'global' ? 'Applied to every tab.' : 'Applied only to this tab and overrides globals with the same key.'}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => addHeader(scope)}
+          className="h-6 px-2 text-xs"
+        >
+          <Plus className="w-3 h-3 mr-1" />
+          Add
+        </Button>
+      </div>
+      {headers.length > 0 ? (
+        <div className="space-y-2">
+          {headers.map((header, index) => (
+            <div key={index} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-1 flex items-center justify-center">
+                <Checkbox
+                  checked={header.enabled}
+                  onCheckedChange={(checked: boolean) => updateHeader(scope, index, 'enabled', checked)}
+                />
+              </div>
+              <Input
+                type="text"
+                value={header.key}
+                onChange={(e) => updateHeader(scope, index, 'key', e.target.value)}
+                placeholder="Header"
+                className="col-span-4 text-sm font-mono"
+              />
+              <Input
+                type="text"
+                value={header.value}
+                onChange={(e) => updateHeader(scope, index, 'value', e.target.value)}
+                placeholder={scope === 'global' ? 'Value for all tabs' : 'Value for this tab'}
+                className="col-span-6 text-sm font-mono"
+              />
+              <div className="col-span-1 flex justify-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeHeader(scope, index)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-3 bg-muted rounded-lg border">
+          <p className="text-sm text-muted-foreground">No {scope === 'global' ? 'global' : 'tab'} headers yet.</p>
+        </div>
+      )}
+    </div>
+  )
+
   const addTab = () => {
     const t: ExplorerTab = {
       id: genId(),
@@ -234,6 +358,7 @@ export function ApiExplorer() {
       urlParams: {},
       queryParams: {},
       customQueryParams: [],
+      headers: [],
       requestBody: '',
       response: null,
       requestTime: null,
@@ -498,6 +623,13 @@ export function ApiExplorer() {
                       </div>
                     </div>
                   )}
+
+                  <SectionCard title="Headers" icon={KeyRound} contentClassName="space-y-4">
+                    {renderHeadersEditor('global', globalHeaders)}
+                    <div className="border-t border-border pt-4">
+                      {renderHeadersEditor('tab', activeTab.headers || [])}
+                    </div>
+                  </SectionCard>
 
                   {/* Request Body */}
                   {['POST', 'PUT', 'PATCH'].includes(activeTab.route.method) && (
