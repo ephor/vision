@@ -1,5 +1,12 @@
 # web
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [767bb3e]
+  - @getvision/core@0.2.0
+
 ## 0.0.9
 
 ### Patch Changes
