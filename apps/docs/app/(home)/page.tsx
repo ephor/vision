@@ -1,4 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Vision — Universal Observability for API Development',
+  description:
+    'Open-source observability dashboard for REST, GraphQL, tRPC, and MCP APIs. Real-time tracing, request explorer, and schema validation — under 5 minutes to set up.',
+  alternates: {
+    canonical: '/',
+  },
+};
 
 export default function HomePage() {
   return (
