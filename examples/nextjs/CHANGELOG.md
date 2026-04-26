@@ -1,5 +1,13 @@
 # nextjs-vision-example
 
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [eaf25c9]
+  - @getvision/core@0.2.1
+  - @getvision/server@1.0.1
+
 ## 0.0.1
 
 ### Patch Changes

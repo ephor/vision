@@ -1,5 +1,11 @@
 # @getvision/core
 
+## 0.2.1
+
+### Patch Changes
+
+- eaf25c9: Introduced functionality to manage global and tab-specific headers in the API Explorer. Headers are persisted locally and dynamically applied to requests, allowing for greater customization and flexibility.
+
 ## 0.2.0
 
 ### Minor Changes
