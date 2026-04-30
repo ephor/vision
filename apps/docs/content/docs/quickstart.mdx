@@ -165,7 +165,7 @@ Pub/sub is powered by BullMQ — in-memory during development (`pubsub: { devMod
 On the frontend, import the exported `AppType` and get a fully-typed RPC client — no codegen:
 
 ```typescript title="frontend/api.ts"
-import { treaty } from '@elysiajs/eden'
+import { treaty } from '@elysia/eden'
 import type { AppType } from '../server'
 
 const api = treaty<AppType>('http://localhost:3000')

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elysiajs/eden": "^1.4.9",
+    "@elysia/eden": "^1.4.10",
     "@getvision/core": "workspace:*",
     "@getvision/server": "workspace:*",
     "@tanstack/react-query": "^5.100.1",

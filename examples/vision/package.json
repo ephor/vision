@@ -14,7 +14,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@elysiajs/eden": "^1.4.9",
+    "@elysia/eden": "^1.4.10",
     "@getvision/server": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "bullmq": "^5.62.0",

@@ -1,12 +1,13 @@
 import { Elysia } from 'elysia'
 import { VisionCore, runInTraceContext, generateTemplate } from '@getvision/core'
-import type { RouteMetadata } from '@getvision/core'
+import type { LogLevel, RouteMetadata } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import type { z } from 'zod'
 import type { QueueEventsOptions, QueueOptions, WorkerOptions } from 'bullmq'
 import { EventBus } from './event-bus'
+import type { EventBusTraceContext } from './event-bus'
 import { eventRegistry } from './event-registry'
 
 // ---------------------------------------------------------------------------
@@ -21,6 +22,15 @@ export interface VisionALSContext {
   vision: VisionCore
   traceId: string
   rootSpanId: string
+  spanId?: string
+}
+
+export interface VisionLogger {
+  log: (message: string, meta?: Record<string, unknown>) => void
+  info: (message: string, meta?: Record<string, unknown>) => void
+  warn: (message: string, meta?: Record<string, unknown>) => void
+  error: (message: string, meta?: Record<string, unknown>) => void
+  debug: (message: string, meta?: Record<string, unknown>) => void
 }
 
 /**
@@ -41,6 +51,18 @@ export interface VisionDerived {
   traceId: string
 }
 
+export interface EventHandlerContext {
+  span: VisionDerived['span']
+  addContext: VisionDerived['addContext']
+  traceId: string
+  logger: VisionLogger
+}
+
+export interface CronHandlerContext extends EventHandlerContext {
+  jobId?: string
+  timestamp: number
+}
+
 /**
  * Configuration for a single pub/sub event subscription.
  */
@@ -51,7 +73,7 @@ export interface EventConfig<T extends Record<string, unknown> = Record<string, 
   tags?: string[]
   /** Max concurrent jobs for this handler (BullMQ worker concurrency). */
   concurrency?: number
-  handler: (event: T) => Promise<void> | void
+  handler: (event: T, context: EventHandlerContext) => Promise<void> | void
 }
 
 /** Map of event name → config. Used by `onEvents()` and `defineEvents()`. */
@@ -79,7 +101,7 @@ export interface CronConfig {
   description?: string
   icon?: string
   tags?: string[]
-  handler: (context: { jobId?: string; timestamp: number }) => Promise<void> | void
+  handler: (context: CronHandlerContext) => Promise<void> | void
 }
 
 /** Map of cron name → config. Used by `defineCrons()`. */
@@ -175,6 +197,15 @@ export interface VisionConfig {
     worker?: Omit<WorkerOptions, 'connection'>
     queueEvents?: Omit<QueueEventsOptions, 'connection'>
   }
+  /**
+   * Maximum HTTP request body size. Accepts either raw bytes (`10_000_000`)
+   * or a size string with unit suffix: `'b' | 'kb' | 'mb' | 'gb'`
+   * (case-insensitive, decimals allowed — e.g. `'10mb'`, `'1.5gb'`).
+   *
+   * Passed to Bun's `serve.maxRequestBodySize`. Defaults to Bun's default
+   * (~128 MB) when omitted.
+   */
+  bodyLimit?: number | string
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +248,10 @@ interface VisionAppHandle {
   app: unknown
   /** Memoized promise returned by `ready()`. */
   readyPromise?: Promise<void>
+  /** Memoized promise returned by `close()` — ensures idempotency. */
+  closePromise?: Promise<void>
+  /** True once `close()` has been initiated. */
+  closed: boolean
   /** Config snapshot for `ready()` to consume lazily. */
   config: VisionConfig
 }
@@ -251,6 +286,37 @@ if (!globalForPending[PENDING_DEFINES_KEY]) {
 }
 function getPendingDefines(): PendingDefines {
   return globalForPending[PENDING_DEFINES_KEY] as PendingDefines
+}
+
+// ---------------------------------------------------------------------------
+// Shared no-op fallbacks
+// ---------------------------------------------------------------------------
+// Hoisted module-scoped so we don't re-allocate them per request, per event
+// dispatch, or per `createModule()` instantiation. Used wherever a real
+// Vision context isn't available (vision: { enabled: false }, modules used
+// outside of `createVision`, etc.).
+
+const noopSpan: VisionDerived['span'] = <T>(
+  _n: string,
+  _a?: Record<string, unknown>,
+  fn?: () => T
+): T => (fn ? fn() : (undefined as unknown as T))
+
+const noopAddContext: VisionDerived['addContext'] = () => {}
+
+const noopLogger: VisionLogger = {
+  log: (msg, meta) => console.log(msg, meta),
+  info: (msg, meta) => console.info(msg, meta),
+  warn: (msg, meta) => console.warn(msg, meta),
+  error: (msg, meta) => console.error(msg, meta),
+  debug: (msg, meta) => console.debug(msg, meta),
+}
+
+const noopEventContext: EventHandlerContext = {
+  span: noopSpan,
+  addContext: noopAddContext,
+  traceId: '',
+  logger: noopLogger,
 }
 
 // ---------------------------------------------------------------------------
@@ -324,30 +390,13 @@ export function createVision(config: VisionConfig) {
     eventBus,
     visionCore,
     initialized: false,
+    closed: false,
     config: visionConfig,
     app: undefined,
-    cleanup: async () => {
-      try {
-        stopDrizzleStudio({ log: false })
-      } catch {
-        /* ignore */
-      }
-      try {
-        await eventBus.close()
-      } catch {
-        /* ignore */
-      }
-    },
+    cleanup: async () => doClose(handle),
   }
 
-  const noopSpan: VisionDerived['span'] = <T>(
-    _n: string,
-    _a?: Record<string, unknown>,
-    fn?: () => T
-  ): T => (fn ? fn() : (undefined as unknown as T))
-
   const dashboardOrigin = `http://localhost:${visionConfig.vision?.port ?? 9500}`
-
   const app = new Elysia()
     .decorate('visionCore', visionCore as VisionCore | null)
     .decorate('eventBus', eventBus)
@@ -442,14 +491,11 @@ export function createVision(config: VisionConfig) {
         for (const [k, v] of Object.entries(attributes)) {
           tracer.setAttribute(childSpan.id, k, v)
         }
-        try {
-          const result = fn
-            ? fn()
-            : (undefined as ReturnType<NonNullable<typeof fn>>)
+        const endSpanOk = () => {
           const completed = tracer.endSpan(childSpan.id)
           if (completed) visionCore.getTraceStore().addSpan(trace.id, completed)
-          return result
-        } catch (err) {
+        }
+        const endSpanErr = (err: unknown) => {
           tracer.setAttribute(childSpan.id, 'error', true)
           tracer.setAttribute(
             childSpan.id,
@@ -458,6 +504,21 @@ export function createVision(config: VisionConfig) {
           )
           const completed = tracer.endSpan(childSpan.id)
           if (completed) visionCore.getTraceStore().addSpan(trace.id, completed)
+        }
+        try {
+          const result = fn
+            ? fn()
+            : (undefined as ReturnType<NonNullable<typeof fn>>)
+          if (result instanceof Promise) {
+            return result.then(
+              (v) => { endSpanOk(); return v },
+              (err) => { endSpanErr(err); throw err }
+            ) as ReturnType<NonNullable<typeof fn>>
+          }
+          endSpanOk()
+          return result
+        } catch (err) {
+          endSpanErr(err)
           throw err
         }
       }
@@ -470,7 +531,7 @@ export function createVision(config: VisionConfig) {
       }
 
       const emit: VisionDerived['emit'] = (eventName, data) =>
-        eventBus.emit(eventName, data)
+        eventBus.emit(eventName, data, { traceId: trace.id, rootSpanId: rootSpan.id })
 
       return {
         span,
@@ -688,6 +749,7 @@ export function createVision(config: VisionConfig) {
    */
   const appWithReady = Object.assign(app, {
     ready: (): Promise<void> => doReady(handle),
+    close: (): Promise<void> => doClose(handle),
   })
 
   return appWithReady
@@ -727,12 +789,12 @@ function doReady(handle: VisionAppHandle): Promise<void> {
     for (const entry of pending.events) {
       if (entry.registered) continue
       entry.registered = true
-      registerEventHandler(handle.eventBus, entry.name, entry.cfg)
+      registerEventHandler(handle.eventBus, entry.name, entry.cfg, visionCore)
     }
     for (const entry of pending.crons) {
       if (entry.registered) continue
       entry.registered = true
-      void scheduleCron(handle.eventBus, entry.name, entry.cfg)
+      void scheduleCron(handle.eventBus, entry.name, entry.cfg, visionCore)
     }
 
     if (!visionCore) {
@@ -833,6 +895,79 @@ export async function ready(app: unknown): Promise<void> {
 }
 
 /**
+ * Gracefully tear down a Vision app. Idempotent — multiple calls return the
+ * same in-flight promise. Order:
+ *
+ * 1. Drain BullMQ workers / queues (`EventBus.close()`).
+ * 2. Stop the Vision Dashboard WebSocket server (`VisionCore.stop()`).
+ * 3. Stop the optional Drizzle Studio child process.
+ *
+ * Errors in any step are swallowed so a partial close still releases as much
+ * as possible — we never want shutdown to throw and mask the original cause
+ * of teardown (HMR reload, SIGTERM, vitest `afterAll`).
+ *
+ * @example
+ * ```ts
+ * import { createVision, close } from '@getvision/server'
+ *
+ * const app = createVision({ ... })
+ * // …
+ * await close(app)
+ *
+ * // Or in vitest:
+ * afterAll(() => close(app))
+ *
+ * // Or in `bun --hot`:
+ * import.meta.hot?.dispose(() => close(app))
+ * ```
+ */
+export async function close(app: unknown): Promise<void> {
+  const fn = (app as { close?: () => Promise<void> }).close
+  if (typeof fn !== 'function') {
+    throw new Error(
+      '[vision] `close(app)` called on an object that is not a Vision app. ' +
+        'Make sure `app` was built with `createVision(...)`.'
+    )
+  }
+  await fn()
+}
+
+/**
+ * Idempotent shutdown driver. Memoized on the handle so concurrent callers
+ * (e.g. SIGTERM + HMR dispose firing simultaneously) share a single teardown.
+ */
+function doClose(handle: VisionAppHandle): Promise<void> {
+  if (handle.closePromise) return handle.closePromise
+  handle.closed = true
+  handle.closePromise = (async () => {
+    // 1. Drain workers first — in-flight jobs need access to the dashboard
+    //    WS for span flushes before we kill the core.
+    try {
+      await handle.eventBus.close()
+    } catch {
+      /* ignore — best-effort drain */
+    }
+    // 2. Stop the dashboard server.
+    try {
+      if (handle.visionCore) await handle.visionCore.stop()
+    } catch {
+      /* ignore */
+    }
+    // 3. Drizzle Studio (if we spawned it).
+    try {
+      stopDrizzleStudio({ log: false })
+    } catch {
+      /* ignore */
+    }
+    // Clear the global instance pointer if we owned it, so the next
+    // `createVision()` in the same process starts fresh.
+    const state = getGlobalState()
+    if (state.instance === handle) state.instance = null
+  })()
+  return handle.closePromise
+}
+
+/**
  * Register process-level handlers (signals, Bun hot-reload).
  *
  * Only called from `onStart` — makes no sense when Vision runs under a host
@@ -920,13 +1055,10 @@ async function installProcessHandlers(handle: VisionAppHandle): Promise<void> {
  *   .post('/', ({ body, emit }) => emit('user/created', body))
  * ```
  */
-export function createModule(opts?: { prefix?: string }) {
-  const noopSpan = (<T,>(_n: string, _a?: Record<string, unknown>, fn?: () => T): T =>
-    (fn ? fn() : (undefined as unknown as T))) as VisionDerived['span']
-  
-  return new Elysia({ prefix: opts?.prefix })
+export function createModule<const Prefix extends string = ''>(opts?: { prefix?: Prefix }) {
+  return new Elysia<Prefix>({ prefix: opts?.prefix })
     .decorate('span', noopSpan)
-    .decorate('addContext', (() => {}) as VisionDerived['addContext'])
+    .decorate('addContext', noopAddContext)
     .decorate('traceId', '')
 }
 
@@ -934,7 +1066,7 @@ export function createModule(opts?: { prefix?: string }) {
 // Event subscription helpers
 // ---------------------------------------------------------------------------
 
-type HasEventBus = { eventBus: EventBus }
+type HasEventBus = { eventBus: EventBus; visionCore?: VisionCore | null }
 
 /**
  * Register a single pub/sub event handler.
@@ -947,7 +1079,7 @@ export function onEvent<T extends Record<string, unknown>>(
   eventName: string,
   config: EventConfig<T>
 ): void {
-  registerEventHandler(decorator.eventBus, eventName, config)
+  registerEventHandler(decorator.eventBus, eventName, config, decorator.visionCore ?? null)
 }
 
 /**
@@ -958,7 +1090,7 @@ export function onEvent<T extends Record<string, unknown>>(
  */
 export function onEvents(decorator: HasEventBus, events: EventMap): void {
   for (const [name, cfg] of Object.entries(events)) {
-    registerEventHandler(decorator.eventBus, name, cfg)
+    registerEventHandler(decorator.eventBus, name, cfg, decorator.visionCore ?? null)
   }
 }
 
@@ -1047,13 +1179,32 @@ export function defineCrons(crons: CronMap) {
   return new Elysia()
 }
 
-async function scheduleCron(bus: EventBus, name: string, cfg: CronConfig): Promise<void> {
+async function scheduleCron(
+  bus: EventBus,
+  name: string,
+  cfg: CronConfig,
+  visionCore: VisionCore | null
+): Promise<void> {
+  const runCronHandler = async (jobId: string | undefined, timestamp: number) => {
+    if (!visionCore) {
+      await cfg.handler({ ...noopEventContext, jobId, timestamp })
+      return
+    }
+    const { context, endRootSpan } = buildHandlerContext(visionCore, `cron.${name}`)
+    const ctx: CronHandlerContext = { ...context, jobId, timestamp }
+    try {
+      await cfg.handler(ctx)
+      endRootSpan()
+    } catch (err) {
+      endRootSpan(err)
+      throw err
+    }
+  }
+
   eventRegistry.registerCron(
     name,
     cfg.schedule,
-    async (ctx) => {
-      await cfg.handler(ctx)
-    },
+    async (ctx) => { await runCronHandler(ctx.jobId, ctx.timestamp) },
     { description: cfg.description, icon: cfg.icon, tags: cfg.tags }
   )
 
@@ -1065,7 +1216,7 @@ async function scheduleCron(bus: EventBus, name: string, cfg: CronConfig): Promi
   )
 
   bus.registerCronHandler(name, async (ctx) => {
-    await cfg.handler(ctx)
+    await runCronHandler(ctx.jobId, ctx.timestamp)
   })
 }
 
@@ -1198,7 +1349,8 @@ export function rateLimit(options: RateLimitOptions) {
 function registerEventHandler(
   bus: EventBus,
   eventName: string,
-  config: EventConfig<any>
+  config: EventConfig<any>,
+  visionCore: VisionCore | null
 ): void {
   const { schema, handler, description, icon, tags, concurrency } = config
 
@@ -1210,20 +1362,31 @@ function registerEventHandler(
   eventRegistry.clearEventHandlers(eventName)
   bus.clearHandler(eventName)
 
+  const runHandler = async (data: unknown, linkedTraceId?: string) => {
+    if (!visionCore) {
+      await handler(data, noopEventContext)
+      return
+    }
+    const { context, endRootSpan } = buildHandlerContext(visionCore, `event.${eventName}`, linkedTraceId)
+    try {
+      await handler(data, context)
+      endRootSpan()
+    } catch (err) {
+      endRootSpan(err)
+      throw err
+    }
+  }
+
   eventRegistry.registerEvent(
     eventName,
     schema,
-    async (data) => {
-      await handler(data)
-    },
+    async (data) => { await runHandler(data) },
     { description, icon, tags }
   )
 
   bus.registerHandler(
     eventName,
-    async (data) => {
-      await handler(data)
-    },
+    async (data, trace) => { await runHandler(data, trace?.traceId) },
     { concurrency }
   )
 }
@@ -1231,6 +1394,89 @@ function registerEventHandler(
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
+
+/**
+ * Build `EventHandlerContext` for an event or cron job execution.
+ *
+ * Creates a new root trace (or links to the caller's trace via `linkedTraceId`)
+ * and a root span so that `span()` calls inside the handler produce visible
+ * child spans in the Dashboard waterfall.
+ *
+ * When `linkedTraceId` is provided the new trace's metadata records it for
+ * cross-trace linking in the Dashboard, but the job always owns its own trace
+ * so the waterfall is self-contained and doesn't pollute the HTTP trace.
+ */
+function buildHandlerContext(
+  visionCore: VisionCore,
+  jobLabel: string,
+  linkedTraceId?: string
+): { context: EventHandlerContext; endRootSpan: (error?: unknown) => void } {
+  const tracer = visionCore.getTracer()
+  const trace = visionCore.createTrace('JOB', jobLabel)
+  if (linkedTraceId) {
+    trace.metadata = { ...(trace.metadata || {}), linkedTraceId }
+  }
+  const rootSpan = tracer.startSpan(jobLabel, trace.id)
+  const startTime = Date.now()
+
+  const span: VisionDerived['span'] = (name, attributes = {}, fn) => {
+    const childSpan = tracer.startSpan(name, trace.id, rootSpan.id)
+    for (const [k, v] of Object.entries(attributes)) {
+      tracer.setAttribute(childSpan.id, k, v)
+    }
+    const endOk = () => {
+      const completed = tracer.endSpan(childSpan.id)
+      if (completed) visionCore.getTraceStore().addSpan(trace.id, completed)
+    }
+    const endErr = (err: unknown) => {
+      tracer.setAttribute(childSpan.id, 'error', true)
+      tracer.setAttribute(childSpan.id, 'error.message', err instanceof Error ? err.message : String(err))
+      const completed = tracer.endSpan(childSpan.id)
+      if (completed) visionCore.getTraceStore().addSpan(trace.id, completed)
+    }
+    try {
+      const result = fn ? fn() : (undefined as ReturnType<NonNullable<typeof fn>>)
+      if (result instanceof Promise) {
+        return result.then(
+          (v) => { endOk(); return v },
+          (err) => { endErr(err); throw err }
+        ) as ReturnType<NonNullable<typeof fn>>
+      }
+      endOk()
+      return result
+    } catch (err) {
+      endErr(err)
+      throw err
+    }
+  }
+
+  const addContext: VisionDerived['addContext'] = (ctx) => {
+    const visionTrace = visionCore.getTraceStore().getTrace(trace.id)
+    if (visionTrace) {
+      visionTrace.metadata = { ...(visionTrace.metadata || {}), ...ctx }
+    }
+  }
+
+  const logger: VisionLogger = {
+    log: (msg, meta) => console.log(`[${jobLabel}]`, msg, meta ?? ''),
+    info: (msg, meta) => console.info(`[${jobLabel}]`, msg, meta ?? ''),
+    warn: (msg, meta) => console.warn(`[${jobLabel}]`, msg, meta ?? ''),
+    error: (msg, meta) => console.error(`[${jobLabel}]`, msg, meta ?? ''),
+    debug: (msg, meta) => console.debug(`[${jobLabel}]`, msg, meta ?? ''),
+  }
+
+  const endRootSpan = (error?: unknown) => {
+    if (error !== undefined) {
+      tracer.setAttribute(rootSpan.id, 'error', true)
+      tracer.setAttribute(rootSpan.id, 'error.message', error instanceof Error ? error.message : String(error))
+    }
+    const completed = tracer.endSpan(rootSpan.id)
+    if (completed) visionCore.getTraceStore().addSpan(trace.id, completed)
+    visionCore.completeTrace(trace.id, error !== undefined ? 500 : 200, Date.now() - startTime)
+  }
+
+  return { context: { span, addContext, traceId: trace.id, logger }, endRootSpan }
+}
 
 function buildVisionCore(config: VisionConfig): VisionCore | null {
   const enabled = config.vision?.enabled !== false

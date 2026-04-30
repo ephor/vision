@@ -39,7 +39,7 @@
     },
     "apps/web": {
       "name": "web",
-      "version": "0.0.9",
+      "version": "0.0.11",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -84,7 +84,7 @@
     },
     "examples/express": {
       "name": "express-basic-example",
-      "version": "0.0.15",
+      "version": "0.0.17",
       "dependencies": {
         "@getvision/adapter-express": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -100,7 +100,7 @@
     },
     "examples/fastify": {
       "name": "fastify-basic-example",
-      "version": "0.0.15",
+      "version": "0.0.17",
       "dependencies": {
         "@getvision/adapter-fastify": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -117,7 +117,7 @@
     },
     "examples/hono": {
       "name": "hono-basic-example",
-      "version": "0.0.15",
+      "version": "0.0.17",
       "dependencies": {
         "@getvision/adapter-hono": "workspace:*",
         "@getvision/core": "workspace:*",
@@ -139,9 +139,9 @@
     },
     "examples/nextjs": {
       "name": "nextjs-vision-example",
-      "version": "0.0.0",
+      "version": "0.0.2",
       "dependencies": {
-        "@elysiajs/eden": "^1.4.9",
+        "@elysia/eden": "^1.4.10",
         "@getvision/core": "workspace:*",
         "@getvision/server": "workspace:*",
         "@tanstack/react-query": "^5.100.1",
@@ -159,9 +159,9 @@
     },
     "examples/vision": {
       "name": "vision-basic-example",
-      "version": "0.0.22",
+      "version": "0.0.24",
       "dependencies": {
-        "@elysiajs/eden": "^1.4.9",
+        "@elysia/eden": "^1.4.10",
         "@getvision/server": "workspace:*",
         "better-sqlite3": "^12.4.1",
         "bullmq": "^5.62.0",
@@ -181,7 +181,7 @@
     },
     "packages/adapter-express": {
       "name": "@getvision/adapter-express",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "zod": "^4.1.11",
@@ -200,7 +200,7 @@
     },
     "packages/adapter-fastify": {
       "name": "@getvision/adapter-fastify",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "dependencies": {
         "@fastify/request-context": "^6.2.1",
         "@getvision/core": "workspace:*",
@@ -222,7 +222,7 @@
     },
     "packages/adapter-hono": {
       "name": "@getvision/adapter-hono",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "@hono/zod-validator": "^0.7.3",
@@ -241,7 +241,7 @@
     },
     "packages/core": {
       "name": "@getvision/core",
-      "version": "0.1.1",
+      "version": "0.2.1",
       "dependencies": {
         "mime-types": "^2.1.35",
         "nanoid": "^5.0.7",
@@ -278,7 +278,7 @@
     },
     "packages/server": {
       "name": "@getvision/server",
-      "version": "0.4.4-61ad392-develop",
+      "version": "1.0.1",
       "dependencies": {
         "@getvision/core": "workspace:*",
         "bullmq": "^5.62.0",
@@ -441,7 +441,7 @@
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
-    "@elysiajs/eden": ["@elysiajs/eden@1.4.9", "", { "peerDependencies": { "elysia": ">=1.4.19" } }, "sha512-3CKVD4ycVjB8nCNssfmhnUuq3SzSHkUES3v5PNCFr9LxIrx39/HVRAZ8z2sLxrFqzUs48dCBZaxoZzJ5UUVHDA=="],
+    "@elysia/eden": ["@elysia/eden@1.4.10", "", { "peerDependencies": { "elysia": ">=1.4.19" } }, "sha512-vcZXQcW6wZj6rhTxaiTkuCbVuS/yAJQ9jqCM6b83a5hu99F5Aj3HOyWXL17iod2Rz+pJpYsQGX0XaeoCsMpw2g=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 

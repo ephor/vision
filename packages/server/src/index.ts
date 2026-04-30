@@ -51,6 +51,7 @@ export {
   MemoryRateLimitStore,
   getVisionContext,
   ready,
+  close,
 } from './vision-app'
 
 // Types

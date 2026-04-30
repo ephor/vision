@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { treaty } from '@elysiajs/eden'
+import { treaty } from '@elysia/eden'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type { AppType } from '@/vision'
 
@@ -125,9 +125,7 @@ export default function Page() {
     mutationFn: () =>
       api.users.post({
         name: `User ${Math.floor(Math.random() * 1000)}`,
-        email: `u${Math.floor(Math.random() * 1000)}@example.com`,
-        userId: '',
-        items: [],
+        email: `u${Math.floor(Math.random() * 1000)}@example.com`
       }),
   })
 
@@ -135,8 +133,6 @@ export default function Page() {
   const placeOrder = useMutation({
     mutationFn: () =>
       api.orders.post({
-        name: 'Name',
-        email: 'email@example.com',
         userId: '1',
         items: [{ productId: 'laptop', qty: 2 }],
       }),

@@ -11,7 +11,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 <Callout type="info">
   Vision Server wraps Elysia — the underlying instance is still an Elysia app,
-  so every Elysia plugin (`@elysiajs/cors`, `@elysiajs/jwt`, `@elysiajs/swagger`, …)
+  so every Elysia plugin (`@elysia/cors`, `@elysia/jwt`, `@elysiajs/swagger`, …)
   works, and the type chain flows into the Eden Treaty client.
 </Callout>
 
@@ -192,7 +192,7 @@ const cleanupModule = createModule().use(
 Vision's underlying instance is Elysia — every plugin and feature works unmodified:
 
 ```typescript
-import { cors } from '@elysiajs/cors'
+import { cors } from '@elysia/cors'
 import { swagger } from '@elysiajs/swagger'
 
 const app = createVision({ service: { name: 'My API' } })
@@ -218,7 +218,7 @@ import { rateLimit } from '@getvision/server'
 ### 🧩 Eden Treaty — typed RPC on the client
 
 ```typescript
-import { treaty } from '@elysiajs/eden'
+import { treaty } from '@elysia/eden'
 import type { AppType } from './server'
 
 const api = treaty<AppType>('http://localhost:3000')

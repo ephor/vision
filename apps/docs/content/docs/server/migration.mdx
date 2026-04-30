@@ -37,7 +37,7 @@ This guide is intentionally dense and structured so it can be fed to an LLM as m
 | `.on('event', { schema, handler })` | same as above |
 | `.cron(expr, handler, { id })` | `.use(defineCrons({ id: { schedule: expr, handler } }))` |
 | `.use(honoMiddleware)` | Elysia plugin via `.use(elysiaPlugin)`, or per-route `beforeHandle: [...]` |
-| `app.use('*', cors())` / `logger()` | `.use(cors())` from `@elysiajs/cors`; logging via `vision: { logging: true }` |
+| `app.use('*', cors())` / `logger()` | `.use(cors())` from `@elysia/cors`; logging via `vision: { logging: true }` |
 | File-based `app/routes/**/index.ts` | Remove. Build modules and `.use()` them into `createVision`. |
 | `app.start(port)` | `app.listen(port)` or Next.js `instrumentation.register()` + `await ready(app)` |
 | Implicit Vision bootstrap | Explicit `await ready(app)` before `app.handle(req)` in fetch-style runtimes |
@@ -242,7 +242,7 @@ createModule()
 
 ## Middleware
 
-- Replace Hono `cors`, `logger`, `jwt` etc. with their Elysia equivalents. For example: `import cors from '@elysiajs/cors'; app.use(cors())`.
+- Replace Hono `cors`, `logger`, `jwt` etc. with their Elysia equivalents. For example: `import cors from '@elysia/cors'; app.use(cors())`.
 - Per-route guards / validators that used to be middleware arguments now go into the route option bag via `beforeHandle`.
 
 ```ts

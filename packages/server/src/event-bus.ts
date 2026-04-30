@@ -2,6 +2,12 @@ import { Queue, Worker, QueueEvents } from 'bullmq'
 import type { QueueEventsOptions, QueueOptions, WorkerOptions } from 'bullmq'
 import { eventRegistry } from './event-registry'
 
+export interface EventBusTraceContext {
+  traceId?: string
+  rootSpanId?: string
+  parentSpanId?: string
+}
+
 /**
  * EventBus configuration
  */
@@ -50,7 +56,10 @@ export class EventBus {
   private workers = new Map<string, Worker>()
   private queueEvents = new Map<string, QueueEvents>()
   private config: EventBusConfig
-  private devModeHandlers = new Map<string, Array<(data: any) => Promise<void>>>()
+  private devModeHandlers = new Map<
+    string,
+    Array<(data: any, trace?: EventBusTraceContext) => Promise<void>>
+  >()
 
   constructor(config: EventBusConfig = {}) {
     // Build Redis config from environment variables
@@ -177,7 +186,8 @@ export class EventBus {
    */
   async emit<T extends Record<string, any>>(
     eventName: string,
-    data: T
+    data: T,
+    trace?: EventBusTraceContext
   ): Promise<void> {
     // Get event metadata from registry
     const eventMeta = eventRegistry.getEvent(eventName)
@@ -201,7 +211,7 @@ export class EventBus {
         
         for (const handler of handlers) {
           try {
-            await handler(validatedData)
+            await handler(validatedData, trace)
             eventRegistry.incrementEventCount(eventName, false)
           } catch (error) {
             console.error(`Error in handler for event "${eventName}":`, error)
@@ -212,7 +222,7 @@ export class EventBus {
       } else {
         // Production mode - use BullMQ
         const queue = this.getQueue(eventName)
-        await queue.add(eventName, validatedData, {
+        await queue.add(eventName, { payload: validatedData, _vision: trace }, {
           attempts: 3,
           backoff: {
             type: 'exponential',
@@ -238,7 +248,7 @@ export class EventBus {
    */
   registerHandler<T>(
     eventName: string,
-    handler: (data: T) => Promise<void>,
+    handler: (data: T, trace?: EventBusTraceContext) => Promise<void>,
     options?: {
       /**
        * Max number of concurrent jobs this handler will process.
@@ -267,7 +277,9 @@ export class EventBus {
         eventName,
         async (job) => {
           try {
-            await handler(job.data)
+            const envelope = job.data as { payload?: T; _vision?: EventBusTraceContext }
+            const data = envelope && 'payload' in envelope ? envelope.payload : (job.data as T)
+            await handler(data as T, envelope?._vision)
           } catch (error) {
             eventRegistry.incrementEventCount(eventName, true)
             throw error
@@ -311,7 +323,7 @@ export class EventBus {
    */
   registerCronHandler(
     cronName: string,
-    handler: (context: any) => Promise<void>
+    handler: (context: any, trace?: EventBusTraceContext) => Promise<void>
   ): void {
     if (this.config.devMode) {
       // Dev mode - cron jobs run immediately for testing
@@ -342,7 +354,7 @@ export class EventBus {
               jobId: job.id,
               timestamp: Date.now(),
             }
-            await handler(context)
+            await handler(context, (job.data as { _vision?: EventBusTraceContext } | undefined)?._vision)
             eventRegistry.incrementCronCount(cronName, false)
           } catch (error) {
             eventRegistry.incrementCronCount(cronName, true)
