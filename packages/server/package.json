@@ -21,6 +21,9 @@
     "dev": "tsc --watch",
     "build": "tsc --emitDeclarationOnly && bun build ./src/*.ts --outdir ./dist --target bun --format esm --external '*' --sourcemap=external",
     "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
     "lint": "eslint . --max-warnings 0"
   },
   "license": "MIT",
@@ -34,6 +37,7 @@
     "elysia": "catalog:"
   },
   "devDependencies": {
+    "@elysia/eden": "1.4.10",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^20.14.9",
