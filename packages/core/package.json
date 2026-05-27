@@ -25,6 +25,11 @@
       "import": "./dist/tracing/index.js",
       "default": "./dist/tracing/index.js"
     },
+    "./exporters": {
+      "types": "./dist/exporters/index.d.ts",
+      "import": "./dist/exporters/index.js",
+      "default": "./dist/exporters/index.js"
+    },
     "./types": {
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js",

@@ -81,5 +81,5 @@ export { t } from 'elysia'
 export type { Static, TSchema } from 'elysia'
 
 // Re-export from core for convenience
-export { VisionCore } from '@getvision/core'
+export { VisionCore, OtlpTraceExporter } from '@getvision/core'
 export type * from '@getvision/core'
