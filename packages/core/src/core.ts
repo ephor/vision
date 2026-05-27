@@ -240,8 +240,10 @@ export class VisionCore {
     for (const exporter of this.exporters) {
       try {
         exporter.export(trace)
-      } catch {
-        // Exporters own their own error reporting; never let one disrupt others.
+      } catch (error) {
+        // Surface a warning so silent failures don't make "where are my traces?"
+        // impossible to debug locally, but never let a throw disrupt the others.
+        console.warn('[VisionCore] Trace exporter threw:', error)
       }
     }
   }

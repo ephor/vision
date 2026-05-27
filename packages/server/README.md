@@ -268,7 +268,7 @@ createVision({
 })
 ```
 
-The exporter speaks OTLP/JSON over HTTP — the destination is purely a matter of `endpoint` + `headers`, so the same code targets any OTLP backend (switching from BetterStack to Honeycomb is a URL + header change, not a code change). Traces are buffered and flushed in batches; a failing exporter is isolated and never affects request handling.
+The exporter speaks OTLP/JSON over HTTP — the destination is purely a matter of `endpoint` + `headers`, so the same code targets any OTLP backend (switching from BetterStack to Honeycomb is a URL + header change, not a code change). Traces are buffered and flushed in batches; failed batches are re-buffered for the next flush so a transient backend outage doesn't silently lose traces, and a failing exporter is isolated so it never affects request handling.
 
 Vision models each HTTP request as a synthetic root span (`SERVER`) with your `c.span(...)` calls as nested `INTERNAL` spans, and attaches the trace's logs as span events.
 
@@ -277,13 +277,14 @@ Vision models each HTTP request as a synthetic root span (`SERVER`) with your `c
 | Option | Default | Description |
 | --- | --- | --- |
 | `endpoint` | _(required)_ | OTLP/HTTP traces endpoint, e.g. `https://<host>/v1/traces` |
-| `headers` | `{}` | Extra headers, typically auth (e.g. `{ Authorization: 'Bearer <token>' }`) |
+| `headers` | `{}` | Extra headers, typically auth (e.g. `{ Authorization: 'Bearer <token>' }`). Keys are matched case-insensitively when merging with built-in defaults. |
 | `serviceName` | `'unknown_service'` | `service.name` resource attribute |
 | `resourceAttributes` | `{}` | Additional resource attributes (e.g. `{ 'deployment.environment': 'prod' }`) |
-| `maxQueueSize` | `100` | Flush once this many traces are buffered |
+| `maxQueueSize` | `2048` | Hard cap on buffered traces. Excess traces (and re-buffered batches that won't fit) are dropped and surfaced via `onError`. |
+| `maxExportBatchSize` | `512` | Flush eagerly once this many traces are buffered, rather than waiting for `flushIntervalMs`. |
 | `flushIntervalMs` | `5000` | Background flush interval (ms) |
 | `timeoutMs` | `10000` | Per-request timeout (ms) |
-| `onError` | no-op | Called on transport/HTTP failures (defaults to silent) |
+| `onError` | `console.warn` | Called on transport/HTTP failures and queue overflow. Pass a no-op to silence. |
 
 > Need a custom sink (custom format, webhook, second dashboard)? Implement the `TraceExporter` interface (`export(trace)` + optional `shutdown()`) and add it to `vision.exporters` — `OtlpTraceExporter` is just the built-in one.
 

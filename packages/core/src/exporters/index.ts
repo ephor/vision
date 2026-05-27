@@ -1,2 +1,3 @@
 export type { TraceExporter } from './types'
-export * from './otlp'
+export { OtlpTraceExporter } from './otlp/exporter'
+export type { OtlpExporterOptions } from './otlp/exporter'

@@ -18,7 +18,12 @@ function httpStatus(statusCode?: number): OtlpStatus | undefined {
   return undefined
 }
 
-/** Child-span status derived from the `error` attribute set by `createSpanHelper`. */
+/**
+ * Child-span status derived from the `error` attribute set by `createSpanHelper`.
+ * The strict `=== true` check is intentional: `error` is an internal contract
+ * with `createSpanHelper` (which always writes the boolean `true`), so we don't
+ * widen to `Boolean(...)` and risk treating arbitrary user-set values as errors.
+ */
 function spanStatus(span: Span): OtlpStatus | undefined {
   if (span.attributes?.error === true) {
     const message = span.attributes['error.message']
@@ -80,9 +85,12 @@ function childSpan(
   spanIds: Map<string, string>
 ): OtlpSpan {
   const parentSpanId = span.parentId ? spanIds.get(span.parentId) ?? rootSpanId : rootSpanId
+  // `spanIds` is pre-populated for every span in the trace by `traceToOtlpSpans`,
+  // so this lookup is guaranteed to hit.
+  const spanId = spanIds.get(span.id)!
   return {
     traceId,
-    spanId: spanIds.get(span.id) ?? newSpanId(),
+    spanId,
     parentSpanId,
     name: span.name,
     kind: SpanKind.INTERNAL,
