@@ -56,7 +56,7 @@ export class VisionWebSocketServer {
   private wss: WebSocketServer
   private clients = new Set<WebSocket>()
   private rpc: JsonRpcHandler
-  private options: Required<Omit<VisionServerOptions, 'apiUrl' | 'autoStart'>> & {
+  private options: Required<Omit<VisionServerOptions, 'apiUrl' | 'autoStart' | 'exporters'>> & {
     apiUrl?: string
   }
   /**

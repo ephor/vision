@@ -211,7 +211,8 @@ const app = new Vision({
     port: 9500,         // Dashboard port
     maxTraces: 1000,    // Max traces to store
     maxLogs: 10000,     // Max logs to store
-    logging: true       // Console logging
+    logging: true,      // Console logging
+    // exporters: [...]  // Forward traces to OTLP backends — see "OTLP Trace Export"
   },
   pubsub: {
     devMode: true,     // In-memory BullMQ for local dev
@@ -245,6 +246,46 @@ const app = new Vision({
   }
 })
 ```
+
+### OTLP Trace Export
+
+Forward every completed trace to any OpenTelemetry-compatible backend — BetterStack, Honeycomb, Grafana Tempo, Datadog, an OTel Collector, and so on — by adding an `OtlpTraceExporter` to `vision.exporters`. Export runs alongside the local Dashboard, so traces show up in both.
+
+```typescript
+import { createVision, OtlpTraceExporter } from '@getvision/server'
+
+createVision({
+  service: { name: 'my-api' },
+  vision: {
+    exporters: [
+      new OtlpTraceExporter({
+        endpoint: 'https://<host>/v1/traces',         // OTLP/HTTP traces endpoint
+        headers: { Authorization: 'Bearer <token>' }, // backend auth
+        serviceName: 'my-api',
+      }),
+    ],
+  },
+})
+```
+
+The exporter speaks OTLP/JSON over HTTP — the destination is purely a matter of `endpoint` + `headers`, so the same code targets any OTLP backend (switching from BetterStack to Honeycomb is a URL + header change, not a code change). Traces are buffered and flushed in batches; a failing exporter is isolated and never affects request handling.
+
+Vision models each HTTP request as a synthetic root span (`SERVER`) with your `c.span(...)` calls as nested `INTERNAL` spans, and attaches the trace's logs as span events.
+
+**`OtlpTraceExporter` options**
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `endpoint` | _(required)_ | OTLP/HTTP traces endpoint, e.g. `https://<host>/v1/traces` |
+| `headers` | `{}` | Extra headers, typically auth (e.g. `{ Authorization: 'Bearer <token>' }`) |
+| `serviceName` | `'unknown_service'` | `service.name` resource attribute |
+| `resourceAttributes` | `{}` | Additional resource attributes (e.g. `{ 'deployment.environment': 'prod' }`) |
+| `maxQueueSize` | `100` | Flush once this many traces are buffered |
+| `flushIntervalMs` | `5000` | Background flush interval (ms) |
+| `timeoutMs` | `10000` | Per-request timeout (ms) |
+| `onError` | no-op | Called on transport/HTTP failures (defaults to silent) |
+
+> Need a custom sink (custom format, webhook, second dashboard)? Implement the `TraceExporter` interface (`export(trace)` + optional `shutdown()`) and add it to `vision.exporters` — `OtlpTraceExporter` is just the built-in one.
 
 ### `app.service(name)`
 

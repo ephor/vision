@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { VisionCore, runInTraceContext, generateTemplate } from '@getvision/core'
-import type { LogLevel, RouteMetadata } from '@getvision/core'
+import type { LogLevel, RouteMetadata, TraceExporter } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
@@ -178,6 +178,12 @@ export interface VisionConfig {
     maxLogs?: number
     logging?: boolean
     apiUrl?: string
+    /**
+     * Sinks that receive every completed trace — e.g. an `OtlpTraceExporter`
+     * forwarding to BetterStack/Honeycomb/Grafana or an OTel Collector. Failures
+     * are isolated and never affect request handling.
+     */
+    exporters?: TraceExporter[]
   }
   pubsub?: {
     redis?: {
@@ -1497,6 +1503,7 @@ function buildVisionCore(config: VisionConfig): VisionCore | null {
       maxTraces: config.vision?.maxTraces ?? 1000,
       maxLogs: config.vision?.maxLogs ?? 10000,
       apiUrl: config.vision?.apiUrl,
+      exporters: config.vision?.exporters,
       // Defer port binding until `ready()` — this is the whole point of
       // the refactor: no network I/O during module evaluation.
       autoStart: false,

@@ -3,6 +3,7 @@
  */
 import { LogEntry } from "./logs";
 import type { ValidationSchema } from '../validation';
+import type { TraceExporter } from '../exporters/types';
 
 // JSON-RPC 2.0 Protocol
 export interface JsonRpcRequest {
@@ -169,6 +170,12 @@ export interface VisionServerOptions {
    * Elysia integration uses this so `app.ready()` owns the lifecycle).
    */
   autoStart?: boolean
+  /**
+   * Sinks that receive every completed trace (e.g. an OTLP exporter forwarding
+   * to BetterStack/Honeycomb/Grafana). Failures are isolated and never affect
+   * request handling.
+   */
+  exporters?: TraceExporter[]
 }
 
 // Adapter interface
@@ -201,3 +208,4 @@ export interface AdapterResponse {
 
 export * from './logs'
 export * from './adapter-options'
+export type { TraceExporter } from '../exporters/types'

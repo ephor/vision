@@ -12,6 +12,7 @@ import type {
   DashboardEvent,
   LogLevel,
   LogEntry,
+  TraceExporter,
 } from './types/index'
 
 /**
@@ -25,6 +26,7 @@ export class VisionCore {
   private consoleInterceptor?: ConsoleInterceptor
   private routes: RouteMetadata[] = []
   private services: ServiceGroup[] = []
+  private exporters: TraceExporter[]
   private startPromise?: Promise<void>
   private appStatus: AppStatus = {
     name: 'Unknown',
@@ -38,6 +40,7 @@ export class VisionCore {
     this.traceStore = new TraceStore(options.maxTraces)
     this.tracer = new Tracer()
     this.logStore = new LogStore(options.maxLogs)
+    this.exporters = options.exporters ?? []
 
     // Optional console intercept
     if (options.captureConsole !== false) {
@@ -225,6 +228,21 @@ export class VisionCore {
     
     if (trace) {
       this.broadcast({ type: 'trace.new', data: trace })
+      this.exportTrace(trace)
+    }
+  }
+
+  /**
+   * Fan a completed trace out to all configured exporters. Each exporter is
+   * isolated so a throwing/misbehaving sink can't break request handling.
+   */
+  private exportTrace(trace: Trace): void {
+    for (const exporter of this.exporters) {
+      try {
+        exporter.export(trace)
+      } catch {
+        // Exporters own their own error reporting; never let one disrupt others.
+      }
     }
   }
 
@@ -366,9 +384,10 @@ export class VisionCore {
     await this.stop()
   }
 
-  /** Stop the Dashboard port. Idempotent. */
+  /** Stop the Dashboard port and flush exporters. Idempotent. */
   async stop(): Promise<void> {
     this.startPromise = undefined
+    await Promise.allSettled(this.exporters.map((exporter) => exporter.shutdown?.()))
     await this.server.stop()
   }
 }

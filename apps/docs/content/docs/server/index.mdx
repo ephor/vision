@@ -252,6 +252,7 @@ const app = createVision({
     maxTraces: 1000,
     maxLogs: 10000,
     logging: true,
+    // exporters: [...] // forward traces to OTLP backends — see below
   },
   pubsub: {
     devMode: true,    // in-memory queue — no Redis required
@@ -259,6 +260,33 @@ const app = createVision({
   },
 })
 ```
+
+## Exporting Traces (OTLP)
+
+Forward every completed trace to any OpenTelemetry-compatible backend — BetterStack, Honeycomb, Grafana Tempo, Datadog, an OTel Collector — by adding an `OtlpTraceExporter` to `vision.exporters`. Export runs alongside the local Dashboard, so traces appear in both.
+
+```typescript
+import { createVision, OtlpTraceExporter } from '@getvision/server'
+
+createVision({
+  service: { name: 'my-api' },
+  vision: {
+    exporters: [
+      new OtlpTraceExporter({
+        endpoint: 'https://<host>/v1/traces',         // OTLP/HTTP traces endpoint
+        headers: { Authorization: 'Bearer <token>' }, // backend auth
+        serviceName: 'my-api',
+      }),
+    ],
+  },
+})
+```
+
+The exporter speaks OTLP/JSON over HTTP, so the destination is purely a matter of `endpoint` + `headers` — switching backends is a config change, not a code change. Traces are buffered and flushed in batches, and a failing exporter is isolated so it never affects request handling.
+
+Each HTTP request becomes a synthetic root span (`SERVER`) with your `c.span(...)` calls as nested `INTERNAL` spans, and the trace's logs attached as span events.
+
+For a custom sink, implement the `TraceExporter` interface (`export(trace)` plus an optional `shutdown()`) and add it to `vision.exporters` — `OtlpTraceExporter` is just the built-in implementation.
 
 ## Next Steps
 
