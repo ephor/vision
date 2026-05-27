@@ -1,6 +1,6 @@
 {
   "name": "@getvision/server",
-  "version": "1.0.2",
+  "version": "1.1.0-a99fcdb-develop",
   "type": "module",
   "description": "Vision Server — Elysia-based meta-framework with built-in observability, pub/sub, and end-to-end type safety (Eden-ready)",
   "main": "./dist/index.js",
