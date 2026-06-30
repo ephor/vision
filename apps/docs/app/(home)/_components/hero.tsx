@@ -133,22 +133,20 @@ export function Hero() {
         </motion.div>
       </div>
 
-      {/* Framework marquee */}
-      <div className="mx-auto mt-16 max-w-6xl">
+      {/* Supported frameworks */}
+      <div className="mx-auto mt-16 max-w-3xl">
         <p className="mb-5 text-center text-xs font-medium tracking-widest text-fd-muted-foreground uppercase">
           Works with the stack you already run
         </p>
-        <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_12%,#000_88%,transparent)]">
-          <div className="animate-marquee flex w-max gap-4">
-            {[...FRAMEWORKS, ...FRAMEWORKS, ...FRAMEWORKS].map((name, i) => (
-              <span
-                key={`${name}-${i}`}
-                className="rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2 text-sm font-medium text-fd-muted-foreground"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {FRAMEWORKS.map((name) => (
+            <span
+              key={name}
+              className="rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2 text-sm font-medium text-fd-muted-foreground"
+            >
+              {name}
+            </span>
+          ))}
         </div>
       </div>
     </section>
