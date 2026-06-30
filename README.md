@@ -1,8 +1,5 @@
 # Vision 🔮
 
-<!-- TODO: no `gh` CLI access from this environment to set repo topics. Run manually:
-gh repo edit ephor/vision --add-topic observability,elysiajs,typescript,apm,tracing,devtools,api-testing -->
-
 [![npm version](https://img.shields.io/npm/v/@getvision/server.svg)](https://www.npmjs.com/package/@getvision/server)
 [![npm downloads](https://img.shields.io/npm/dm/@getvision/server.svg)](https://www.npmjs.com/package/@getvision/server)
 [![CI](https://github.com/ephor/vision/actions/workflows/ci.yml/badge.svg)](https://github.com/ephor/vision/actions/workflows/ci.yml)
