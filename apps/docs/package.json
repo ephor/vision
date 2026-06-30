@@ -10,15 +10,18 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "cnfast": "^0.0.8",
+    "fumadocs-core": "15.8.5",
+    "fumadocs-mdx": "12.0.3",
+    "fumadocs-ui": "15.8.5",
+    "lucide-react": "^0.544.0",
+    "motion": "^11.18.1",
     "next": "15.5.4",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "cnfast": "^0.0.8",
-    "lucide-react": "^0.544.0",
-    "motion": "^11.18.1",
-    "fumadocs-ui": "15.8.5",
-    "fumadocs-core": "15.8.5",
-    "fumadocs-mdx": "12.0.3"
+    "three": "^0.185.0"
   },
   "devDependencies": {
     "@types/node": "24.6.2",

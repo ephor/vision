@@ -82,7 +82,7 @@ const WITHOUT = [
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-400 uppercase">
+    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase">
       {children}
     </span>
   );
@@ -109,9 +109,9 @@ export function Below() {
               key={f.title}
               {...reveal}
               transition={{ ...reveal.transition, delay: i * 0.05 }}
-              className="group relative rounded-xl border border-fd-border bg-fd-card/50 p-6 transition hover:border-violet-500/40 hover:bg-fd-card"
+              className="group relative rounded-xl border border-fd-border bg-fd-card/50 p-6 transition hover:border-emerald-500/40 hover:bg-fd-card"
             >
-              <div className="mb-4 inline-flex rounded-lg border border-fd-border bg-fd-background p-2.5 text-violet-400 transition group-hover:border-violet-500/40">
+              <div className="mb-4 inline-flex rounded-lg border border-fd-border bg-fd-background p-2.5 text-emerald-400 transition group-hover:border-emerald-500/40">
                 <f.icon className="size-5" />
               </div>
               <h3 className="flex items-center gap-2 font-semibold">
@@ -145,7 +145,7 @@ export function Below() {
               transition={{ ...reveal.transition, delay: i * 0.07 }}
               className="rounded-xl border border-fd-border bg-fd-card/50 p-6"
             >
-              <w.icon className="size-6 text-violet-400" />
+              <w.icon className="size-6 text-emerald-400" />
               <h3 className="mt-4 font-semibold">{w.title}</h3>
               <p className="mt-2 text-sm text-fd-muted-foreground text-pretty">
                 {w.body}
@@ -157,7 +157,7 @@ export function Below() {
         <motion.div {...reveal} className="mt-8 text-center">
           <Link
             href="/docs/why-vision"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
           >
             See the full comparison with Encore.ts
             <ArrowRight className="size-4" />
@@ -171,7 +171,7 @@ export function Below() {
           {...reveal}
           className="relative mx-auto max-w-4xl overflow-hidden rounded-2xl border border-fd-border bg-fd-card/50 px-6 py-16 text-center"
         >
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-[260px] w-[600px] -translate-x-1/2 rounded-full bg-violet-500/20 blur-[110px]" />
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-[260px] w-[600px] -translate-x-1/2 rounded-full bg-emerald-500/20 blur-[110px]" />
           <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
             Ready to see what your API is doing?
           </h2>
@@ -182,7 +182,7 @@ export function Below() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/docs/quickstart"
-              className="group inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:shadow-violet-600/40"
+              className="group inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:shadow-emerald-500/40"
             >
               Get started
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />

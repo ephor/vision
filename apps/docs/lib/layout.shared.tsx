@@ -12,6 +12,10 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: 'Vision',
     },
+    // Dark theme only — hide the light/dark toggle
+    themeSwitch: {
+      enabled: false,
+    },
     links: [
       {
         text: 'Documentation',
