@@ -12,12 +12,9 @@ import {
   Boxes,
   Cable,
   KeyRound,
-  Check,
-  Circle,
   ArrowRight,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const reveal = {
   initial: { opacity: 0, y: 24 },
@@ -81,14 +78,6 @@ const WITHOUT = [
     title: "Without the lock-in",
     body: "Self-hosted and MIT-licensed. Develop locally, then export to whatever production backend you already run.",
   },
-];
-
-const ROADMAP: { label: string; done: boolean; badge?: string }[] = [
-  { label: "REST", done: true },
-  { label: "OpenTelemetry export", done: true, badge: "new" },
-  { label: "GraphQL", done: false },
-  { label: "tRPC", done: false },
-  { label: "MCP", done: false },
 ];
 
 function Badge({ children }: { children: React.ReactNode }) {
@@ -174,50 +163,6 @@ export function Below() {
             <ArrowRight className="size-4" />
           </Link>
         </motion.div>
-      </section>
-
-      {/* Roadmap */}
-      <section className="mx-auto max-w-3xl px-4 py-20">
-        <motion.div {...reveal} className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Roadmap
-          </h2>
-          <p className="mt-4 text-fd-muted-foreground">
-            REST and OpenTelemetry export ship today. Protocols are next.
-          </p>
-        </motion.div>
-
-        <motion.ul
-          {...reveal}
-          className="mx-auto mt-10 flex max-w-md flex-col gap-2"
-        >
-          {ROADMAP.map((r) => (
-            <li
-              key={r.label}
-              className={cn(
-                "flex items-center gap-3 rounded-lg border px-4 py-3",
-                r.done
-                  ? "border-violet-500/30 bg-violet-500/5"
-                  : "border-fd-border bg-fd-card/40",
-              )}
-            >
-              {r.done ? (
-                <Check className="size-5 shrink-0 text-violet-400" />
-              ) : (
-                <Circle className="size-5 shrink-0 text-fd-muted-foreground/50" />
-              )}
-              <span
-                className={cn(
-                  "font-medium",
-                  !r.done && "text-fd-muted-foreground",
-                )}
-              >
-                {r.label}
-              </span>
-              {r.badge && <Badge>{r.badge}</Badge>}
-            </li>
-          ))}
-        </motion.ul>
       </section>
 
       {/* Final CTA */}
