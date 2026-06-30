@@ -24,22 +24,23 @@ Vision is a development dashboard that provides unified observability across pro
 
 ## Why Vision
 
-Observability for APIs usually means a tradeoff. **Encore.ts** gives you a dashboard, but only if you rebuild your app on its framework and runtime. **OpenTelemetry** gives you a vendor-neutral standard, but you're wiring up an SDK, a collector, and a backend yourself. **Sentry** is quick to install, but it's built for error tracking, not a request/response playground for everyday API development.
+Observability for APIs usually means a tradeoff. **Encore.ts** gives you a built-in dashboard, but only if you rebuild your app on its framework and runtime. **OpenTelemetry** gives you a vendor-neutral standard, but it's plumbing — you wire up an SDK, a collector, and a backend before you see anything.
 
-Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. Either way, it's self-hosted, runs alongside your app, and you keep your code.
+Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. It's self-hosted, runs alongside your app, and you keep your code — and when you're ready to ship telemetry to production, Vision speaks OTLP, so the same traces export straight into your OpenTelemetry backend.
 
 ### Vision vs. the alternatives
 
-|                                        | **Vision**                                                | **Encore.ts**                                         | **OpenTelemetry**                                        | **Sentry**                                               |
-| -------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| Setup time                             | ~2 lines in an existing app                               | Framework rewrite (Encore runtime/SDK)                | Manual instrumentation + collector/backend config        | SDK install, minutes                                     |
-| Vendor / code lock-in                  | None — middleware on your existing app                    | High — app is built on Encore's framework             | None — open standard                                     | Low-medium — SDK calls, hosted backend by default        |
-| Self-hosted                            | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           | Yes (Collector + backend of your choice)                 | Self-hosted available, but under a non-OSS license (FSL) |
-| Multi-protocol (REST/GraphQL/tRPC/MCP) | REST today; GraphQL, tRPC, MCP on the [Roadmap](#roadmap) | REST/RPC via Encore's own framework                   | Protocol-agnostic, but you instrument each one yourself  | Mainly HTTP/REST tracing                                 |
-| Validation library integration         | Zod, Valibot, Standard Schema v1 (auto request templates) | Encore's own validation (TypeScript types → API)      | None — not in scope for OTel                             | None — not in scope                                      |
-| License / cost                         | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform | Apache 2.0, free (you pay for the backend you export to) | BSL/FSL source-available; paid SaaS for hosted plans     |
+|                                        | **Vision**                                                | **Encore.ts**                                         | **OpenTelemetry**                                        |
+| -------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| Setup time                             | ~2 lines in an existing app                               | Framework rewrite (Encore runtime/SDK)                | Manual instrumentation + collector/backend config        |
+| Vendor / code lock-in                  | None — middleware on your existing app                    | High — app is built on Encore's framework             | None — open standard                                     |
+| Self-hosted                            | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           | Yes (Collector + backend of your choice)                 |
+| Built-in dashboard / UI                | Yes — traces, logs, request playground                    | Yes — local dev dashboard + cloud                     | No — bring your own (Jaeger, Grafana, …)                 |
+| Multi-protocol (REST/GraphQL/tRPC/MCP) | REST today; GraphQL, tRPC, MCP on the [Roadmap](#roadmap) | REST/RPC via Encore's own framework                   | Protocol-agnostic, but you instrument each one yourself  |
+| Validation library integration         | Zod, Valibot, Standard Schema v1 (auto request templates) | Encore's own validation (TypeScript types → API)      | None — not in scope for OTel                             |
+| License / cost                         | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform | Apache 2.0, free (you pay for the backend you export to) |
 
-_(Comparison based on each project's public docs as of writing; correct an inaccuracy by opening an issue or PR.)_
+_OpenTelemetry isn't really a competitor — it's a standard Vision exports to. Vision is the dev-time UX; OTel is the wire format for shipping those traces onward. Comparison based on each project's public docs as of writing; correct an inaccuracy by opening an issue or PR._
 
 ---
 
