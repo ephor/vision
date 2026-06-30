@@ -28,19 +28,23 @@ Observability for APIs usually means a tradeoff. **Encore.ts** gives you a built
 
 Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. It's self-hosted, runs alongside your app, and you keep your code — and when you're ready to ship telemetry to production, Vision speaks OTLP, so the same traces export straight into your OpenTelemetry backend.
 
-### Vision vs. the alternatives
+### Vision vs. Encore.ts
 
-|                                        | **Vision**                                                | **Encore.ts**                                         | **OpenTelemetry**                                        |
-| -------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
-| Setup time                             | ~2 lines in an existing app                               | Framework rewrite (Encore runtime/SDK)                | Manual instrumentation + collector/backend config        |
-| Vendor / code lock-in                  | None — middleware on your existing app                    | High — app is built on Encore's framework             | None — open standard                                     |
-| Self-hosted                            | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           | Yes (Collector + backend of your choice)                 |
-| Built-in dashboard / UI                | Yes — traces, logs, request playground                    | Yes — local dev dashboard + cloud                     | No — bring your own (Jaeger, Grafana, …)                 |
-| Multi-protocol (REST/GraphQL/tRPC/MCP) | REST today; GraphQL, tRPC, MCP on the [Roadmap](#roadmap) | REST/RPC via Encore's own framework                   | Protocol-agnostic, but you instrument each one yourself  |
-| Validation library integration         | Zod, Valibot, Standard Schema v1 (auto request templates) | Encore's own validation (TypeScript types → API)      | None — not in scope for OTel                             |
-| License / cost                         | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform | Apache 2.0, free (you pay for the backend you export to) |
+The closest comparison is **Encore.ts** — it also pairs API code with an auto-generated dashboard. The difference is what you give up to get one:
 
-_OpenTelemetry isn't really a competitor — it's a standard Vision exports to. Vision is the dev-time UX; OTel is the wire format for shipping those traces onward. Comparison based on each project's public docs as of writing; correct an inaccuracy by opening an issue or PR._
+|                                          | **Vision**                                                | **Encore.ts**                                         |
+| ---------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| Setup                                    | ~2 lines in an app you already have                       | Rewrite onto Encore's runtime/SDK                     |
+| Works with existing Express/Fastify/Hono | Yes — drop-in middleware                                  | No — you adopt Encore's framework                     |
+| Vendor / code lock-in                    | None                                                      | High — app is built on Encore's framework             |
+| Built-in dashboard / UI                  | Yes — traces, logs, request playground                    | Yes — local dev dashboard + cloud                     |
+| Multi-protocol (REST/GraphQL/tRPC/MCP)   | REST today; GraphQL, tRPC, MCP on the [Roadmap](#roadmap) | REST/RPC via Encore's own framework                   |
+| Validation library integration           | Zod, Valibot, Standard Schema v1 (auto request templates) | Encore's own validation (TypeScript types → API)      |
+| OpenTelemetry / OTLP export              | Yes — OTLP/HTTP, shipped                                  | Announced, coming soon                                |
+| Self-hosted                              | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           |
+| License / cost                           | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform |
+
+_OpenTelemetry isn't on this list on purpose — it's a standard Vision exports to, not a competitor. Vision is the dev-time UX; OTel is the wire format for shipping those traces to whatever backend you run. Comparison based on each project's public docs as of writing; correct an inaccuracy by opening an issue or PR._
 
 ---
 
