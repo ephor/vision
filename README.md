@@ -26,7 +26,9 @@ Vision is a development dashboard that provides unified observability across pro
 
 Observability for APIs usually means a tradeoff. **Encore.ts** gives you a built-in dashboard, but only if you rebuild your app on its framework and runtime. **OpenTelemetry** gives you a vendor-neutral standard, but it's plumbing — you wire up an SDK, a collector, and a backend before you see anything.
 
-Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. It's self-hosted, runs alongside your app, and you keep your code — and when you're ready to ship telemetry to production, Vision speaks OTLP, so the same traces export straight into your OpenTelemetry backend.
+Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. It's self-hosted, runs alongside your app, and you keep your code.
+
+**Develop with Vision locally → ship the same traces to whatever prod backend you already run (Grafana, Honeycomb, Datadog, OTel Collector).**
 
 ### Vision vs. Encore.ts
 
@@ -43,8 +45,6 @@ The closest comparison is **Encore.ts** — it also pairs API code with an auto-
 | OpenTelemetry / OTLP export              | Yes — OTLP/HTTP, shipped                                  | Announced, coming soon                                |
 | Self-hosted                              | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           |
 | License / cost                           | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform |
-
-_OpenTelemetry isn't on this list on purpose — it's a standard Vision exports to, not a competitor. Vision is the dev-time UX; OTel is the wire format for shipping those traces to whatever backend you run. Comparison based on each project's public docs as of writing; correct an inaccuracy by opening an issue or PR._
 
 ---
 
