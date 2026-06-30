@@ -10,18 +10,12 @@ const reveal = {
   transition: { duration: 0.5, ease: "easeOut" },
 } as const;
 
-// A stylised trace waterfall — offsets/widths are % of the request duration.
+// The spans below map 1:1 to the span() calls in the code on the left.
+// Offsets/widths are % of the request duration.
 const SPANS = [
   { label: "GET /users", ms: "142ms", left: 0, width: 100, depth: 0 },
-  {
-    label: "db.query · select users",
-    ms: "38ms",
-    left: 8,
-    width: 27,
-    depth: 1,
-  },
-  { label: "cache.get", ms: "4ms", left: 36, width: 4, depth: 1 },
-  { label: "serialize", ms: "6ms", left: 88, width: 8, depth: 1 },
+  { label: "db.select", ms: "38ms", left: 8, width: 27, depth: 1 },
+  { label: "enrich.profiles", ms: "54ms", left: 36, width: 38, depth: 1 },
 ];
 
 export function Showcase() {
@@ -29,15 +23,16 @@ export function Showcase() {
     <section className="mx-auto max-w-6xl px-4 py-20">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Two lines in. Full visibility out.
+          Add a span. Watch it appear.
         </h2>
         <p className="mt-4 text-fd-muted-foreground text-pretty">
-          Mount the adapter, then open the dashboard — every request becomes a
-          trace you can read, replay and debug.
+          Every request is traced automatically. Drop <code>span()</code>,
+          context and logs where you want more detail — and see exactly what
+          ran, in order, with timings.
         </p>
       </motion.div>
 
-      <div className="mt-14 grid items-center gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+      <div className="mt-14 grid items-center gap-6 lg:grid-cols-2">
         {/* Code card */}
         <motion.div {...reveal} className="beam-border rounded-xl">
           <div className="overflow-hidden rounded-xl border border-fd-border bg-fd-card/80 shadow-2xl shadow-black/20 backdrop-blur">
@@ -47,43 +42,86 @@ export function Showcase() {
               <span className="size-3 rounded-full bg-green-400/80" />
               <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-fd-muted-foreground">
                 <Terminal className="size-3.5" />
-                server.ts
+                users.module.ts
               </span>
             </div>
-            <pre className="overflow-x-auto p-5 text-sm leading-relaxed">
+            <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed">
               <code className="font-mono">
-                <span className="text-fd-muted-foreground">
-                  {"// 1. add the adapter"}
-                </span>
-                {"\n"}
                 <span className="text-sky-400">import</span>
                 <span className="text-fd-foreground">
-                  {" { visionAdapter } "}
+                  {" { createModule } "}
                 </span>
                 <span className="text-sky-400">from</span>
                 <span className="text-emerald-400">
-                  {" '@getvision/adapter-express'"}
+                  {" '@getvision/server'"}
                 </span>
                 {"\n\n"}
-                <span className="text-fd-muted-foreground">
-                  {"// 2. mount it on the app you already have"}
+                <span className="text-sky-400">export const</span>
+                <span className="text-fd-foreground">{" users = "}</span>
+                <span className="text-teal-300">createModule</span>
+                <span className="text-fd-foreground">({"{ "}</span>
+                <span className="text-cyan-400">prefix</span>
+                <span className="text-fd-foreground">: </span>
+                <span className="text-emerald-400">{"'/users'"}</span>
+                <span className="text-fd-foreground">{" })"}</span>
+                {"\n"}
+                <span className="text-fd-foreground">{"  ."}</span>
+                <span className="text-teal-300">get</span>
+                <span className="text-fd-foreground">
+                  {"('/', ({ span, addContext, logger }) => {"}
                 </span>
                 {"\n"}
-                <span className="text-fd-foreground">app.</span>
-                <span className="text-teal-300">use</span>
-                <span className="text-fd-foreground">(</span>
-                <span className="text-teal-300">visionAdapter</span>
+                <span className="text-fd-foreground">{"    "}</span>
+                <span className="text-teal-300">addContext</span>
                 <span className="text-fd-foreground">({"{ "}</span>
-                <span className="text-cyan-400">port</span>
+                <span className="text-emerald-400">{"'user.plan'"}</span>
                 <span className="text-fd-foreground">: </span>
-                <span className="text-amber-400">9500</span>
-                <span className="text-fd-foreground">{" }))"}</span>
+                <span className="text-emerald-400">{"'pro'"}</span>
+                <span className="text-fd-foreground">{" })"}</span>
                 {"\n\n"}
-                <span className="text-emerald-400">✦</span>
-                <span className="text-fd-muted-foreground">
-                  {" dashboard live at "}
+                <span className="text-fd-foreground">{"    "}</span>
+                <span className="text-sky-400">const</span>
+                <span className="text-fd-foreground">{" rows = "}</span>
+                <span className="text-teal-300">span</span>
+                <span className="text-fd-foreground">(</span>
+                <span className="text-emerald-400">{"'db.select'"}</span>
+                <span className="text-fd-foreground">, {"{ "}</span>
+                <span className="text-emerald-400">{"'db.table'"}</span>
+                <span className="text-fd-foreground">: </span>
+                <span className="text-emerald-400">{"'users'"}</span>
+                <span className="text-fd-foreground">{" }, () =>"}</span>
+                {"\n"}
+                <span className="text-fd-foreground">
+                  {"      db.select().from(users).all()"}
                 </span>
-                <span className="text-emerald-400">localhost:9500</span>
+                {"\n"}
+                <span className="text-fd-foreground">{"    )"}</span>
+                {"\n"}
+                <span className="text-fd-foreground">{"    "}</span>
+                <span className="text-sky-400">const</span>
+                <span className="text-fd-foreground">{" data = "}</span>
+                <span className="text-teal-300">span</span>
+                <span className="text-fd-foreground">(</span>
+                <span className="text-emerald-400">{"'enrich.profiles'"}</span>
+                <span className="text-fd-foreground">
+                  {", {}, () => enrich(rows))"}
+                </span>
+                {"\n\n"}
+                <span className="text-fd-foreground">{"    "}</span>
+                <span className="text-teal-300">logger</span>
+                <span className="text-fd-foreground">.</span>
+                <span className="text-teal-300">info</span>
+                <span className="text-fd-foreground">(</span>
+                <span className="text-emerald-400">{"'loaded users'"}</span>
+                <span className="text-fd-foreground">, {"{ "}</span>
+                <span className="text-cyan-400">count</span>
+                <span className="text-fd-foreground">: rows.length {"}"})</span>
+                {"\n"}
+                <span className="text-fd-foreground">{"    "}</span>
+                <span className="text-sky-400">return</span>
+                <span className="text-fd-foreground">{" data"}</span>
+                {"\n"}
+                <span className="text-fd-foreground">{"  })"}</span>
               </code>
             </pre>
           </div>
@@ -137,7 +175,7 @@ export function Showcase() {
             {SPANS.map((s) => (
               <div key={s.label} className="flex items-center gap-3 text-xs">
                 <span
-                  className="w-40 shrink-0 truncate font-mono text-fd-muted-foreground"
+                  className="w-32 shrink-0 truncate font-mono text-fd-muted-foreground"
                   style={{ paddingLeft: s.depth * 12 }}
                 >
                   {s.label}
@@ -155,13 +193,15 @@ export function Showcase() {
             ))}
           </div>
 
-          {/* log line */}
+          {/* log line carrying wide-event context */}
           <div className="border-t border-fd-border bg-fd-background/40 px-4 py-3 font-mono text-xs">
-            <span className="text-emerald-400">✓</span>{" "}
+            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-400">
+              INFO
+            </span>{" "}
+            <span className="text-fd-foreground">loaded users</span>{" "}
             <span className="text-fd-muted-foreground">
-              user.id=<span className="text-fd-foreground">123</span> plan=
-              <span className="text-fd-foreground">pro</span> · request
-              completed
+              count=<span className="text-fd-foreground">12</span> user.plan=
+              <span className="text-fd-foreground">pro</span>
             </span>
           </div>
         </motion.div>
