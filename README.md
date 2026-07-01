@@ -1,4 +1,7 @@
-# Vision 🔮
+<div align="center">
+  <img src="apps/docs/public/logo.svg" width="76" alt="Vision logo" />
+  <h1>Vision</h1>
+</div>
 
 [![npm version](https://img.shields.io/npm/v/@getvision/server.svg)](https://www.npmjs.com/package/@getvision/server)
 [![npm downloads](https://img.shields.io/npm/dm/@getvision/server.svg)](https://www.npmjs.com/package/@getvision/server)

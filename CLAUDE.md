@@ -842,22 +842,31 @@ bun run build
 
 ### @getvision/server
 
-**Purpose:** Meta-framework built on Hono with built-in observability
+**Purpose:** Meta-framework built on Elysia with built-in observability
 
 **Key features:**
-- Service builder pattern
-- Event bus (BullMQ)
-- Cron jobs (BullMQ repeatable jobs)
-- Built-in Vision integration
+- Module pattern: `createVision()` + `createModule({ prefix }).use(defineEvents(...)).get(...)`
+- Per-request context helpers: `span`, `addContext`, `emit`, `traceId`
+- Standard Schema validation (Zod / Valibot / TypeBox via re-exported `t`)
+- Type-safe pub/sub events (`defineEvents`) with trace context propagation
+- Cron jobs via BullMQ repeatable jobs (`defineCrons`)
+- Per-endpoint rate limiting (`rateLimit`)
+- OTLP trace export (`OtlpTraceExporter`)
+- Eden Treaty ready — `export type AppType = typeof app`
+- Graceful shutdown — `ready(app)` / `close(app)` (also `app.close()`, auto-registered with `bun --hot`)
+
+**Public exports** (from `src/vision-app.ts`):
+`createVision`, `createModule`, `defineEvents`, `defineCrons`, `rateLimit`, `onEvent`, `onEvents`, `MemoryRateLimitStore`, `getVisionContext`, `ready`, `close`, `EventBus`, `t` (Elysia/TypeBox).
 
 **Dependencies:**
-- `hono` - Base framework
-- `@hono/node-server` - Node.js adapter
+- `elysia` - Base framework (Bun-first)
 - `bullmq` - Job queue and event bus
 - `ioredis` - Redis client
-- `zod` - Validation (required for server)
+- `zod` - Validation (commonly used; also supports Valibot and TypeBox via Standard Schema)
 
-**Note:** Exports TypeScript source (`exports: "./src/index.ts"`), not compiled
+**Note:** Exports TypeScript source (`exports: "./src/index.ts"`), not compiled.
+
+**Migration:** The pre-1.0 Hono-based `Vision` class and `app.service(...).endpoint(...)` ServiceBuilder pattern are gone. See `apps/docs/content/docs/server/migration.mdx` for the old → new mapping.
 
 ### @getvision/adapter-express
 
