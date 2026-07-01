@@ -1,24 +1,21 @@
 {
-  "mode": "snapshot",
+  "mode": "stable",
   "initialVersions": {
     "docs": "0.0.1",
-    "web": "0.0.11",
-    "express-basic-example": "0.0.17",
-    "fastify-basic-example": "0.0.17",
-    "hono-basic-example": "0.0.17",
-    "nextjs-vision-example": "0.0.3",
-    "vision-basic-example": "0.0.25",
-    "@getvision/adapter-express": "0.1.4",
-    "@getvision/adapter-fastify": "0.1.4",
-    "@getvision/adapter-hono": "0.1.4",
-    "@getvision/core": "0.2.1",
+    "web": "0.0.12",
+    "express-basic-example": "0.0.18",
+    "fastify-basic-example": "0.0.18",
+    "hono-basic-example": "0.0.18",
+    "nextjs-vision-example": "0.0.4",
+    "vision-basic-example": "0.0.26",
+    "@getvision/adapter-express": "0.1.5",
+    "@getvision/adapter-fastify": "0.1.5",
+    "@getvision/adapter-hono": "0.1.5",
+    "@getvision/core": "0.3.0",
     "@repo/eslint-config": "0.0.1",
-    "@getvision/server": "1.0.2",
+    "@getvision/server": "1.1.0",
     "@repo/typescript-config": "0.0.1",
     "@repo/ui": "0.0.2"
   },
-  "changesets": [
-    "angry-bats-shout",
-    "lazy-frogs-dream"
-  ]
+  "changesets": []
 }

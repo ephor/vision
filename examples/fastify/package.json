@@ -1,6 +1,6 @@
 {
   "name": "fastify-basic-example",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "private": true,
   "type": "module",
   "license": "MIT",

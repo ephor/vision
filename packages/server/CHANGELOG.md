@@ -1,5 +1,40 @@
 # @getvision/server
 
+## 1.1.0
+
+### Minor Changes
+
+- a99fcdb: Add a generic exporter mechanism that fans completed traces out to OTLP/HTTP
+  backends (BetterStack, Honeycomb, Grafana Tempo, an OTel Collector, …). The
+  destination is purely endpoint + headers, so one exporter targets any
+  OTLP-compatible backend.
+  - core: `TraceExporter` interface + `VisionServerOptions.exporters`; fan-out in
+    `completeTrace` (isolated per exporter) and flush on `stop()`
+  - core: `OtlpTraceExporter` (OTLP/JSON over HTTP) with batching, random
+    spec-compliant ids via Web Crypto, and Trace→OTLP transform (synthetic root
+    SERVER span + nested INTERNAL spans, logs as span events)
+  - server: forward `vision.exporters` into VisionCore; re-export OtlpTraceExporter
+  - docs: README + docs-site config/section; mark OpenTelemetry export shipped
+
+- ad2e4bc: Add OTLP log exporter — all console.\* logs captured by ConsoleInterceptor are now
+  exportable as OTLP LogRecords to any OTLP/HTTP backend (BetterStack, Honeycomb,
+  Grafana Tempo, OTel Collector).
+  - core: `LogExporter` interface with `export()`/`shutdown()` contract
+  - core: `OtlpLogExporter` — buffered OTLP/JSON log exporter (same batching,
+    retry, and isolation pattern as `OtlpTraceExporter`)
+  - core: `VisionServerOptions.exporters` grouped under `{ traces?, logs? }` for a
+    single entry point
+  - core: `ConsoleInterceptor` propagates `traceId` on `LogEntry` for trace-log
+    correlation in downstream backends
+  - server: forward `vision.exporters.logs` into VisionCore; re-export
+    `OtlpLogExporter`
+
+### Patch Changes
+
+- Updated dependencies [a99fcdb]
+- Updated dependencies [ad2e4bc]
+  - @getvision/core@0.3.0
+
 ## 1.0.2
 
 ### Patch Changes
