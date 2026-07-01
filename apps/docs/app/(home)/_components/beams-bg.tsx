@@ -12,6 +12,7 @@ const Beams = dynamic(() => import("./beams/Beams"), { ssr: false });
  */
 export function BeamsBg() {
   const [show, setShow] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const motionOk = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -21,10 +22,24 @@ export function BeamsBg() {
     return () => motionOk.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    if (!show) {
+      setReady(false);
+      return;
+    }
+    // let the WebGL canvas paint before we fade it in over the static bg
+    const t = setTimeout(() => setReady(true), 350);
+    return () => clearTimeout(t);
+  }, [show]);
+
   if (!show) return null;
 
   return (
-    <div className="absolute inset-0 -z-10 block">
+    <div
+      className={`absolute inset-0 -z-10 block transition-opacity duration-1000 ease-out ${
+        ready ? "opacity-100" : "opacity-0"
+      }`}
+    >
       <Beams
         beamWidth={2}
         beamHeight={18}

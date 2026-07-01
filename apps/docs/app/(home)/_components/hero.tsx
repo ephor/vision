@@ -43,9 +43,9 @@ export function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-xl text-lg text-fd-muted-foreground text-pretty">
-          Add live traces, logs, and an API playground to the Express, Fastify,
-          Hono or Elysia app you already have. Two lines of code — no rewrite,
-          no vendor lock-in.
+          Vision auto-generates a full dashboard for the Express, Fastify, Hono
+          or Elysia app you already have — routes, traces, logs and an API
+          playground. Two lines of code, zero config.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

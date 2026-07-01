@@ -8,7 +8,7 @@ import {
   FlaskConical,
   ShieldCheck,
   Share2,
-  Lock,
+  LayoutDashboard,
   Boxes,
   Cable,
   KeyRound,
@@ -29,6 +29,11 @@ const FEATURES: {
   body: string;
   badge?: string;
 }[] = [
+  {
+    icon: LayoutDashboard,
+    title: "Auto-generated dashboard",
+    body: "Vision discovers your routes and services and builds the whole dashboard for you — no setup, no config, no schema files.",
+  },
   {
     icon: Activity,
     title: "Real-time tracing",
@@ -55,18 +60,13 @@ const FEATURES: {
     body: "Ship the same traces over OTLP/HTTP to Grafana, Honeycomb, Datadog or an OTel Collector.",
     badge: "new",
   },
-  {
-    icon: Lock,
-    title: "Self-hosted & MIT",
-    body: "Runs in-process, alongside your app. Your data never leaves your machine. Zero lock-in.",
-  },
 ];
 
 const WITHOUT = [
   {
     icon: Boxes,
     title: "Without the rewrite",
-    body: "Encore.ts gives you a dashboard — if you rebuild your app on its framework. Vision is just middleware on the app you have.",
+    body: "Some tools give you a dashboard — but only if you rebuild your app on their framework. Vision is just middleware on the app you already have.",
   },
   {
     icon: Cable,
@@ -159,7 +159,7 @@ export function Below() {
             href="/docs/why-vision"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
           >
-            See the full comparison with Encore.ts
+            See how Vision compares
             <ArrowRight className="size-4" />
           </Link>
         </motion.div>
