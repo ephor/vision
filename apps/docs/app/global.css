@@ -35,20 +35,6 @@
   animation: aurora-shift 6s ease-in-out infinite;
 }
 
-/* Fade a grid layer towards the edges */
-.grid-fade-mask {
-  -webkit-mask-image: radial-gradient(
-    ellipse 65% 55% at 50% 0%,
-    #000 55%,
-    transparent 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 65% 55% at 50% 0%,
-    #000 55%,
-    transparent 100%
-  );
-}
-
 /* Rotating conic "border beam" around a card */
 .beam-border {
   position: relative;

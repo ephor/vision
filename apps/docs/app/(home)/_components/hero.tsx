@@ -15,7 +15,6 @@ export function Hero() {
 
       {/* Static background (shown when beams are off, e.g. reduced motion) */}
       <div className="pointer-events-none absolute inset-0 -z-20">
-        <div className="grid-fade-mask absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,var(--color-fd-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-fd-border)_1px,transparent_1px)] [background-size:44px_44px]" />
         <div className="absolute -top-40 left-1/2 h-[460px] w-[860px] -translate-x-1/2 rounded-full bg-emerald-500/15 blur-[130px]" />
         <div className="absolute top-40 -right-24 h-[320px] w-[320px] rounded-full bg-teal-500/10 blur-[100px]" />
       </div>
