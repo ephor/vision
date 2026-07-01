@@ -259,7 +259,7 @@ const app = createVision({
     maxTraces: 1000,
     maxLogs: 10000,
     logging: true,
-    // exporters: [...] // forward traces to OTLP backends — see below
+    // exporters: { traces: [...], logs: [...] } // forward to OTLP backends — see below
   },
   pubsub: {
     devMode: true,    // in-memory queue — no Redis required
@@ -268,9 +268,11 @@ const app = createVision({
 })
 ```
 
-## OTLP Trace Export
+## OTLP Export
 
-Forward every completed trace to any OpenTelemetry-compatible backend — BetterStack, Honeycomb, Grafana Tempo, Datadog, an OTel Collector, and so on — by adding an `OtlpTraceExporter` to `vision.exporters`. Export runs alongside the local Dashboard, so traces show up in both.
+Forward observability data to any OpenTelemetry-compatible backend — BetterStack, Honeycomb, Grafana Tempo, Datadog, an OTel Collector — via the `exporters` config. Traces and logs are configured independently under the same `exporters` object. Export runs alongside the local Dashboard, so data appears in both.
+
+### Trace Export
 
 ```typescript
 import { createVision, OtlpTraceExporter } from '@getvision/server'
@@ -278,20 +280,20 @@ import { createVision, OtlpTraceExporter } from '@getvision/server'
 createVision({
   service: { name: 'my-api' },
   vision: {
-    exporters: [
-      new OtlpTraceExporter({
-        endpoint: 'https://<host>/v1/traces',         // OTLP/HTTP traces endpoint
-        headers: { Authorization: 'Bearer <token>' }, // backend auth
-        serviceName: 'my-api',
-      }),
-    ],
+    exporters: {
+      traces: [
+        new OtlpTraceExporter({
+          endpoint: 'https://<host>/v1/traces',         // OTLP/HTTP traces endpoint
+          headers: { Authorization: 'Bearer <token>' }, // backend auth
+          serviceName: 'my-api',
+        }),
+      ],
+    },
   },
 })
 ```
 
-The exporter speaks OTLP/JSON over HTTP — the destination is purely a matter of `endpoint` + `headers`, so the same code targets any OTLP backend (switching from BetterStack to Honeycomb is a URL + header change, not a code change). Traces are buffered and flushed in batches; failed batches are re-buffered for the next flush so a transient backend outage doesn't silently lose traces, and a failing exporter is isolated so it never affects request handling.
-
-Vision models each HTTP request as a synthetic root span (`SERVER`) with your `span(...)` calls as nested `INTERNAL` spans, and attaches the trace's logs as span events.
+Each HTTP request is modelled as a synthetic root span (`SERVER`) with `span(...)` calls as nested `INTERNAL` spans, and trace logs attached as span events.
 
 **`OtlpTraceExporter` options**
 
@@ -307,7 +309,55 @@ Vision models each HTTP request as a synthetic root span (`SERVER`) with your `s
 | `timeoutMs` | `10000` | Per-request timeout (ms) |
 | `onError` | `console.warn` | Called on transport/HTTP failures and queue overflow. Pass a no-op to silence. |
 
-> Need a custom sink (custom format, webhook, second dashboard)? Implement the `TraceExporter` interface (`export(trace)` + optional `shutdown()`) and add it to `vision.exporters` — `OtlpTraceExporter` is just the built-in one.
+### Log Export
+
+All `console.*` calls captured by Vision's `ConsoleInterceptor` can be forwarded as OTLP LogRecords. Logs inside a trace carry the `traceId` for correlation in the backend.
+
+```typescript
+import { createVision, OtlpLogExporter } from '@getvision/server'
+
+createVision({
+  service: { name: 'my-api' },
+  vision: {
+    exporters: {
+      logs: [
+        new OtlpLogExporter({
+          endpoint: 'https://<host>/v1/logs',            // OTLP/HTTP logs endpoint
+          headers: { Authorization: 'Bearer <token>' },
+          serviceName: 'my-api',
+        }),
+      ],
+    },
+  },
+})
+```
+
+Works alongside trace export — just add both under the same `exporters`:
+
+```typescript
+exporters: {
+  traces: [new OtlpTraceExporter({ endpoint: '.../v1/traces', ... })],
+  logs:   [new OtlpLogExporter({ endpoint: '.../v1/logs', ... })],
+}
+```
+
+**`OtlpLogExporter` options**
+
+Same options as `OtlpTraceExporter`. Defaults and behaviour (buffering, batching, retry, isolation) are identical.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `endpoint` | _(required)_ | OTLP/HTTP logs endpoint, e.g. `https://<host>/v1/logs` |
+| `headers` | `{}` | Extra headers, typically auth. Keys matched case-insensitively. |
+| `serviceName` | `'unknown_service'` | `service.name` resource attribute |
+| `resourceAttributes` | `{}` | Additional resource attributes |
+| `maxQueueSize` | `2048` | Hard cap on buffered log entries |
+| `maxExportBatchSize` | `512` | Flush eagerly once this many entries are buffered |
+| `flushIntervalMs` | `5000` | Background flush interval (ms) |
+| `timeoutMs` | `10000` | Per-request timeout (ms) |
+| `onError` | `console.warn` | Called on transport/HTTP failures and queue overflow |
+
+> Need a custom sink for traces or logs? Implement `TraceExporter` or `LogExporter` and add it to the respective array — the built-in exporters are just the reference implementations.
 
 ## API Reference
 
