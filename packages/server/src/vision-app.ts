@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { VisionCore, runInTraceContext, generateTemplate } from '@getvision/core'
-import type { LogLevel, RouteMetadata, TraceExporter } from '@getvision/core'
+import type { LogLevel, RouteMetadata, TraceExporter, LogExporter } from '@getvision/core'
 import { AsyncLocalStorage } from 'async_hooks'
 import { existsSync } from 'fs'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
@@ -179,11 +179,14 @@ export interface VisionConfig {
     logging?: boolean
     apiUrl?: string
     /**
-     * Sinks that receive every completed trace — e.g. an `OtlpTraceExporter`
-     * forwarding to BetterStack/Honeycomb/Grafana or an OTel Collector. Failures
-     * are isolated and never affect request handling.
+     * Sinks for observability data — e.g. `OtlpTraceExporter` for traces,
+     * `OtlpLogExporter` for logs. Every sink is isolated so a failure in one
+     * never affects request handling.
      */
-    exporters?: TraceExporter[]
+    exporters?: {
+      traces?: TraceExporter[]
+      logs?: LogExporter[]
+    }
   }
   pubsub?: {
     redis?: {

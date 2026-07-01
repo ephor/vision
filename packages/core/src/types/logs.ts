@@ -12,4 +12,5 @@ export interface LogEntry {
   context?: Record<string, any>
   source?: string
   stack?: string
+  traceId?: string
 }

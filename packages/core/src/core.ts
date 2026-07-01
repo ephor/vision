@@ -13,6 +13,7 @@ import type {
   LogLevel,
   LogEntry,
   TraceExporter,
+  LogExporter,
 } from './types/index'
 
 /**
@@ -26,7 +27,8 @@ export class VisionCore {
   private consoleInterceptor?: ConsoleInterceptor
   private routes: RouteMetadata[] = []
   private services: ServiceGroup[] = []
-  private exporters: TraceExporter[]
+  private traceExporters: TraceExporter[]
+  private logExporters: LogExporter[]
   private startPromise?: Promise<void>
   private appStatus: AppStatus = {
     name: 'Unknown',
@@ -40,19 +42,22 @@ export class VisionCore {
     this.traceStore = new TraceStore(options.maxTraces)
     this.tracer = new Tracer()
     this.logStore = new LogStore(options.maxLogs)
-    this.exporters = options.exporters ?? []
+    this.traceExporters = options.exporters?.traces ?? []
+    this.logExporters = options.exporters?.logs ?? []
 
     // Optional console intercept
     if (options.captureConsole !== false) {
       this.consoleInterceptor = new ConsoleInterceptor(
         this.logStore,
         this.traceStore,
-        () => {
+        (entry) => {
           // Broadcast latest log entry to connected clients
           this.broadcast({
             type: 'log.entry',
-            data: this.logStore.getLogs({ limit: 1 })[0]
+            data: entry
           })
+          // Fan out to all log exporters
+          this.exportLog(entry)
         }
       )
       this.consoleInterceptor.start()
@@ -233,17 +238,31 @@ export class VisionCore {
   }
 
   /**
-   * Fan a completed trace out to all configured exporters. Each exporter is
-   * isolated so a throwing/misbehaving sink can't break request handling.
+   * Fan a completed trace out to all configured trace exporters. Each exporter
+   * is isolated so a throwing/misbehaving sink can't break request handling.
    */
   private exportTrace(trace: Trace): void {
-    for (const exporter of this.exporters) {
+    for (const exporter of this.traceExporters) {
       try {
         exporter.export(trace)
       } catch (error) {
         // Surface a warning so silent failures don't make "where are my traces?"
         // impossible to debug locally, but never let a throw disrupt the others.
         console.warn('[VisionCore] Trace exporter threw:', error)
+      }
+    }
+  }
+
+  /**
+   * Fan a log entry out to all configured log exporters. Each exporter is
+   * isolated so a throwing/misbehaving sink can't break request handling.
+   */
+  private exportLog(entry: LogEntry): void {
+    for (const exporter of this.logExporters) {
+      try {
+        void exporter.export(entry)
+      } catch (error) {
+        console.warn('[VisionCore] Log exporter threw:', error)
       }
     }
   }
@@ -389,7 +408,8 @@ export class VisionCore {
   /** Stop the Dashboard port and flush exporters. Idempotent. */
   async stop(): Promise<void> {
     this.startPromise = undefined
-    await Promise.allSettled(this.exporters.map((exporter) => exporter.shutdown?.()))
+    await Promise.allSettled(this.traceExporters.map((exporter) => exporter.shutdown?.()))
+    await Promise.allSettled(this.logExporters.map((exporter) => exporter.shutdown?.()))
     await this.server.stop()
   }
 }

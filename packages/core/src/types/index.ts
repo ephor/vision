@@ -3,7 +3,7 @@
  */
 import { LogEntry } from "./logs";
 import type { ValidationSchema } from '../validation';
-import type { TraceExporter } from '../exporters/types';
+import type { TraceExporter, LogExporter } from '../exporters/types';
 
 // JSON-RPC 2.0 Protocol
 export interface JsonRpcRequest {
@@ -171,11 +171,15 @@ export interface VisionServerOptions {
    */
   autoStart?: boolean
   /**
-   * Sinks that receive every completed trace (e.g. an OTLP exporter forwarding
-   * to BetterStack/Honeycomb/Grafana). Failures are isolated and never affect
-   * request handling.
+   * Sinks for observability data. Every sink is isolated so a failure in one
+   * never affects request handling.
    */
-  exporters?: TraceExporter[]
+  exporters?: {
+    /** Sinks that receive every completed trace. */
+    traces?: TraceExporter[]
+    /** Sinks that receive every captured log entry (from ConsoleInterceptor). */
+    logs?: LogExporter[]
+  }
 }
 
 // Adapter interface
@@ -208,4 +212,4 @@ export interface AdapterResponse {
 
 export * from './logs'
 export * from './adapter-options'
-export type { TraceExporter } from '../exporters/types'
+export type { TraceExporter, LogExporter } from '../exporters/types'

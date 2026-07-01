@@ -67,3 +67,42 @@ export interface OtlpResourceSpans {
 export interface OtlpTracePayload {
   resourceSpans: OtlpResourceSpans[]
 }
+
+// ---------------------------------------------------------------------------
+// OTLP Logs types
+// ---------------------------------------------------------------------------
+
+/** @see https://opentelemetry.io/docs/specs/otel/logs/data-model/ */
+export interface OtlpLogRecord {
+  timeUnixNano: string
+  observedTimeUnixNano?: string
+  severityNumber?: number
+  severityText?: string
+  body?: { stringValue: string } | OtlpAnyValue
+  attributes?: OtlpKeyValue[]
+  traceId?: string
+  spanId?: string
+  flags?: number
+}
+
+export interface OtlpScopeLogs {
+  scope?: { name: string; version?: string }
+  logRecords: OtlpLogRecord[]
+}
+
+export interface OtlpResourceLogs {
+  resource?: { attributes: OtlpKeyValue[] }
+  scopeLogs: OtlpScopeLogs[]
+}
+
+export interface OtlpLogPayload {
+  resourceLogs: OtlpResourceLogs[]
+}
+
+/** SeverityNumber values per the OTLP spec. */
+export const SeverityNumber = {
+  DEBUG: 5,
+  INFO: 9,
+  WARN: 13,
+  ERROR: 17,
+} as const

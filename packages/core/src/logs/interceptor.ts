@@ -1,5 +1,5 @@
 import type { LogStore } from './store'
-import type { LogLevel } from '../types/logs'
+import type { LogEntry, LogLevel } from '../types/logs'
 import type { TraceStore } from '../tracing/store'
 import { getActiveTraceId } from '../tracing/context'
 
@@ -18,12 +18,12 @@ export class ConsoleInterceptor {
 
   private logStore: LogStore
   private traceStore?: TraceStore
-  private onLog?: (level: LogLevel, message: string, args?: any[], stack?: string) => void
+  private onLog?: (entry: LogEntry) => void
 
   constructor(
     logStore: LogStore,
     traceStore?: TraceStore,
-    onLog?: (level: LogLevel, message: string, args?: any[], stack?: string) => void
+    onLog?: (entry: LogEntry) => void
   ) {
     this.logStore = logStore
     this.traceStore = traceStore
@@ -74,6 +74,7 @@ export class ConsoleInterceptor {
 
         // Store log in global store with context
         const logEntry = this.logStore.addLog(level, message, args, stack, context)
+        logEntry.traceId = activeTraceId
 
         // Attach to active trace if exists
         if (activeTraceId && this.traceStore) {
@@ -81,7 +82,7 @@ export class ConsoleInterceptor {
         }
 
         // Notify listener
-        this.onLog?.(level, message, args, stack)
+        this.onLog?.(logEntry)
       }
     }
 
