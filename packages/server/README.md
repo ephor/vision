@@ -6,9 +6,9 @@ Built on Elysia. Automatic tracing. Type-safe APIs. Pub/Sub & Cron. Zero config.
 
 ## Why Vision Server?
 
-**vs NestJS:** Faster, simpler, better DX  
-**vs Encore.ts:** Open source, no vendor lock-in  
-**vs Plain Elysia:** Built-in observability, type-safety, pub/sub & cron
+**vs NestJS:** Orders of magnitude faster, zero DI ceremony, built-in observability
+**vs Encore.ts:** 100% open source (MIT), no vendor lock-in
+**vs Plain Elysia:** Built-in observability, pub/sub & cron, rate limiting, module pattern
 
 ## Quick Start
 
@@ -49,205 +49,226 @@ const usersModule = createModule({ prefix: '/users' })
 
 const app = createVision({
   service: { name: 'My API', version: '1.0.0' },
-  vision: { enabled: true },
   pubsub: { devMode: true },
-})
-  .use(usersModule)
-  .listen(3000)
+}).use(usersModule)
+
+app.listen(3000)
+
+/** Eden Treaty client type — export for the frontend. */
+export type AppType = typeof app
 ```
 
 **That's it!** You get:
+
 - ✅ Vision Dashboard on port 9500
 - ✅ Automatic request tracing
-- ✅ Type-safe validation
-- ✅ Pub/Sub events (BullMQ-based)
-- ✅ Eden Treaty client support (`treaty<typeof app>`)
+- ✅ Type-safe validation (Zod / Valibot / TypeBox via Standard Schema)
+- ✅ Pub/Sub events (BullMQ-based, in-memory in dev)
+- ✅ Eden Treaty client support — `treaty<typeof app>`
+
+## The Module Pattern
+
+Vision composes apps from small, focused **modules**. A module is an Elysia plugin with Vision's per-request context (`span`, `emit`, `addContext`, `traceId`) already typed in.
+
+```typescript
+const ordersModule = createModule({ prefix: '/orders' })
+  .use(defineEvents({ 'order/placed': { schema, handler } }))
+  .post(
+    '/',
+    async ({ body, emit }) => {
+      await emit('order/placed', { orderId: '...', total: body.total })
+      return { ok: true }
+    },
+    { body: OrderBody }
+  )
+```
+
+Compose at the root via `.use()` — order doesn't matter, and each module contributes its own routes, events, and crons:
+
+```typescript
+const app = createVision({ service: { name: 'Shop' } })
+  .use(usersModule)
+  .use(ordersModule)
+  .use(productsModule)
+```
 
 ## Features
 
-### 🚀 Zero Configuration
+### 🚀 Zero configuration
 
 Everything works out of the box:
-- Vision Dashboard automatically starts
-- Tracing middleware auto-installed
-- Event bus auto-initialized (BullMQ)
-- Service catalog auto-discovered
 
-### 🔥 c.span() Built Into Context
+- Vision Dashboard starts automatically on port 9500
+- Tracing hooks are pre-wired (`onRequest`, `onAfterResponse`, `onError`)
+- Service & route catalog auto-registered (once on `listen`, or lazily on first request for `.handle(req)` deployments like Next.js)
+- BullMQ event bus auto-initialized (in-memory in `devMode`, Redis in production)
 
-No more `useVisionSpan()` or manual imports:
+### 🔥 `span` / `emit` / `addContext` / `traceId` in every handler
 
-```typescript
-async (data, c) => {
-  // Just use c.span()!
-  const user = c.span('db.select', { 'db.table': 'users' }, () => {
-    return db.users.findOne(data.id)
-  })
-  
-  const posts = c.span('db.select', { 'db.table': 'posts' }, () => {
-    return db.posts.findMany({ userId: user.id })
-  })
-  
-  return { user, posts }
-}
-```
-
-### ✅ Type-Safe Everything
-
-Zod validation for inputs and outputs:
+Every HTTP handler receives Vision's context alongside Elysia's `body/query/params`:
 
 ```typescript
-app.endpoint('POST', '/users', {
-  input: z.object({
-    name: z.string().min(1),
-    email: z.string().email()
-  }),
-  output: z.object({
-    id: z.string()
+.post('/', async ({ body, span, emit, addContext, traceId }) => {
+  addContext({ 'user.email': body.email })
+
+  const user = span('db.insert', { 'db.table': 'users' }, () => {
+    return db.users.create(body)
   })
-}, async (data, c) => {
-  // data is fully typed!
-  return { id: '123' }
+
+  await emit('user/created', { userId: user.id, email: user.email })
+  return { ...user, traceId }
 })
 ```
 
-### 📡 Pub/Sub & Cron Built-In
+### ✅ Validation with any Standard Schema library
 
-BullMQ event bus is built-in:
+Use Zod, Valibot, or Elysia's built-in TypeBox (`t`) — all interchangeable, mix per route:
 
 ```typescript
-// Subscribe to events
-app.on('user/created', async (event) => {
-  await sendWelcomeEmail(event.data.email)
+import { t } from '@getvision/server'
+import { z } from 'zod'
+import * as v from 'valibot'
+
+.post('/', handler, { body: z.object({ name: z.string() }) })           // Zod
+.post('/', handler, { body: v.object({ name: v.string() }) })           // Valibot
+.post('/', handler, { body: t.Object({ name: t.String() }) })           // TypeBox
+```
+
+Invalid request → Elysia returns a `422` with validation details automatically.
+
+### 📡 Built-in pub/sub & cron
+
+Powered by BullMQ — in-memory during development, Redis-backed in production:
+
+```typescript
+import { createModule, defineEvents, defineCrons } from '@getvision/server'
+
+const notificationsModule = createModule()
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string() }),
+        description: 'User account created',
+        icon: '👤',
+        tags: ['user', 'auth'],
+        handler: async (event) => {
+          await sendWelcomeEmail(event.email)
+        },
+      },
+    })
+  )
+  .use(
+    defineCrons({
+      'nightly-cleanup': {
+        schedule: '0 0 * * *',
+        handler: async () => {
+          await db.sessions.deleteExpired()
+        },
+      },
+    })
+  )
+```
+
+Emit events from any handler using the context:
+
+```typescript
+await emit('user/created', { userId: '123', email: 'user@example.com' })
+```
+
+Trace context (`traceId`/`spanId`) is propagated through the BullMQ job envelope, so event/cron handlers join the same trace as the request that emitted them.
+
+### 🎯 Elysia-native
+
+The underlying instance is Elysia — every plugin and feature works unmodified:
+
+```typescript
+import { cors } from '@elysia/cors'
+import { swagger } from '@elysiajs/swagger'
+
+const app = createVision({ service: { name: 'My API' } })
+  .use(cors())
+  .use(swagger())
+  .use(usersModule)
+  .get('/health', () => ({ status: 'ok' }))
+```
+
+### 🔒 Per-endpoint rate limiting
+
+```typescript
+import { rateLimit } from '@getvision/server'
+
+.post('/', handler, {
+  body: SignupBody,
+  beforeHandle: [rateLimit({ requests: 5, window: '15m' })],
 })
- // Schedule cron jobs
-.cron('0 0 * * *', async () => {
-  await cleanupInactiveUsers()
-})
-
-// Send events from handlers
-await c.emit('user/created', { userId: '123', email: 'user@example.com' })
 ```
 
-### 🎯 Service Builder Pattern
-
-Organize your code by services:
+Module-level — apply once to every route in the module:
 
 ```typescript
-app.service('users')
-  .on('user/created', handler)
-  .endpoint('GET', '/users', schema, handler)
-  .endpoint('POST', '/users', schema, handler)
-  .cron('0 0 * * *', handler)
-
-app.service('orders')
-  .on('order/placed', handler)
-  .endpoint('GET', '/orders', schema, handler)
-  .endpoint('POST', '/orders', schema, handler)
+const adminModule = createModule({ prefix: '/admin' })
+  .onBeforeHandle(rateLimit({ requests: 10, window: '30s' }))
+  .get('/stats', handler)
+  .delete('/sessions/:id', handler)
 ```
 
-> Note: Declare `service.on('event', { schema, handler })` BEFORE any endpoint that calls `c.emit('event', ...)`.
-> This ensures TypeScript can infer the event type for `c.emit`, otherwise you'll get type errors.
-
-### 🔐 Middleware Support
-
-Add middleware globally or per-service:
+### 🧩 Eden Treaty — typed RPC on the client
 
 ```typescript
-import { logger } from 'hono/logger'
-import { jwt } from 'hono/jwt'
+import { treaty } from '@elysia/eden'
+import type { AppType } from './server'
 
-// Global middleware
-app.use('*', logger())
+const api = treaty<AppType>('http://localhost:3000')
 
-// Service-level middleware (applies to all endpoints)
-app.service('admin')
-  .use(jwt({ secret: 'secret' }))  // Protect all admin endpoints
-  .endpoint('GET', '/admin/users', schema, handler)
-  .endpoint('POST', '/admin/settings', schema, handler)
-
-// Endpoint-level middleware
-app.service('users')
-  .endpoint('GET', '/users', schema, handler)  // Public
-  .endpoint('POST', '/users', schema, handler, {
-    middleware: [authMiddleware]  // Protected
-  })
+const { data } = await api.users.get()
+//         ^? { users: { id: string; name: string }[] }
 ```
 
-### 🔮 Vision Dashboard Included
+Change a schema on the server → the client gets a compile error. No codegen.
 
-Automatic observability:
-- 📊 Real-time request tracing
-- 📝 Live logs
-- 🏗️ Service catalog
-- 🔍 Waterfall visualization
+### 🔮 Vision Dashboard
+
+Visit `http://localhost:9500` after starting your app:
+
+- 📊 Real-time request tracing with waterfall visualization
+- 📝 Live logs (linked to the trace that emitted them)
+- 🏗️ Service, route, event and cron catalog
+- 🧪 API Explorer — auto-generated request templates from your schemas
 - 📈 Performance metrics
 
-Visit `http://localhost:9500` after starting your app!
-
-## API Reference
-
-### `new Vision(config)`
-
-Create a new Vision app.
+## Configuration
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: {
     name: 'My API',
     version: '1.0.0',
     description: 'Optional description',
     integrations: {
-      database: 'postgresql://localhost/mydb',  // Optional
-      redis: 'redis://localhost:6379'            // Optional
+      database: 'postgresql://localhost/mydb',
+      redis: 'redis://localhost:6379',
     },
     drizzle: {
-      autoStart: true,   // Auto-start Drizzle Studio
-      port: 4983         // Drizzle Studio port
-    }
+      autoStart: true, // auto-start Drizzle Studio in dev
+      port: 4983,
+    },
   },
   vision: {
-    enabled: true,      // Enable/disable dashboard
-    port: 9500,         // Dashboard port
-    maxTraces: 1000,    // Max traces to store
-    maxLogs: 10000,     // Max logs to store
-    logging: true,      // Console logging
-    // exporters: [...]  // Forward traces to OTLP backends — see "OTLP Trace Export"
+    enabled: true,    // enable/disable dashboard
+    port: 9500,       // dashboard port
+    maxTraces: 1000,
+    maxLogs: 10000,
+    logging: true,
+    // exporters: [...] // forward traces to OTLP backends — see below
   },
   pubsub: {
-    devMode: true,     // In-memory BullMQ for local dev
-    redis: {
-      host: 'localhost',
-      port: 6379,
-      password: 'your-password',
-      // Connection settings to prevent timeouts
-      keepAlive: 30000,              // Keep connection alive (30s)
-      maxRetriesPerRequest: null,     // Required null for BullMQ
-      enableReadyCheck: true,        // Check Redis is ready
-      connectTimeout: 10000,         // Connection timeout (10s)
-      enableOfflineQueue: true       // Queue commands when offline
-    },
-    // BullMQ options
-    queue: {
-      defaultJobOptions: {
-        lockDuration: 300000, // 5 minutes
-        stalledInterval: 300000,
-        maxStalledCount: 1,
-        removeOnComplete: 1000,
-        removeOnFail: 1000,
-      }
-    },
-    worker: {
-      lockDuration: 300000,
-    },
-    queueEvents: {
-      stalledInterval: 300000,
-    }
-  }
+    devMode: true,    // in-memory queue — no Redis required
+    // redis: { host: 'localhost', port: 6379 }
+  },
 })
 ```
 
-### OTLP Trace Export
+## OTLP Trace Export
 
 Forward every completed trace to any OpenTelemetry-compatible backend — BetterStack, Honeycomb, Grafana Tempo, Datadog, an OTel Collector, and so on — by adding an `OtlpTraceExporter` to `vision.exporters`. Export runs alongside the local Dashboard, so traces show up in both.
 
@@ -270,7 +291,7 @@ createVision({
 
 The exporter speaks OTLP/JSON over HTTP — the destination is purely a matter of `endpoint` + `headers`, so the same code targets any OTLP backend (switching from BetterStack to Honeycomb is a URL + header change, not a code change). Traces are buffered and flushed in batches; failed batches are re-buffered for the next flush so a transient backend outage doesn't silently lose traces, and a failing exporter is isolated so it never affects request handling.
 
-Vision models each HTTP request as a synthetic root span (`SERVER`) with your `c.span(...)` calls as nested `INTERNAL` spans, and attaches the trace's logs as span events.
+Vision models each HTTP request as a synthetic root span (`SERVER`) with your `span(...)` calls as nested `INTERNAL` spans, and attaches the trace's logs as span events.
 
 **`OtlpTraceExporter` options**
 
@@ -288,347 +309,308 @@ Vision models each HTTP request as a synthetic root span (`SERVER`) with your `c
 
 > Need a custom sink (custom format, webhook, second dashboard)? Implement the `TraceExporter` interface (`export(trace)` + optional `shutdown()`) and add it to `vision.exporters` — `OtlpTraceExporter` is just the built-in one.
 
-### `app.service(name)`
+## API Reference
 
-Create a new service builder.
+### `createVision(config)`
+
+Create a new Vision app. Returns an Elysia instance decorated with Vision's per-request context.
 
 ```typescript
-app.service('users')
-  .on(...)
-  .endpoint(...)
-  .cron(...)
+const app = createVision({
+  service: { name: 'My API', version: '1.0.0' },
+  pubsub: { devMode: true },
+})
 ```
 
-### `service.endpoint(method, path, schema, handler, config?)`
+See [Configuration](#configuration) for all options.
 
-Define a type-safe HTTP endpoint.
+### `createModule({ prefix? })`
+
+Create a new module. Equivalent to `new Elysia({ prefix })` with Vision's context types pre-decorated.
 
 ```typescript
-.endpoint(
-  'GET',
-  '/users/:id',
-  {
-    input: z.object({ id: z.string() }),
-    output: z.object({ id: z.string(), name: z.string() })
-  },
-  async ({ id }, c) => {
-    // handler with c.span() available
-    return { id, name: 'John' }
-  },
-  {
-    middleware: [authMiddleware]  // Optional
-  }
+const usersModule = createModule({ prefix: '/users' })
+  .get('/', handler)
+  .post('/', handler, { body: schema })
+```
+
+### `defineEvents(map)`
+
+Register pub/sub event schemas and handlers. Returns an Elysia plugin — `.use()` it inside the module that owns the events.
+
+```typescript
+createModule().use(
+  defineEvents({
+    'user/created': {
+      schema: z.object({ userId: z.string(), email: z.string().email() }),
+      description: 'User account created',
+      icon: '👤',
+      tags: ['user', 'auth'],
+      handler: async (event) => {
+        await sendWelcomeEmail(event.email)
+      },
+    },
+  })
 )
 ```
 
-### `service.on(eventName, handler)`
+### `defineCrons(map)`
 
-Subscribe to events.
+Register cron jobs. Returns an Elysia plugin.
 
 ```typescript
-.on('user/created', async (event) => {
-  console.log(event.data)
+createModule().use(
+  defineCrons({
+    'nightly-cleanup': {
+      schedule: '0 0 * * *',
+      description: 'Purge expired sessions',
+      handler: async () => {
+        await db.sessions.deleteExpired()
+      },
+    },
+  })
+)
+```
+
+Crons run under BullMQ's repeatable jobs — in-memory in `devMode`, Redis-backed in production.
+
+### `rateLimit(options)`
+
+Token-bucket rate limiter. Plugs into Elysia's `beforeHandle` hook on a route or module.
+
+```typescript
+rateLimit({
+  requests: 100,
+  window: '1h',
+  keyBy: ({ request }) => request.headers.get('x-user-id') ?? 'anonymous',
 })
 ```
 
-### `service.cron(schedule, handler, options?)`
+- **`requests`** — max requests per window
+- **`window`** — `'30s'`, `'15m'`, `'1h'`, `'2d'`, or ms as a string
+- **`keyBy`** — optional key function (defaults to client IP, falls back to `User-Agent`)
+- **`store`** — optional `RateLimitStore` (defaults to in-memory `MemoryRateLimitStore`)
 
-Schedule a cron job.
+Exceeding the limit returns `429 Too Many Requests` with `RateLimit-*` / `Retry-After` headers.
 
-```typescript
-.cron('0 0 * * *', async () => {
-  console.log('Daily job')
-}, { id: 'custom-id' })
-```
+### Handler context
 
-### `c.span(name, attributes, fn)`
-
-Create a custom span (built into context).
+Every handler receives a merged Elysia + Vision context:
 
 ```typescript
-const result = c.span('operation.name', {
-  'attribute.key': 'value'
-}, () => {
-  // Your code here
-  return someResult
-})
+.post('/', async ({ body, params, query, set,           // Elysia
+                    span, emit, addContext, traceId }) => // Vision
+{ /* ... */ })
 ```
 
-### Event emission
+- **`span(name, attributes, fn)`** — wraps a block in a tracing span; returns `fn()`'s result. Detects async callbacks and defers `endSpan()` until the promise settles.
+- **`emit(event, payload)`** — publishes a typed event; payload is validated against the schema from `defineEvents`.
+- **`addContext(attrs)`** — adds "wide event" attributes to the current trace; subsequent logs pick them up automatically.
+- **`traceId`** — current request's trace id (for error response correlation, structured logging).
 
-Emit events from handlers using the context:
+### `ready(app)` / `close(app)`
 
 ```typescript
-await c.emit('user/created', { userId: '123', email: 'user@example.com' })
+import { ready, close } from '@getvision/server'
+
+await ready(app) // waits for dashboard, event bus, and Drizzle Studio to be up
+// ... work ...
+await close(app) // graceful shutdown — drains BullMQ workers, stops dashboard, terminates Drizzle Studio
 ```
 
-### `app.getVision()`
+Idempotent. `close()` is also auto-registered with `import.meta.hot?.dispose` when you use `.listen()` with `bun --hot`. Available as both top-level functions and instance methods (`app.close()`).
 
-Get the VisionCore instance.
+### `getVisionContext()`
+
+Access the current request's Vision context from anywhere (utilities, libs called deep in the call stack). Backed by AsyncLocalStorage:
 
 ```typescript
-const vision = app.getVision()
-const tracer = vision.getTracer()
+import { getVisionContext } from '@getvision/server'
+
+function logSomething() {
+  const ctx = getVisionContext()
+  ctx?.addContext({ 'lib.called': true })
+}
 ```
 
-### `app.start(port, options?)`
+### `t` (TypeBox)
 
-Start the server (convenience method).
+Re-export of Elysia's `t` for users who prefer TypeBox over Zod/Valibot:
 
 ```typescript
-await app.start(3000)
-// or
-await app.start(3000, { hostname: '0.0.0.0' })
+import { t } from '@getvision/server'
+
+.post('/', handler, { body: t.Object({ name: t.String() }) })
 ```
+
+### `EventBus` (advanced)
+
+The internal pub/sub class — exposed for sharing a bus across multiple apps or for manual wiring. Most users never need this.
 
 ## Drizzle Integration
 
-Vision Server automatically detects and integrates with Drizzle ORM.
-
-### Auto-Start Drizzle Studio
+Vision auto-detects Drizzle ORM and starts Drizzle Studio in development.
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: {
     name: 'My API',
-    integrations: {
-      database: 'sqlite://./dev.db'
-    },
+    integrations: { database: 'sqlite://./dev.db' },
     drizzle: {
-      autoStart: true,  // Start Drizzle Studio automatically
-      port: 4983        // Default: 4983
-    }
-  }
+      autoStart: true, // auto-start Drizzle Studio
+      port: 4983,      // default port
+    },
+  },
 })
 ```
 
 **What happens:**
+
 1. ✅ Detects `drizzle.config.ts` in your project
-2. ✅ Auto-starts Drizzle Studio on port 4983
-3. ✅ Displays in Vision Dashboard → Integrations
+2. ✅ Starts Drizzle Studio on port 4983
+3. ✅ Surfaces it in the Vision Dashboard → Integrations
 4. ✅ Links to https://local.drizzle.studio
 
-### Use with c.span()
+Trace database calls with `span`:
 
 ```typescript
-app.service('users')
-  .endpoint('GET', '/users/:id', schema, async ({ id }, c) => {
-    // Trace database queries
-    const user = c.span('db.select', {
-      'db.system': 'sqlite',
-      'db.table': 'users'
-    }, () => {
-      return db.select().from(users).where(eq(users.id, id)).get()
-    })
-    
-    return user
+.get('/users/:id', ({ params, span }) => {
+  return span('db.select', { 'db.system': 'sqlite', 'db.table': 'users' }, () => {
+    return db.select().from(users).where(eq(users.id, params.id)).get()
   })
+}, { params: z.object({ id: z.string() }) })
 ```
 
-## Redis Connection Configuration
+## Redis Configuration
 
-### Preventing Connection Drops
-
-Redis connections can close due to timeouts or network issues, causing workers to fail with "Connection is closed" errors. Vision Server includes sensible defaults to help prevent this:
+`devMode: true` uses an in-memory BullMQ — no Redis required. For production, point `pubsub.redis` at your Redis instance:
 
 ```typescript
-const app = new Vision({
+const app = createVision({
   service: { name: 'My API' },
   pubsub: {
-    devMode: false,  // Use Redis in production
+    devMode: false,
     redis: {
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-      // Connection settings (these are the defaults)
-      keepAlive: 30000,              // Keep connection alive (30s)
-      maxRetriesPerRequest: null,     // Required null for BullMQ
-      enableReadyCheck: true,        // Check Redis is ready before commands
-      connectTimeout: 10000,         // Connection timeout (10s)
-      enableOfflineQueue: true       // Queue commands when offline
-    }
-  }
+      // Sensible defaults (these are the built-ins)
+      keepAlive: 30000,             // prevent idle timeouts
+      maxRetriesPerRequest: null,   // required null for BullMQ
+      enableReadyCheck: true,
+      connectTimeout: 10000,
+      enableOfflineQueue: true,
+    },
+  },
 })
 ```
 
-**What this helps with:**
-- ✅ **keepAlive (30s)**: Helps prevent idle connection timeouts
-- ✅ **Automatic reconnection**: Retries up to 10 times with exponential backoff
-- ✅ **Connection settings**: Each Queue/Worker/QueueEvents uses these connection settings
-- ✅ **Offline queue**: Commands are queued when Redis is temporarily unavailable
+**Troubleshooting:**
 
-### Environment Variables
-
-You can also configure Redis via environment variables:
-
-```bash
-# Option 1: Redis URL (recommended)
-REDIS_URL=redis://:password@hostname:6379
-
-# Option 2: Individual variables
-REDIS_HOST=hostname
-REDIS_PORT=6379
-REDIS_PASSWORD=password
-```
-
-### Troubleshooting
-
-**"Connection is closed" errors:**
-- Vision Server now includes automatic reconnection with exponential backoff
-- Check logs for `🔄 Redis reconnecting...` messages
-- If reconnection fails after 10 attempts, check your Redis server health
-
-**"Could not renew lock for job" errors:**
-- This happens when workers lose connection during job processing
-- The new keepAlive setting (30s) prevents this
-- Increase `keepAlive` if you have very long-running jobs
-
-**Custom retry strategy:**
-```typescript
-pubsub: {
-  redis: {
-    // ... other settings
-    keepAlive: 60000,  // 60s for long-running jobs
-    maxRetriesPerRequest: 30  // More retries for unstable networks
-  }
-}
-```
-
-## Hono Compatibility
-
-Vision extends Hono, so all Hono features work:
-
-```typescript
-// Use any Hono middleware
-app.use('*', logger())
-app.use('*', cors())
-app.use('/admin/*', jwt({ secret: 'secret' }))
-
-// Define routes Hono-style
-app.get('/health', (c) => c.json({ status: 'ok' }))
-
-// Use Hono routing features
-app.route('/api/v1', apiRoutes)
-
-// Access Hono methods
-app.notFound((c) => c.json({ error: 'Not found' }, 404))
-app.onError((err, c) => c.json({ error: err.message }, 500))
-```
+- **"Connection is closed"** — Vision auto-reconnects with exponential backoff. Check logs for `🔄 Redis reconnecting...`.
+- **"Could not renew lock for job"** — long-running jobs need a longer `keepAlive`. Bump it to `60000` (60s) or more.
 
 ## Complete Example
 
-Here's a full working example with multiple services, pub/sub, and Drizzle:
-
 ```typescript
-import { Vision } from '@getvision/server'
+import {
+  createVision,
+  createModule,
+  defineEvents,
+  defineCrons,
+  rateLimit,
+} from '@getvision/server'
 import { z } from 'zod'
 import { db } from './db'
 import { users, orders } from './db/schema'
 import { eq } from 'drizzle-orm'
 
-const app = new Vision({
+const User = z.object({ id: z.string(), name: z.string(), email: z.string().email() })
+
+// — Users module ———————————————————————————
+const usersModule = createModule({ prefix: '/users' })
+  .use(
+    defineEvents({
+      'user/created': {
+        schema: z.object({ userId: z.string(), email: z.string().email() }),
+        handler: async (event) => {
+          console.log('[welcome email] →', event.email)
+        },
+      },
+    })
+  )
+  .get('/', ({ span }) => {
+    const allUsers = span('db.select', { 'db.table': 'users' }, () =>
+      db.select().from(users).all()
+    )
+    return { users: allUsers }
+  })
+  .post(
+    '/',
+    async ({ body, emit, span }) => {
+      const user = span('db.insert', { 'db.table': 'users' }, () =>
+        db.insert(users).values(body).returning().get()
+      )
+      await emit('user/created', { userId: user.id, email: user.email })
+      return user
+    },
+    {
+      body: z.object({ name: z.string().min(1), email: z.string().email() }),
+      response: User,
+      beforeHandle: [rateLimit({ requests: 5, window: '15m' })],
+    }
+  )
+
+// — Orders module ——————————————————————————
+const ordersModule = createModule({ prefix: '/orders' })
+  .use(
+    defineCrons({
+      'daily-summary': {
+        schedule: '0 0 * * *',
+        handler: async () => console.log('Daily order summary'),
+      },
+    })
+  )
+  .post(
+    '/',
+    async ({ body, span }) => {
+      const order = span('db.insert', { 'db.table': 'orders' }, () =>
+        db.insert(orders).values({ userId: body.userId, total: 100 }).returning().get()
+      )
+      return { orderId: order.id }
+    },
+    {
+      body: z.object({
+        userId: z.string(),
+        items: z.array(z.object({ productId: z.string(), quantity: z.number() })),
+      }),
+    }
+  )
+
+// — Root app ———————————————————————————————
+const app = createVision({
   service: {
     name: 'E-Commerce API',
     version: '1.0.0',
-    integrations: {
-      database: 'sqlite://./dev.db'
-    },
-    drizzle: {
-      autoStart: true,
-      port: 4983
-    }
+    integrations: { database: 'sqlite://./dev.db' },
+    drizzle: { autoStart: true, port: 4983 },
   },
-  vision: {
-    enabled: true,
-    port: 9500
-  },
-  pubsub: {
-    schemas: {
-      'user/created': {
-        data: z.object({
-          userId: z.string(),
-          email: z.string().email()
-        })
-      },
-      'order/placed': {
-        data: z.object({
-          orderId: z.string(),
-          userId: z.string(),
-          total: z.number()
-        })
-      }
-    }
-  }
+  vision: { enabled: true, port: 9500 },
+  pubsub: { devMode: true },
 })
+  .use(usersModule)
+  .use(ordersModule)
 
-// User Service
-app.service('users')
-  .endpoint('GET', '/users', {
-    input: z.object({}),
-    output: z.object({
-      users: z.array(z.object({
-        id: z.string(),
-        name: z.string()
-      }))
-    })
-  }, async (_, c) => {
-    const allUsers = c.span('db.select', { 'db.table': 'users' }, () => {
-      return db.select().from(users).all()
-    })
-    return { users: allUsers }
-  })
-  .on('user/created', async (event) => {
-    console.log('Sending welcome email to:', event.data.email)
-  })
-  .endpoint('POST', '/users', {
-    input: z.object({
-      name: z.string().min(1),
-      email: z.string().email()
-    }),
-    output: z.object({ id: z.string() })
-  }, async (data, c) => {
-    const user = c.span('db.insert', { 'db.table': 'users' }, () => {
-      return db.insert(users).values(data).returning().get()
-    })
-    
-    // Emit event (type-safe)
-    await c.emit('user/created', { userId: user.id, email: user.email })
-    
-    return { id: user.id }
-  })
+app.listen(3000)
 
-// Order Service
-app.service('orders')
-  .endpoint('POST', '/orders', {
-    input: z.object({
-      userId: z.string(),
-      items: z.array(z.object({
-        productId: z.string(),
-        quantity: z.number()
-      }))
-    }),
-    output: z.object({ orderId: z.string() })
-  }, async (data, c) => {
-    const order = c.span('db.insert', { 'db.table': 'orders' }, () => {
-      return db.insert(orders).values({
-        userId: data.userId,
-        total: 100
-      }).returning().get()
-    })
-    
-    return { orderId: order.id }
-  })
-  .cron('0 0 * * *', async () => {
-    console.log('Daily order summary')
-  })
-
-app.start(3000)
+/** Eden Treaty client type — export for the frontend. */
+export type AppType = typeof app
 ```
 
-### Run the Example
+### Run it
 
 ```bash
-# From project root
+# From repo root
 bun run example:server
 
 # Or directly
@@ -637,48 +619,55 @@ bun run dev
 ```
 
 Visit:
+
 - **API:** http://localhost:3000
 - **Vision Dashboard:** http://localhost:9500
 - **Drizzle Studio:** https://local.drizzle.studio
+
+## Migrating from the Hono-era API
+
+The pre-1.0 `Vision` class, `app.service(...).endpoint(...)` builder, and file-based autodiscovery have all been replaced by the Elysia module pattern. See the [migration guide](https://getvision.dev/docs/server/migration) for a complete old → new mapping.
 
 ## Why Vision Server?
 
 ### ✅ Advantages
 
-**vs NestJS:**
-- 10x faster (Hono vs Express)
-- 10x simpler (no DI, no decorators)
+**vs NestJS**
+- Orders of magnitude faster (Bun + Elysia)
+- 10× simpler — no DI, no decorators, no module graph
 - Built-in observability
 
-**vs Encore.ts:**
+**vs Encore.ts**
 - 100% open source (MIT)
 - No vendor lock-in
-- Deploy anywhere
+- Deploy anywhere (Bun, Node, Docker, edge)
 
-**vs Plain Hono:**
-- Built-in observability
-- Type-safe validation
-- Pub/Sub & Cron included
-- Better code organization
+**vs plain Elysia**
+- Built-in tracing, logs, API Explorer
+- Type-safe pub/sub & cron
+- Per-endpoint rate limiting
+- Module pattern for code organization
 
 ### 🎯 Perfect For
 
 - Greenfield projects
 - API-first architectures
 - Teams that want great DX
-- Projects that need observability
-- Anyone who wants NestJS features without the complexity
+- Projects that need observability from day one
+- Anyone who wants NestJS-style structure without the complexity
 
 ## Roadmap
 
 - [x] Drizzle integration with auto-start Studio
-- [x] Type-safe validation with Zod
-- [x] Auto-generated API schemas
-- [ ] Cache layer (Redis integration)
-- [ ] Rate limiting (per-endpoint & global)
-- [ ] Testing helpers
+- [x] Standard Schema validation (Zod / Valibot / TypeBox)
+- [x] Pub/sub & cron via BullMQ
+- [x] Per-endpoint rate limiting
+- [x] OTLP trace export
+- [x] Trace context propagation through pub/sub
 - [ ] OpenAPI generation
 - [ ] WebSocket support
+- [ ] Cache layer (Redis-backed)
+- [ ] Testing helpers
 
 ## License
 
