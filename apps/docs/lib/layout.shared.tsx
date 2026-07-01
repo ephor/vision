@@ -1,4 +1,4 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 /**
  * Shared layout configurations
@@ -10,7 +10,13 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: 'Vision',
+      title: (
+        <span className="inline-flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" width={22} height={22} />
+          <span className="font-semibold">Vision</span>
+        </span>
+      ),
     },
     // Dark theme only — hide the light/dark toggle
     themeSwitch: {
@@ -18,16 +24,16 @@ export function baseOptions(): BaseLayoutProps {
     },
     links: [
       {
-        text: 'Documentation',
-        url: '/docs',
-        active: 'nested-url',
+        text: "Documentation",
+        url: "/docs",
+        active: "nested-url",
       },
       {
-        text: 'GitHub',
-        url: 'https://github.com/ephor/vision',
+        text: "GitHub",
+        url: "https://github.com/ephor/vision",
         external: true,
       },
     ],
-    githubUrl: 'https://github.com/ephor/vision',
+    githubUrl: "https://github.com/ephor/vision",
   };
 }
