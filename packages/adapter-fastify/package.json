@@ -1,7 +1,7 @@
 {
   "name": "@getvision/adapter-fastify",
   "version": "0.1.5",
-  "description": "Fastify adapter for Vision Dashboard",
+  "description": "Fastify adapter for Vision's local API observability and debugging dashboard",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -19,7 +19,9 @@
     "fastify",
     "observability",
     "tracing",
-    "monitoring"
+    "api-debugging",
+    "api-testing",
+    "typescript"
   ],
   "author": "",
   "license": "MIT",

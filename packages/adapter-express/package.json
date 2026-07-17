@@ -1,6 +1,7 @@
 {
   "name": "@getvision/adapter-express",
   "version": "0.1.5",
+  "description": "Express adapter for Vision's local API observability and debugging dashboard",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -11,6 +12,15 @@
     "lint": "eslint . --max-warnings 0"
   },
   "license": "MIT",
+  "keywords": [
+    "vision",
+    "express",
+    "observability",
+    "tracing",
+    "api-debugging",
+    "api-testing",
+    "typescript"
+  ],
   "dependencies": {
     "@getvision/core": "workspace:*",
     "zod": "^4.1.11"

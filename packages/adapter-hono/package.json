@@ -1,6 +1,7 @@
 {
   "name": "@getvision/adapter-hono",
   "version": "0.1.5",
+  "description": "Hono adapter for Vision's local API observability and debugging dashboard",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -11,6 +12,15 @@
     "lint": "eslint . --max-warnings 0"
   },
   "license": "MIT",
+  "keywords": [
+    "vision",
+    "hono",
+    "observability",
+    "tracing",
+    "api-debugging",
+    "api-testing",
+    "typescript"
+  ],
   "dependencies": {
     "@hono/zod-validator": "^0.7.3",
     "@getvision/core": "workspace:*",

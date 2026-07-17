@@ -14,7 +14,7 @@ npm install @getvision/adapter-express
 
 ```typescript
 import express from 'express'
-import { visionMiddleware, enableAutoDiscovery, zValidator } from '@getvision/adapter-express'
+import { visionMiddleware, enableAutoDiscovery, validator } from '@getvision/adapter-express'
 import { z } from 'zod'
 
 const app = express()
@@ -39,7 +39,7 @@ const createUser = z.object({
   age: z.number().int().positive().optional().describe('Age (optional)'),
 })
 
-app.post('/users', zValidator('body', createUser), (req, res) => {
+app.post('/users', validator('body', createUser), (req, res) => {
   res.status(201).json(req.body)
 })
 

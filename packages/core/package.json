@@ -1,6 +1,7 @@
 {
   "name": "@getvision/core",
   "version": "0.3.0",
+  "description": "Core tracing, logging, validation, dashboard, and OTLP primitives for Vision",
   "type": "module",
   "types": "dist/index.d.ts",
   "module": "dist/index.js",
@@ -45,6 +46,15 @@
     "lint": "eslint . --max-warnings 0"
   },
   "license": "MIT",
+  "keywords": [
+    "vision",
+    "observability",
+    "tracing",
+    "api-debugging",
+    "api-testing",
+    "opentelemetry",
+    "typescript"
+  ],
   "dependencies": {
     "ws": "^8.18.0",
     "nanoid": "^5.0.7",

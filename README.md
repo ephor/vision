@@ -9,9 +9,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/ephor/vision.svg?style=social)](https://github.com/ephor/vision/stargazers)
 
-**Universal observability dashboard for API development**
+**Local-first observability and API debugging for TypeScript**
 
-Vision is a development dashboard that provides unified observability across protocols and validation libraries. Add it to your existing Express, Fastify, or Hono application.
+Vision gives TypeScript API developers live request traces, contextual logs, route discovery, and a schema-aware API playground in one self-hosted dashboard. Add it to an existing Express, Fastify, or Hono app, or use the Elysia-based Vision Server to start from scratch.
 
 > Protocol-agnostic monitoring with support for REST today — see the [Roadmap](#roadmap) for GraphQL, tRPC, and MCP
 
@@ -52,8 +52,8 @@ The closest comparison is **Encore.ts** — it also pairs API code with an auto-
 
 ### Multi-Protocol Support
 
-- REST APIs, GraphQL, tRPC, and Model Context Protocol (MCP)
-- Unified tracing across all protocols
+- REST API tracing and exploration today
+- GraphQL, tRPC, and Model Context Protocol (MCP) support on the roadmap
 - Service catalog with auto-discovery
 
 ### Validation Library Integration
@@ -93,15 +93,21 @@ Vision implements the **Wide Events** logging approach - add context once, see i
 
 ```typescript
 import express from "express";
-import { visionAdapter } from "@getvision/adapter-express";
+import {
+  enableAutoDiscovery,
+  validator,
+  visionMiddleware,
+} from "@getvision/adapter-express";
 import { z } from "zod"; // or v from 'valibot'!
 
 const app = express();
 
 // Add Vision in development
 if (process.env.NODE_ENV !== "production") {
-  app.use("*", visionAdapter({ port: 9500 }));
+  app.use(visionMiddleware({ port: 9500 }));
 }
+
+app.use(express.json());
 
 // Your existing endpoints - now with Vision!
 app.post(
@@ -119,6 +125,11 @@ app.post(
     res.json(req.body);
   },
 );
+
+// Discover routes after registering them
+if (process.env.NODE_ENV !== "production") {
+  enableAutoDiscovery(app);
+}
 
 app.listen(3000);
 // Dashboard at http://localhost:9500

@@ -21,7 +21,7 @@ npm i @getvision/adapter-express
 
 ```ts
 import express from 'express'
-import { visionMiddleware, enableAutoDiscovery, zValidator } from '@getvision/adapter-express'
+import { visionMiddleware, enableAutoDiscovery, validator } from '@getvision/adapter-express'
 import { z } from 'zod'
 
 const app = express()
@@ -41,7 +41,7 @@ const CreateUser = z.object({
   email: z.string().email().describe('Email'),
   age: z.number().int().positive().optional().describe('Age (optional)'),
 })
-app.post('/users', zValidator('body', CreateUser), (req, res) => res.status(201).json(req.body))
+app.post('/users', validator('body', CreateUser), (req, res) => res.status(201).json(req.body))
 
 // Auto-discover routes (dev only)
 if (process.env.NODE_ENV !== 'production') {
@@ -129,23 +129,23 @@ enableAutoDiscovery(app, { services: [
 ]})
 ```
 
-## Zod Validation
+## Schema Validation
 
 ```ts
 import { z } from 'zod'
-import { zValidator } from '@getvision/adapter-express'
+import { validator } from '@getvision/adapter-express'
 
 const UpdateUser = z.object({
   name: z.string().min(1).optional().describe('Full name (optional)'),
   email: z.string().email().optional().describe('Email (optional)'),
 })
 
-app.put('/users/:id', zValidator('body', UpdateUser), (req, res) => {
+app.put('/users/:id', validator('body', UpdateUser), (req, res) => {
   res.json(req.body)
 })
 ```
 
-The adapter attaches the Zod schema to route metadata so API Explorer can generate a commented JSON template. Comments are stripped automatically when sending.
+The universal `validator()` supports Zod, Valibot, and other Standard Schema-compatible libraries. It attaches the schema to route metadata so API Explorer can generate a commented JSON template. Comments are stripped automatically when sending.
 
 ## Custom Spans
 
@@ -198,7 +198,7 @@ If you proxy the Dashboard or run on a different origin, keep these headers to a
 
 ## Troubleshooting
 
-- API Explorer shows “No schema defined” → ensure the route uses `zValidator('body', schema)` and `enableAutoDiscovery(app)` ran after route registration
+- API Explorer shows “No schema defined” → ensure the route uses `validator('body', schema)` and `enableAutoDiscovery(app)` ran after route registration
 - Response body shows as string → make sure the adapter is updated (response is now captured before stringify when using `res.json`)
 - Spans look flat → ensure you use `useVisionSpan()` to create child spans; they will be parented under `http.request`
 
