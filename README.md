@@ -13,7 +13,10 @@
 
 Vision gives TypeScript API developers live request traces, contextual logs, route discovery, and a schema-aware API playground in one self-hosted dashboard. Add it to an existing Express, Fastify, or Hono app, or use the Elysia-based Vision Server to start from scratch.
 
-> Protocol-agnostic monitoring with support for REST today — see the [Roadmap](#roadmap) for GraphQL, tRPC, and MCP
+> REST observability today, with GraphQL, tRPC, and MCP on the [roadmap](#roadmap).
+
+> [!IMPORTANT]
+> Vision can run in production, but the dashboard has no authentication by default and may capture request headers and bodies. Do not expose its port publicly; keep it on a private network and access it through SSH or Kubernetes port forwarding, or place it behind an authenticated proxy. See the [deployment guide](https://getvision.dev/docs/deployment).
 
 <!-- TODO: replace screenshot with animated demo GIF -->
 <div align="center">
@@ -38,11 +41,12 @@ The closest comparison is **Encore.ts** — it also pairs API code with an auto-
 | ---------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
 | Setup                                    | ~2 lines in an app you already have                       | Rewrite onto Encore's runtime/SDK                     |
 | Works with existing Express/Fastify/Hono | Yes — drop-in middleware                                  | No — you adopt Encore's framework                     |
-| Vendor / code lock-in                    | None                                                      | High — app is built on Encore's framework             |
+| Runtime / infrastructure lock-in         | Low with adapters; Elysia coupling with Vision Server     | High with Encore APIs and infrastructure primitives   |
 | Built-in dashboard / UI                  | Yes — traces, logs, request playground                    | Yes — local dev dashboard + cloud                     |
 | Multi-protocol (REST/GraphQL/tRPC/MCP)   | REST today; GraphQL, tRPC, MCP on the [Roadmap](#roadmap) | REST/RPC via Encore's own framework                   |
 | Validation library integration           | Zod, Valibot, Standard Schema v1 (auto request templates) | Encore's own validation (TypeScript types → API)      |
-| OpenTelemetry / OTLP export              | Yes — OTLP/HTTP, shipped                                  | Announced, coming soon                                |
+| Managed cloud targets                    | Any compatible Node.js or Bun host                        | AWS and GCP                                           |
+| OpenTelemetry / OTLP export              | Yes — OTLP/HTTP for traces and logs                       | Requires separate OpenTelemetry instrumentation       |
 | Self-hosted                              | Yes (in-process dashboard)                                | Yes, self-hostable; cloud platform optional           |
 | License / cost                           | MIT, free                                                 | Apache 2.0 (open source) + paid Encore Cloud platform |
 
@@ -73,7 +77,7 @@ The closest comparison is **Encore.ts** — it also pairs API code with an auto-
 
 ### Export & Integration
 
-- OpenTelemetry export (new) - OTLP/HTTP exporter (`@getvision/server` `vision.exporters`) for sending traces to Honeycomb, Grafana Tempo, BetterStack, an OTel Collector, or any OTLP-compatible backend
+- OTLP/HTTP export for traces and logs through `@getvision/server`'s `vision.exporters` configuration, compatible with Honeycomb, Grafana Tempo, Better Stack, Datadog, OpenTelemetry Collector, and other OTLP backends. See [OTLP Export](https://getvision.dev/docs/server#otlp-export).
 
 ---
 
@@ -90,6 +94,11 @@ Vision implements the **Wide Events** logging approach - add context once, see i
 ## Quick Start
 
 ### Add to Existing App (Express Example)
+
+```bash
+bun add @getvision/adapter-express express zod
+# or: npm install @getvision/adapter-express express zod
+```
 
 ```typescript
 import express from "express";
@@ -172,7 +181,7 @@ createVision({ service: { name: "My API" } })
 ## Roadmap
 
 - [x] REST
-- [x] OpenTelemetry export (new)
+- [x] OpenTelemetry export
 - [ ] GraphQL
 - [ ] tRPC
 - [ ] MCP
@@ -187,7 +196,17 @@ Full documentation at **[getvision.dev/docs](https://getvision.dev/docs)**
 
 - [Getting Started](https://getvision.dev/docs/quickstart)
 - [Validation Libraries](https://getvision.dev/docs/validation)
-- [Adapter Guides](https://getvision.dev/docs/adapters)
+- [Hono Adapter](https://getvision.dev/docs/adapters/hono)
+- [Express Adapter](https://getvision.dev/docs/adapters/express)
+- [Fastify Adapter](https://getvision.dev/docs/adapters/fastify)
 - [Deployment](https://getvision.dev/docs/deployment)
 
 ---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, development, and pull request guidelines.
+
+## License
+
+Vision is available under the [MIT License](./LICENSE).
