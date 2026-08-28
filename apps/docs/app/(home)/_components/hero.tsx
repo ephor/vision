@@ -34,17 +34,17 @@ export function Hero() {
         </span>
 
         <h1 className="mt-6 text-4xl font-bold tracking-tight text-balance sm:text-6xl">
-          Drop-in{" "}
+          Production-ready{" "}
           <span className="animate-aurora bg-clip-text text-transparent [background-image:linear-gradient(90deg,#6ee7b7,#2dd4bf,#34d399,#6ee7b7)]">
-            observability
+            TypeScript server
           </span>{" "}
-          for your TypeScript API
+          with built-in observability
         </h1>
 
         <p className="mx-auto mt-6 max-w-xl text-lg text-fd-muted-foreground text-pretty">
-          Vision auto-generates a full dashboard for the Express, Fastify, Hono
-          or Elysia app you already have — routes, traces, logs and an API
-          playground. Two lines of code, zero config.
+          Vision is your app server — traces, logs, API playground plus
+          BullMQ pub/sub & cron. Use it standalone or drop 2 lines into the
+          Express, Fastify, Hono or Next.js app you already have.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -67,17 +67,17 @@ export function Hero() {
         </div>
 
         <p className="mt-6 text-sm text-fd-muted-foreground">
-          <span className="font-mono text-emerald-400">{">"}</span> Develop
-          locally, then ship the same traces to any{" "}
-          <span className="font-medium text-fd-foreground">OpenTelemetry</span>{" "}
-          backend.
+          <span className="font-mono text-emerald-400">{">"}</span> Built on
+          Elysia & BullMQ · In-memory dev, Redis prod · Ship traces via{" "}
+          <span className="font-medium text-fd-foreground">OTLP</span> to
+          Grafana / Honeycomb / Datadog
         </p>
       </motion.div>
 
       {/* Supported frameworks */}
       <div className="mx-auto mt-16 max-w-3xl">
         <p className="mb-5 text-center text-xs font-medium tracking-widest text-fd-muted-foreground uppercase">
-          Works with the stack you already run
+          Works with the stack you already run via adapters
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           {FRAMEWORKS.map((name) => (

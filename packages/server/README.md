@@ -1,8 +1,8 @@
 # @getvision/server
 
-**Meta-framework with built-in observability — everything you need, nothing you don't.**
+**Production-ready TypeScript server with built-in observability, queues & scheduling.**
 
-Built on Elysia. Automatic tracing. Type-safe APIs. Pub/Sub & Cron. Zero config. Eden Treaty ready.
+TypeScript server (built on Elysia) — automatic tracing, type-safe APIs, BullMQ pub/sub & cron, OTLP export. Zero config. Eden Treaty ready. MIT, self-hosted.
 
 ## Why Vision Server?
 

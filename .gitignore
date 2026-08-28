@@ -1,3 +1,5 @@
+.agent/
+.agents/
 .DS_Store
 node_modules
 .turbo

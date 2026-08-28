@@ -13,6 +13,8 @@ import {
   Cable,
   KeyRound,
   ArrowRight,
+  Inbox,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,6 +55,16 @@ const FEATURES: {
     icon: ShieldCheck,
     title: "Schema-aware",
     body: "Request templates auto-generated from your Zod, Valibot or Standard Schema validators.",
+  },
+  {
+    icon: Inbox,
+    title: "Type-safe pub/sub",
+    body: "defineEvents() + emit() — Zod/Valibot validated, BullMQ with 3 retries & exponential backoff. Failed jobs queryable/re-drivable, no hidden DLQ.",
+  },
+  {
+    icon: Clock,
+    title: "Cron & repeatable jobs",
+    body: "defineCrons({ schedule: '0 0 * * *' }) — BullMQ repeatable jobs with atomic claim & key dedup. No ShedLock needed.",
   },
   {
     icon: Share2,

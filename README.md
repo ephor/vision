@@ -9,9 +9,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/ephor/vision.svg?style=social)](https://github.com/ephor/vision/stargazers)
 
-**Local-first observability and API debugging for TypeScript**
+**Production-ready TypeScript server with built-in observability, queues & scheduling**
 
-Vision gives TypeScript API developers live request traces, contextual logs, route discovery, and a schema-aware API playground in one self-hosted dashboard. Add it to an existing Express, Fastify, or Hono app, or use the Elysia-based Vision Server to start from scratch.
+Vision is a production-ready TypeScript server (`@getvision/server`, built on Elysia) with a self-hosted dashboard — live request traces, contextual logs, route discovery, and a schema-aware API playground. Use it as your app server, or add observability to an existing Express, Fastify, or Hono app via adapters. BullMQ pub/sub & cron built in (in-memory dev, Redis prod), OTLP export to any backend. MIT, self-hosted, no vendor lock-in.
 
 > REST observability today, with GraphQL, tRPC, and MCP on the [roadmap](#roadmap).
 
@@ -29,7 +29,7 @@ Vision gives TypeScript API developers live request traces, contextual logs, rou
 
 Observability for APIs usually means a tradeoff. **Encore.ts** gives you a built-in dashboard, but only if you rebuild your app on its framework and runtime. **OpenTelemetry** gives you a vendor-neutral standard, but it's plumbing — you wire up an SDK, a collector, and a backend before you see anything.
 
-Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is an Elysia-based meta-framework with Vision built in. It's self-hosted, runs alongside your app, and you keep your code.
+Vision drops into the Express, Fastify, or Hono app you already have — two lines of code, no rewrite — and gives you live traces, logs, and a request playground in your browser while you build. Prefer to start clean? `@getvision/server` is the full TypeScript server with Vision built in — observability plus BullMQ-backed pub/sub & cron out of the box (built on Elysia). Self-hosted, runs alongside your app, you keep your code.
 
 **Develop with Vision locally → ship the same traces to whatever prod backend you already run (Grafana, Honeycomb, Datadog, OTel Collector).**
 
@@ -67,6 +67,14 @@ The closest comparison is **Encore.ts** — it also pairs API code with an auto-
 - **Standard Schema v1** - Universal compatibility
 - Automatic request template generation
 - Real-time validation error display
+
+### Queues & Scheduling (via `@getvision/server`)
+
+- **Pub/sub events** — `defineEvents()` + `emit()` — typed, validated (Zod/Valibot), powered by BullMQ
+- **Cron / repeatable jobs** — `defineCrons({ schedule: '0 0 * * *' })` — backed by BullMQ repeatable jobs (atomic claim, key-based dedup — no extra ShedLock needed)
+- **Retry with backoff** — `attempts: 3` + exponential backoff native
+- **Failed jobs are queryable/re-drivable** via BullMQ's `failed` set (no separate DLQ — intentional; failed set covers SOW §3.4 delivery-status/audit needs)
+- **Dev mode** — in-memory (no Redis); production — Redis (`REDIS_URL` / `pubsub.redis`)
 
 ### Development Tools
 
