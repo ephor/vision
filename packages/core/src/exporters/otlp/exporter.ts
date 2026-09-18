@@ -3,6 +3,14 @@ import type { TraceExporter } from '../types'
 import { toAttributes } from './convert'
 import { tracesToOtlpPayload } from './transform'
 import type { OtlpKeyValue } from './otlp-types'
+import {
+  chunkBySize,
+  isPayloadRejection,
+  jsonByteLength,
+  postOtlp,
+  resolveMaxPayloadBytes,
+  type OtlpCompression,
+} from './http'
 
 export interface OtlpExporterOptions {
   /** OTLP/HTTP traces endpoint, e.g. `https://<host>/v1/traces`. */
@@ -28,7 +36,20 @@ export interface OtlpExporterOptions {
   /** Per-request timeout in ms. Default 10000. */
   timeoutMs?: number
   /**
-   * Notified on transport/HTTP failures and queue overflow. Defaults to
+   * Upper bound on the uncompressed JSON size of a single export request.
+   * Batches are split across several requests to stay under it; a single
+   * trace larger than this is still sent alone. Non-positive values fall back
+   * to the default. Default 1000000.
+   */
+  maxPayloadBytes?: number
+  /**
+   * Request body encoding. `'gzip'` falls back to uncompressed when the
+   * runtime lacks `CompressionStream`. Default `'none'`.
+   */
+  compression?: OtlpCompression
+  /**
+   * Notified on transport/HTTP failures, queue overflow, and traces dropped
+   * because the backend rejected them as too large (413/400/422). Defaults to
    * `console.warn` so problems aren't silently dropped during local dev — pass
    * a no-op to silence.
    */
@@ -42,7 +63,8 @@ export interface OtlpExporterOptions {
  *
  * Failed batches are re-buffered for the next flush so a transient backend
  * outage doesn't silently lose traces; `maxQueueSize` bounds memory growth if
- * the backend stays down.
+ * the backend stays down. Batches rejected as too large are halved and resent;
+ * a single rejected trace is dropped rather than retried forever.
  */
 export class OtlpTraceExporter implements TraceExporter {
   private readonly endpoint: string
@@ -51,6 +73,8 @@ export class OtlpTraceExporter implements TraceExporter {
   private readonly maxQueueSize: number
   private readonly maxExportBatchSize: number
   private readonly timeoutMs: number
+  private readonly maxPayloadBytes: number
+  private readonly compression: OtlpCompression
   private readonly onError: (error: unknown) => void
   private queue: Trace[] = []
   private timer?: ReturnType<typeof setInterval>
@@ -66,6 +90,8 @@ export class OtlpTraceExporter implements TraceExporter {
     this.maxQueueSize = options.maxQueueSize ?? 2048
     this.maxExportBatchSize = options.maxExportBatchSize ?? 512
     this.timeoutMs = options.timeoutMs ?? 10_000
+    this.maxPayloadBytes = resolveMaxPayloadBytes(options.maxPayloadBytes)
+    this.compression = options.compression ?? 'none'
     this.onError = options.onError ?? defaultOnError
 
     this.timer = setInterval(() => void this.flush(), options.flushIntervalMs ?? 5_000)
@@ -95,31 +121,68 @@ export class OtlpTraceExporter implements TraceExporter {
 
     const batch = this.queue
     this.queue = []
-    this.flushing = this.send(batch).finally(() => {
+    this.flushing = this.sendBatch(batch).finally(() => {
       this.flushing = undefined
     })
     return this.flushing
   }
 
-  private async send(batch: Trace[]): Promise<void> {
-    const payload = tracesToOtlpPayload(batch, this.resource)
-    try {
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: this.headers,
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      })
-      if (!response.ok) {
-        this.onError(
-          new Error(`OTLP export failed: ${response.status} ${response.statusText}`)
-        )
-        this.rebuffer(batch)
+  private async sendBatch(batch: Trace[]): Promise<void> {
+    const chunks = chunkBySize(
+      batch,
+      (trace) => jsonByteLength(tracesToOtlpPayload([trace], this.resource)),
+      0,
+      this.maxPayloadBytes
+    )
+    for (let i = 0; i < chunks.length; i++) {
+      const retry = await this.send(chunks[i])
+      if (retry.length > 0) {
+        this.rebuffer([...retry, ...chunks.slice(i + 1).flat()])
+        return
       }
+    }
+  }
+
+  /**
+   * POST one chunk, halving it on payload rejections.
+   *
+   * @param batch Traces to send.
+   * @returns Traces that failed transiently and should be retried.
+   */
+  private async send(batch: Trace[]): Promise<Trace[]> {
+    const payload = tracesToOtlpPayload(batch, this.resource)
+    let response: Response
+    try {
+      response = await postOtlp(
+        this.endpoint,
+        this.headers,
+        JSON.stringify(payload),
+        this.compression,
+        this.timeoutMs
+      )
     } catch (error) {
       this.onError(error)
-      this.rebuffer(batch)
+      return batch
     }
+    if (response.ok) return []
+    if (isPayloadRejection(response.status)) {
+      if (batch.length === 1) {
+        this.onError(
+          new Error(
+            `OTLP export rejected trace ${batch[0].id} (${response.status} ${response.statusText}); dropping it as oversized or malformed`
+          )
+        )
+        return []
+      }
+      const mid = Math.ceil(batch.length / 2)
+      const first = await this.send(batch.slice(0, mid))
+      const second = await this.send(batch.slice(mid))
+      return [...first, ...second]
+    }
+    this.onError(
+      new Error(`OTLP export failed: ${response.status} ${response.statusText}`)
+    )
+    return batch
   }
 
   /**

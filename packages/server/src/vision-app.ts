@@ -223,6 +223,19 @@ export interface VisionConfig {
 
 const visionContext = new AsyncLocalStorage<VisionALSContext>()
 
+const MAX_CAPTURED_BODY_CHARS = 65536
+
+function capCapturedBody(body: unknown): unknown {
+  try {
+    const text = typeof body === 'string' ? body : JSON.stringify(body)
+    return text !== undefined && text.length > MAX_CAPTURED_BODY_CHARS
+      ? '<truncated>'
+      : body
+  } catch {
+    return undefined
+  }
+}
+
 /** Retrieve the Vision context within the current async scope (if any). */
 export function getVisionContext(): VisionALSContext | undefined {
   return visionContext.getStore()
@@ -568,13 +581,14 @@ export function createVision(config: VisionConfig) {
       // Merge the already-parsed body into trace.metadata.request.body.
       const shouldHaveBody = ['POST', 'PUT', 'PATCH'].includes(request.method)
       if (shouldHaveBody && body !== undefined) {
+        const capturedBody = capCapturedBody(body)
         const trace = visionCore.getTraceStore().getTrace(traceId)
         if (trace?.metadata) {
           const req = (trace.metadata as { request?: Record<string, unknown> })
             .request
-          if (req) req.body = body
+          if (req) req.body = capturedBody
         }
-        visionCore.getTracer().setAttribute(rootSpanId, 'http.request.body', body)
+        visionCore.getTracer().setAttribute(rootSpanId, 'http.request.body', capturedBody)
       }
     })
     .onAfterHandle({ as: 'global' }, async ({ store, set, response }) => {
@@ -636,7 +650,7 @@ export function createVision(config: VisionConfig) {
         // still needs to flush to the client. Try JSON first, fall back to text.
         try {
           const text = await response.clone().text()
-          if (text.length > 65536) {
+          if (text.length > MAX_CAPTURED_BODY_CHARS) {
             responseBody = '<truncated>'
           } else if (text.length === 0) {
             responseBody = undefined
@@ -658,7 +672,7 @@ export function createVision(config: VisionConfig) {
       } else {
         try {
           const asJson = JSON.stringify(response)
-          if (asJson && asJson.length > 65536) responseBody = '<truncated>'
+          if (asJson && asJson.length > MAX_CAPTURED_BODY_CHARS) responseBody = '<truncated>'
         } catch {
           responseBody = undefined
         }
@@ -708,15 +722,22 @@ export function createVision(config: VisionConfig) {
       }
     })
     .onError({ as: 'global' }, ({ error, store }) => {
-      if (!visionCore) return
       const s = store as Record<string, unknown>
       const traceId = s.__visionTraceId as string | undefined
       const rootSpanId = s.__visionRootSpanId as string | undefined
-      if (!traceId || !rootSpanId) return
+      const message = error instanceof Error ? error.message : String(error)
+      const trace = traceId ? visionCore?.getTraceStore().getTrace(traceId) : undefined
+      const parts: string[] = []
+      if (trace) parts.push(`method=${trace.method}`, `path=${trace.path}`)
+      if (traceId) parts.push(`traceId=${traceId}`)
+      parts.push(`error=${message}`)
+      console.error(`ERR request failed ${parts.join(' ')}`, error)
+
+      if (!visionCore || !traceId || !rootSpanId) return
 
       const tracer = visionCore.getTracer()
       tracer.addEvent(rootSpanId, 'error', {
-        message: error instanceof Error ? error.message : String(error),
+        message,
         stack: error instanceof Error ? error.stack : undefined,
       })
       tracer.setAttribute(rootSpanId, 'error', true)

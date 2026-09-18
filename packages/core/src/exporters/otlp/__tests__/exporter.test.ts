@@ -205,3 +205,135 @@ describe('OtlpTraceExporter — header merge', () => {
     expect(headers['authorization']).toBe('Bearer t')
   })
 })
+
+function makeBigTrace(id: string, bodyChars: number): Trace {
+  return { ...makeTrace(id), path: `/t-${id}`, metadata: { body: 'x'.repeat(bodyChars) } }
+}
+
+function sentPaths(call: FetchCall): string[] {
+  const payload = JSON.parse(String(call.init.body))
+  return payload.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) =>
+    s.name.replace('GET /t-', '')
+  )
+}
+
+describe('OtlpTraceExporter — payload size limits', () => {
+  test('splits a batch larger than maxPayloadBytes across several requests', async () => {
+    stub = stubFetch(() => new Response('', { status: 200 }))
+    const exporter = new OtlpTraceExporter({
+      endpoint: 'http://test/v1/traces',
+      maxExportBatchSize: 99,
+      maxPayloadBytes: 2_000,
+      onError: () => {},
+    })
+
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    for (const id of ids) exporter.export(makeBigTrace(id, 500))
+    await exporter.flush()
+
+    expect(stub!.calls.length).toBeGreaterThan(1)
+    for (const call of stub!.calls) {
+      expect(new TextEncoder().encode(String(call.init.body)).byteLength).toBeLessThanOrEqual(2_000)
+    }
+    expect(stub!.calls.flatMap(sentPaths)).toEqual(ids)
+  })
+
+  test('falls back to the default cap for non-positive maxPayloadBytes', async () => {
+    stub = stubFetch(() => new Response('', { status: 200 }))
+    const exporter = new OtlpTraceExporter({
+      endpoint: 'http://test/v1/traces',
+      maxExportBatchSize: 99,
+      maxPayloadBytes: 0,
+      onError: () => {},
+    })
+
+    exporter.export(makeBigTrace('a', 10))
+    exporter.export(makeBigTrace('b', 10))
+    await exporter.flush()
+
+    expect(stub!.calls).toHaveLength(1)
+  })
+
+  test('413 on a multi-trace batch splits it and sends the halves without re-buffering', async () => {
+    stub = stubFetch((call) =>
+      sentPaths(call).length > 2
+        ? new Response('', { status: 413, statusText: 'Request Entity Too Large' })
+        : new Response('', { status: 200 })
+    )
+    const errors: unknown[] = []
+    const exporter = new OtlpTraceExporter({
+      endpoint: 'http://test/v1/traces',
+      maxExportBatchSize: 99,
+      onError: (e) => errors.push(e),
+    })
+
+    for (const id of ['a', 'b', 'c', 'd']) exporter.export(makeBigTrace(id, 1))
+    await exporter.flush()
+
+    expect(stub!.calls.map(sentPaths)).toEqual([['a', 'b', 'c', 'd'], ['a', 'b'], ['c', 'd']])
+    expect(errors).toHaveLength(0)
+
+    await exporter.flush()
+    expect(stub!.calls).toHaveLength(3)
+  })
+
+  test('413 on a single trace drops it with a descriptive onError and no retry', async () => {
+    stub = stubFetch(() => new Response('', { status: 413, statusText: 'Request Entity Too Large' }))
+    const errors: unknown[] = []
+    const exporter = new OtlpTraceExporter({
+      endpoint: 'http://test/v1/traces',
+      maxExportBatchSize: 99,
+      onError: (e) => errors.push(e),
+    })
+
+    exporter.export(makeBigTrace('huge', 1))
+    await exporter.flush()
+
+    expect(errors).toHaveLength(1)
+    expect(String(errors[0])).toContain('rejected trace huge')
+    expect(String(errors[0])).toContain('413')
+    expect(String(errors[0])).toContain('dropping')
+
+    await exporter.shutdown()
+    expect(stub!.calls).toHaveLength(1)
+  })
+})
+
+describe('OtlpTraceExporter — compression', () => {
+  const hasCompressionStream = typeof globalThis.CompressionStream === 'function'
+
+  test.skipIf(!hasCompressionStream)('gzip sends content-encoding and a gunzippable JSON body', async () => {
+    stub = stubFetch(() => new Response('', { status: 200 }))
+    const exporter = new OtlpTraceExporter({
+      endpoint: 'http://test/v1/traces',
+      compression: 'gzip',
+      onError: () => {},
+    })
+
+    exporter.export(makeTrace('a'))
+    await exporter.flush()
+
+    const { init } = stub!.calls[0]
+    const headers = init.headers as Record<string, string>
+    expect(headers['content-encoding']).toBe('gzip')
+    expect(headers['content-type']).toBe('application/json')
+
+    const text = await new Response(
+      new Blob([init.body as ArrayBuffer]).stream().pipeThrough(new DecompressionStream('gzip'))
+    ).text()
+    const payload = JSON.parse(text)
+    expect(payload.resourceSpans[0].scopeSpans[0].spans).toHaveLength(1)
+  })
+
+  test('defaults to an uncompressed body', async () => {
+    stub = stubFetch(() => new Response('', { status: 200 }))
+    const exporter = new OtlpTraceExporter({ endpoint: 'http://test/v1/traces', onError: () => {} })
+
+    exporter.export(makeTrace('a'))
+    await exporter.flush()
+
+    const headers = stub!.calls[0].init.headers as Record<string, string>
+    expect(headers['content-encoding']).toBeUndefined()
+    expect(typeof stub!.calls[0].init.body).toBe('string')
+  })
+})
