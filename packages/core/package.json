@@ -1,6 +1,6 @@
 {
   "name": "@getvision/core",
-  "version": "0.3.0",
+  "version": "0.3.1-b1ec1d3-develop",
   "description": "Core tracing, logging, validation, dashboard, and OTLP primitives for Vision",
   "type": "module",
   "types": "dist/index.d.ts",
